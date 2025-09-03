@@ -11,6 +11,7 @@ export default function Navbar() {
     { label: "🏠 Home", href: "/" },
     { label: "📁 Workspace", href: "/workspace" },
     { label: "📝 Tasks", href: "/tasklist" },
+    { label: "💬 Chatbot", href: "/chatbot" },
   ];
 
   return (
