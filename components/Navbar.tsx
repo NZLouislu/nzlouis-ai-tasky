@@ -9,8 +9,7 @@ export default function Navbar() {
 
   const items = [
     { label: "🏠 Home", href: "/" },
-    { label: "🛠 Editor", href: "/editor" },
-    { label: "📁 Workspace", href: "/workspace" }
+    { label: "📁 Workspace", href: "/workspace" },
   ];
 
   return (
