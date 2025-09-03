@@ -10,6 +10,7 @@ export default function Navbar() {
   const items = [
     { label: "🏠 Home", href: "/" },
     { label: "📁 Workspace", href: "/workspace" },
+    { label: "📝 Tasks", href: "/tasklist" },
   ];
 
   return (
