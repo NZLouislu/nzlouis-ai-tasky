@@ -43,12 +43,13 @@ function ColumnContainer({
   return (
     <div
       ref={setNodeRef}
-      id={`col-${column.id}`}
       className={`bg-gray-100 rounded-lg p-4 min-w-[250px] flex-shrink-0 transition-all ${
         isOver ? "border-2 border-blue-500" : ""
       }`}
     >
-      <h3 className="font-bold text-gray-700 mb-3">{column.title}</h3>
+      <h3 className="font-bold text-gray-700 mb-3 text-sm sm:text-base md:text-lg">
+        {column.title}
+      </h3>
       {children}
     </div>
   );
@@ -137,27 +138,23 @@ export default function TaskList({ initialBoard }: TaskListProps) {
       return;
     }
 
+    const newBoard = [...board];
     if (source.colIndex === destColIndex) {
       if (source.cardIndex !== destCardIndex) {
-        const newCards = [...board[source.colIndex].cards];
-        const newOrder = arrayMove(newCards, source.cardIndex, destCardIndex);
-        const newBoard = [...board];
-        newBoard[source.colIndex] = {
-          ...newBoard[source.colIndex],
-          cards: newOrder,
-        };
-        setBoard(newBoard);
+        newBoard[source.colIndex].cards = arrayMove(
+          newBoard[source.colIndex].cards,
+          source.cardIndex,
+          destCardIndex
+        );
       }
     } else {
-      const newBoard = [...board];
       const [moved] = newBoard[source.colIndex].cards.splice(
         source.cardIndex,
         1
       );
       newBoard[destColIndex].cards.splice(destCardIndex, 0, moved);
-      setBoard(newBoard);
     }
-
+    setBoard(newBoard);
     setActiveCard(null);
     setOverColumnId(null);
   };
@@ -170,7 +167,7 @@ export default function TaskList({ initialBoard }: TaskListProps) {
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex space-x-4 overflow-x-auto p-4">
+      <div className="flex flex-col sm:flex-row sm:space-x-4 overflow-x-auto p-2 sm:p-4">
         {board.map((column) => (
           <ColumnContainer
             key={column.id}
@@ -188,6 +185,7 @@ export default function TaskList({ initialBoard }: TaskListProps) {
           </ColumnContainer>
         ))}
       </div>
+
       <DragOverlay>
         {activeCard ? <Task task={activeCard} /> : null}
       </DragOverlay>

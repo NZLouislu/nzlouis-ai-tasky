@@ -2,14 +2,7 @@
 
 import { CSS } from "@dnd-kit/utilities";
 import { useSortable } from "@dnd-kit/sortable";
-
-export interface Card {
-  id: string;
-  title: string;
-  description?: string;
-  due?: string;
-  status?: string;
-}
+import { Card } from "../data/types";
 
 interface TaskProps {
   task: Card;
@@ -19,7 +12,7 @@ export default function Task({ task }: TaskProps) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: task.id });
 
-  const style: React.CSSProperties = {
+  const style = {
     transform: CSS.Transform.toString(transform),
     transition,
   };
@@ -32,9 +25,13 @@ export default function Task({ task }: TaskProps) {
       {...listeners}
       className="bg-white rounded-lg shadow p-4 mb-3 cursor-pointer hover:shadow-md transition-shadow"
     >
-      <h4 className="font-semibold text-gray-800">{task.title}</h4>
+      <h4 className="font-semibold text-gray-800 text-sm md:text-base lg:text-lg">
+        {task.title}
+      </h4>
       {task.description && (
-        <p className="text-gray-500 text-sm mt-1">{task.description}</p>
+        <p className="text-gray-500 text-xs md:text-sm mt-1">
+          {task.description}
+        </p>
       )}
       {task.due && (
         <span className="text-gray-400 text-xs mt-2 block">
