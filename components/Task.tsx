@@ -2,7 +2,7 @@
 
 import { CSS } from "@dnd-kit/utilities";
 import { useSortable } from "@dnd-kit/sortable";
-import { Card } from "../data/types";
+import { Card } from "./types";
 
 interface TaskProps {
   task: Card;

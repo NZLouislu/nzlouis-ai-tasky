@@ -18,7 +18,8 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { useDroppable } from "@dnd-kit/core";
-import Task, { Card } from "./Task";
+import { Card } from "./types";
+import Task from "./Task";
 
 export interface Column {
   id: string;

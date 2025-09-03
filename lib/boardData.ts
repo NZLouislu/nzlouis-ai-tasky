@@ -1,9 +1,4 @@
-export interface Card {
-  id: string;
-  title: string;
-  description?: string;
-  due?: string;
-}
+import { Card } from "@/components/types";
 
 export interface Column {
   id: string;
