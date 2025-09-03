@@ -32,7 +32,6 @@ export default function Workspace() {
   const [activePageId, setActivePageId] = useState<string>("page-1");
   const [showIconSelector, setShowIconSelector] = useState(false);
   const [showCoverOptions, setShowCoverOptions] = useState(false);
-  const [showTitleActions, setShowTitleActions] = useState(false);
   const [showCoverActions, setShowCoverActions] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -239,11 +238,7 @@ export default function Workspace() {
 
             {/* Title + Editor */}
             <div className="max-w-[900px] mx-auto px-4">
-              <div
-                className="flex justify-start"
-                onMouseEnter={() => setShowTitleActions(true)}
-                onMouseLeave={() => setShowTitleActions(false)}
-              >
+              <div className="flex justify-start">
                 <div className="w-full">
                   <div className="flex space-x-2 mb-2 transition-opacity duration-200 pl-8">
                     {!activePage.icon && (
