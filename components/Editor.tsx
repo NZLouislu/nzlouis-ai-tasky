@@ -7,9 +7,17 @@ import { PartialBlock } from "@blocknote/core";
 
 interface EditorProps {
   initialContent?: PartialBlock[];
+  onChange?: (content: PartialBlock[]) => void;
 }
 
-export default function Editor({ initialContent }: EditorProps) {
+export default function Editor({ initialContent, onChange }: EditorProps) {
   const editor = useCreateBlockNote({ initialContent });
-  return <BlockNoteView editor={editor} />;
+  
+  const handleChange = () => {
+    if (onChange) {
+      onChange(editor.document);
+    }
+  };
+  
+  return <BlockNoteView editor={editor} onChange={handleChange} />;
 }

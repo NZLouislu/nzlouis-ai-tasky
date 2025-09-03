@@ -9,11 +9,12 @@ export default function Navbar() {
 
   const items = [
     { label: "🏠 Home", href: "/" },
-    { label: "🛠 Editor", href: "/editor" }
+    { label: "🛠 Editor", href: "/editor" },
+    { label: "📁 Workspace", href: "/workspace" }
   ];
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b bg-white/30 backdrop-blur-md">
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-white/30 backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 md:px-6">
         <Link
           href="https://www.nzlouis.com"
@@ -53,7 +54,7 @@ export default function Navbar() {
       </div>
 
       {open && (
-        <div className="md:hidden border-t bg-white/30 backdrop-blur-md shadow-md">
+        <div className="md:hidden bg-white/30 backdrop-blur-md shadow-md">
           <div className="flex flex-col gap-4 p-4">
             {items.map((i) => (
               <Link

@@ -6,7 +6,7 @@ export default function Footer({
 }: ComponentPropsWithoutRef<"footer">) {
   return (
     <footer
-      className={`mt-2 border-t py-6 text-center text-sm text-gray-500 ${className}`}
+      className={`mt-2 py-6 text-center text-sm text-gray-500 ${className}`}
       {...props}
     >
       © {new Date().getFullYear()} NZLouis | Louis Lu. All rights reserved.

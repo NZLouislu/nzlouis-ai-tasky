@@ -27,7 +27,10 @@ export default function EditorPage() {
 
   return (
     <div>
-      <h1>{page.title}</h1>
+      <h1 className="flex items-center">
+        <span className="mr-2">📝</span>
+        {page.title}
+      </h1>
       <Editor initialContent={page.content} />
     </div>
   );
