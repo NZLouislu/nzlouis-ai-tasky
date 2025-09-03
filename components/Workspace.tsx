@@ -210,124 +210,125 @@ export default function Workspace() {
                    onMouseEnter={() => setShowTitleActions(true)}
                    onMouseLeave={() => setShowTitleActions(false)}>
                 <div className="w-full">
-                {/* Action Buttons - Hidden by default, shown on hover */}
-                <div className={`flex space-x-2 mb-2 transition-opacity duration-200 pl-10 ${showTitleActions || (!activePage.icon && !activePage.cover) ? 'opacity-100' : 'opacity-0'}`}>
-                  {!activePage.icon && (
-                    <button
-                      onClick={() => setShowIconSelector(!showIconSelector)}
-                      className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 rounded"
-                    >
-                      <Plus size={16} className="mr-1" />
-                      Add Icon
-                    </button>
+                  {/* Action Buttons - Hidden by default, shown on hover */}
+                  <div className={`flex space-x-2 mb-2 transition-opacity duration-200 pl-10 ${showTitleActions || (!activePage.icon && !activePage.cover) ? 'opacity-100' : 'opacity-0'}`}>
+                    {!activePage.icon && (
+                      <button
+                        onClick={() => setShowIconSelector(!showIconSelector)}
+                        className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 rounded"
+                      >
+                        <Plus size={16} className="mr-1" />
+                        Add Icon
+                      </button>
+                    )}
+                    
+                    {!activePage.cover && (
+                      <button
+                        onClick={() => setShowCoverOptions(!showCoverOptions)}
+                        className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 rounded"
+                      >
+                        <Image size={16} className="mr-1" />
+                        Add Cover
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* Icon Selector */}
+                  {showIconSelector && (
+                    <div className="mb-3 p-3 bg-white border border-gray-200 rounded-lg shadow-lg ml-10">
+                      <div className="grid grid-cols-8 gap-2">
+                        {iconOptions.map((icon) => (
+                          <button
+                            key={icon}
+                            onClick={() => setPageIcon(activePageId, icon)}
+                            className="text-lg p-2 hover:bg-gray-100 rounded"
+                          >
+                            {icon}
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => removePageIcon(activePageId)}
+                          className="text-sm p-2 hover:bg-gray-100 rounded flex items-center justify-center text-gray-500"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
                   )}
                   
-                  {!activePage.cover && (
-                    <button
-                      onClick={() => setShowCoverOptions(!showCoverOptions)}
-                      className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 rounded"
-                    >
-                      <Image size={16} className="mr-1" />
-                      Add Cover
-                    </button>
-                  )}
-                </div>
-                
-                {/* Icon Selector */}
-                {showIconSelector && (
-                  <div className="mb-3 p-3 bg-white border border-gray-200 rounded-lg shadow-lg ml-10">
-                    <div className="grid grid-cols-8 gap-2">
-                      {iconOptions.map((icon) => (
-                        <button
-                          key={icon}
-                          onClick={() => setPageIcon(activePageId, icon)}
-                          className="text-lg p-2 hover:bg-gray-100 rounded"
-                        >
-                          {icon}
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => removePageIcon(activePageId)}
-                        className="text-sm p-2 hover:bg-gray-100 rounded flex items-center justify-center text-gray-500"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Cover Options */}
-                {showCoverOptions && (
-                  <div className="mb-3 p-3 bg-white border border-gray-200 rounded-lg shadow-lg ml-10">
-                    <div className="mb-3">
-                      <h3 className="text-sm font-medium text-gray-700 mb-2">Colors</h3>
-                      <div className="flex flex-wrap gap-2">
-                        {colorOptions.map((color) => (
-                          <button
-                            key={color}
-                            onClick={() => setPageCover(activePageId, { type: "color", value: color })}
-                            className={`w-8 h-8 rounded ${color} hover:opacity-80`}
-                          ></button>
-                        ))}
+                  {/* Cover Options */}
+                  {showCoverOptions && (
+                    <div className="mb-3 p-3 bg-white border border-gray-200 rounded-lg shadow-lg ml-10">
+                      <div className="mb-3">
+                        <h3 className="text-sm font-medium text-gray-700 mb-2">Colors</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {colorOptions.map((color) => (
+                            <button
+                              key={color}
+                              onClick={() => setPageCover(activePageId, { type: "color", value: color })}
+                              className={`w-8 h-8 rounded ${color} hover:opacity-80`}
+                            ></button>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-700 mb-2">Image URL</h3>
+                        <input
+                          type="text"
+                          placeholder="Enter image URL"
+                          className="w-full px-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          onBlur={(e) => {
+                            if (e.target.value) {
+                              setPageCover(activePageId, { type: "image", value: e.target.value });
+                            }
+                          }}
+                        />
                       </div>
                     </div>
-                    
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-700 mb-2">Image URL</h3>
-                      <input
-                        type="text"
-                        placeholder="Enter image URL"
-                        className="w-full px-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        onBlur={(e) => {
-                          if (e.target.value) {
-                            setPageCover(activePageId, { type: "image", value: e.target.value });
+                  )}
+                  
+                  <div className="mb-8 pl-10">
+                    <div className="flex items-center">
+                      {activePage.icon ? (
+                        <div className="relative">
+                          <span
+                            className="text-2xl mr-3 cursor-pointer"
+                            onClick={() => setShowIconSelector(true)}
+                          >
+                            {activePage.icon}
+                          </span>
+                        </div>
+                      ) : null}
+                      <div
+                        className="text-3xl font-bold text-gray-800 text-left w-full"
+                        onClick={() => {
+                          // Focus the input when the div is clicked
+                          const input = document.getElementById(`title-input-${activePageId}`);
+                          if (input) {
+                            input.focus();
                           }
                         }}
-                      />
-                    </div>
-                  </div>
-                )}
-                
-                <div className="mb-8 pl-10">
-                  <div className="flex items-center">
-                    {activePage.icon ? (
-                      <div className="relative">
-                        <span
-                          className="text-2xl mr-3 cursor-pointer"
-                          onClick={() => setShowIconSelector(true)}
-                        >
-                          {activePage.icon}
-                        </span>
+                      >
+                        <input
+                          id={`title-input-${activePageId}`}
+                          type="text"
+                          value={activePage.title}
+                          onChange={(e) => updatePageTitle(activePageId, e.target.value)}
+                          placeholder="Untitled"
+                          className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-3xl font-bold text-gray-800 placeholder-gray-400"
+                        />
                       </div>
-                    ) : null}
-                    <div
-                      className="text-3xl font-bold text-gray-800 text-left w-full"
-                      onClick={() => {
-                        // Focus the input when the div is clicked
-                        const input = document.getElementById(`title-input-${activePageId}`);
-                        if (input) {
-                          input.focus();
-                        }
-                      }}
-                    >
-                      <input
-                        id={`title-input-${activePageId}`}
-                        type="text"
-                        value={activePage.title}
-                        onChange={(e) => updatePageTitle(activePageId, e.target.value)}
-                        placeholder="Untitled"
-                        className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-3xl font-bold text-gray-800 placeholder-gray-400"
-                      />
                     </div>
                   </div>
-                </div>
-                
-                {/* Editor */}
-                <div className="text-left pl-10">
-                  <Editor
-                    initialContent={activePage.content}
-                    onChange={updatePageContent}
-                  />
+                  
+                  {/* Editor */}
+                  <div className="text-left pl-10">
+                    <Editor
+                      initialContent={activePage.content}
+                      onChange={updatePageContent}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
