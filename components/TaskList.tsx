@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -17,9 +17,9 @@ import {
   verticalListSortingStrategy,
   arrayMove,
 } from "@dnd-kit/sortable";
-import { useDroppable } from "@dnd-kit/core";
-import { Card } from "./types";
 import Task from "./Task";
+import ColumnContainer from "./ColumnContainer";
+import { Card } from "./types";
 
 export interface Column {
   id: string;
@@ -27,41 +27,20 @@ export interface Column {
   cards: Card[];
 }
 
-interface TaskListProps {
-  initialBoard: Column[];
-}
-
-function ColumnContainer({
-  column,
-  isOver,
-  children,
-}: {
-  column: Column;
-  isOver: boolean;
-  children: React.ReactNode;
-}) {
-  const { setNodeRef } = useDroppable({ id: column.id });
-  return (
-    <div
-      ref={setNodeRef}
-      className={`bg-gray-100 rounded-lg p-4 min-w-[250px] flex-shrink-0 transition-all ${
-        isOver ? "border-2 border-blue-500" : ""
-      }`}
-    >
-      <h3 className="font-bold text-gray-700 mb-3 text-sm sm:text-base md:text-lg">
-        {column.title}
-      </h3>
-      {children}
-    </div>
-  );
-}
-
-export default function TaskList({ initialBoard }: TaskListProps) {
+export default function TaskList({ initialBoard }: { initialBoard: Column[] }) {
   const [board, setBoard] = useState<Column[]>(
     initialBoard.map((c) => ({ ...c, cards: [...c.cards] }))
   );
   const [activeCard, setActiveCard] = useState<Card | null>(null);
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   const sensors = useSensors(useSensor(PointerSensor));
 
@@ -160,6 +139,44 @@ export default function TaskList({ initialBoard }: TaskListProps) {
     setOverColumnId(null);
   };
 
+  if (isMobile) {
+    return (
+      <div className="w-full max-w-[900px] px-2 py-2">
+        <div className="flex flex-col gap-4">
+          {board.map((column) => (
+            <div key={column.id} className="bg-gray-100 rounded-lg p-4 w-full">
+              <h3 className="font-bold text-gray-700 mb-3 text-base">
+                {column.title}
+              </h3>
+              <div className="flex flex-col">
+                {column.cards.map((card) => (
+                  <div
+                    key={card.id}
+                    className="bg-white rounded-lg shadow p-4 mb-3"
+                  >
+                    <h4 className="font-semibold text-gray-800 text-base">
+                      {card.title}
+                    </h4>
+                    {card.description && (
+                      <p className="text-gray-500 text-sm mt-1">
+                        {card.description}
+                      </p>
+                    )}
+                    {card.due && (
+                      <span className="text-gray-400 text-xs mt-2 block">
+                        Due: {card.due}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <DndContext
       sensors={sensors}
@@ -168,12 +185,16 @@ export default function TaskList({ initialBoard }: TaskListProps) {
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex flex-col sm:flex-row sm:space-x-4 overflow-x-auto p-2 sm:p-4">
+      <div className="w-full max-w-[900px] px-2 md:px-4 flex flex-row gap-4 p-2">
         {board.map((column) => (
           <ColumnContainer
             key={column.id}
-            column={column}
-            isOver={overColumnId === column.id}
+            id={column.id}
+            title={column.title}
+            onOverChange={(isOver) => {
+              if (isOver) setOverColumnId(column.id);
+              else if (overColumnId === column.id) setOverColumnId(null);
+            }}
           >
             <SortableContext
               items={column.cards.map((c) => c.id)}
@@ -186,7 +207,6 @@ export default function TaskList({ initialBoard }: TaskListProps) {
           </ColumnContainer>
         ))}
       </div>
-
       <DragOverlay>
         {activeCard ? <Task task={activeCard} /> : null}
       </DragOverlay>
