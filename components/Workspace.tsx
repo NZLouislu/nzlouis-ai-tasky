@@ -3,6 +3,7 @@ import { useState } from "react";
 import Editor from "./Editor";
 import { PartialBlock } from "@blocknote/core";
 import { Plus, Image, Trash2, Menu } from "lucide-react";
+import Sidebar from "./Sidebar";
 
 interface Page {
   id: string;
@@ -112,60 +113,17 @@ export default function Workspace() {
 
   return (
     <div className="flex h-screen">
-      {/* Sidebar */}
-      <div
-        className={`fixed md:static inset-y-0 left-0 z-30 transform ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        } md:translate-x-0 transition-transform duration-200 ease-in-out w-64 bg-gray-50 border-r border-gray-200 flex-col`}
-      >
-        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-gray-800 flex items-center">
-            <span className="mr-2">📁</span> Workspace
-          </h2>
-        </div>
-
-        <div
-          className="px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 flex items-center cursor-pointer rounded-md"
-          onClick={addNewPage}
-        >
-          <Plus size={16} className="mr-2 text-gray-500" />
-          New Page
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-2">
-            {pages.map((page) => (
-              <div
-                key={page.id}
-                onClick={() => {
-                  setActivePageId(page.id);
-                  if (window.innerWidth < 768) {
-                    setSidebarOpen(false);
-                  }
-                }}
-                className={`flex items-center p-2 mb-1 text-sm rounded cursor-pointer truncate ${
-                  activePageId === page.id
-                    ? "bg-blue-100 text-blue-800"
-                    : "text-gray-700 hover:bg-gray-100"
-                }`}
-              >
-                {page.icon && <span className="mr-2">{page.icon}</span>}
-                {activePageId === page.id ? (
-                  <input
-                    type="text"
-                    value={page.title}
-                    onChange={(e) => updatePageTitle(page.id, e.target.value)}
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-full bg-transparent border-none focus:outline-none focus:ring-0"
-                  />
-                ) : (
-                  <span>{page.title}</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <Sidebar
+        title="Workspace"
+        icon="📁"
+        pages={pages.map(p => ({ id: p.id, title: p.title, icon: p.icon }))}
+        activePageId={activePageId}
+        onAddPage={addNewPage}
+        onUpdatePageTitle={updatePageTitle}
+        onSelectPage={setActivePageId}
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+      />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
@@ -184,7 +142,7 @@ export default function Workspace() {
               {activePage.icon && (
                 <span className="mr-1">{activePage.icon}</span>
               )}
-              {activePage.title}
+              {activePage.title || "Untitled"}
             </span>
           </nav>
         </div>

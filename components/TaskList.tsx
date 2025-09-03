@@ -19,13 +19,9 @@ import {
 } from "@dnd-kit/sortable";
 import Task from "./Task";
 import ColumnContainer from "./ColumnContainer";
-import { Card } from "./types";
+import { Card, Column } from "./types";
 
-export interface Column {
-  id: string;
-  title: string;
-  cards: Card[];
-}
+
 
 export default function TaskList({ initialBoard }: { initialBoard: Column[] }) {
   const [board, setBoard] = useState<Column[]>(

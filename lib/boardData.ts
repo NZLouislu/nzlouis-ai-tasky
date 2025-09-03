@@ -1,10 +1,4 @@
-import { Card } from "@/components/types";
-
-export interface Column {
-  id: string;
-  title: string;
-  cards: Card[];
-}
+import { Column } from "@/components/types";
 
 export const boardData: Column[] = [
   {
