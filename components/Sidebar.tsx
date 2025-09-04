@@ -12,11 +12,12 @@ interface SidebarProps {
   icon: string;
   pages: Page[];
   activePageId: string;
-  onAddPage?: () => void; // 改为可选
-  onUpdatePageTitle?: (pageId: string, newTitle: string) => void; // 改为可选
+  onAddPage?: () => void;
+  onUpdatePageTitle?: (pageId: string, newTitle: string) => void;
   onSelectPage: (pageId: string) => void;
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
+  className?: string;
 }
 
 export default function Sidebar({
@@ -28,13 +29,14 @@ export default function Sidebar({
   onUpdatePageTitle,
   onSelectPage,
   sidebarOpen,
-  setSidebarOpen
+  setSidebarOpen,
+  className = ""
 }: SidebarProps) {
   return (
     <div
-      className={`fixed md:static inset-y-0 left-0 z-30 transform ${
+      className={`fixed inset-y-0 left-0 z-30 transform ${className} ${
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
-      } md:translate-x-0 transition-transform duration-200 ease-in-out w-64 bg-gray-50 border-r border-gray-200 flex-col`}
+      } md:translate-x-0 transition-transform duration-200 ease-in-out w-64 bg-gray-50 border-r border-gray-200 flex flex-col`}
     >
       <div className="p-4 border-b border-gray-200 flex justify-between items-center">
         <h2 className="text-lg font-semibold text-gray-800 flex items-center">

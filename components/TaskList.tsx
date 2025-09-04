@@ -137,7 +137,7 @@ export default function TaskList({ initialBoard }: { initialBoard: Column[] }) {
 
   if (isMobile) {
     return (
-      <div className="w-full max-w-[900px] px-2 py-2">
+      <div className="w-full max-w-[900px] px-2 md:px-2 lg:px-8 py-2">
         <div className="flex flex-col gap-4">
           {board.map((column) => (
             <div key={column.id} className="bg-gray-100 rounded-lg p-4 w-full">
@@ -181,7 +181,7 @@ export default function TaskList({ initialBoard }: { initialBoard: Column[] }) {
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="w-full max-w-[900px] px-2 md:px-4 flex flex-row gap-4 p-2">
+      <div className="w-full max-w-[900px] px-2 md:px-2 lg:px-8 flex flex-row gap-4 p-2">
         {board.map((column) => (
           <ColumnContainer
             key={column.id}

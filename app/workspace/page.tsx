@@ -1,11 +1,10 @@
 "use client";
-import dynamic from "next/dynamic";
 
-const Workspace = dynamic(() => import("../../components/Workspace"), { ssr: false });
+import Workspace from "@/components/Workspace";
 
 export default function WorkspacePage() {
   return (
-    <div className="h-screen">
+    <div className="h-screen pt-16 px-0 md:px-2 lg:px-8">
       <Workspace />
     </div>
   );
