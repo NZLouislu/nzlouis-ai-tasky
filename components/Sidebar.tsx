@@ -1,10 +1,12 @@
 "use client";
 import { Plus } from "lucide-react";
+import Link from "next/link";
 
 interface Page {
   id: string;
   title: string;
   icon?: string;
+  href?: string;
 }
 
 interface SidebarProps {
@@ -14,7 +16,7 @@ interface SidebarProps {
   activePageId: string;
   onAddPage?: () => void;
   onUpdatePageTitle?: (pageId: string, newTitle: string) => void;
-  onSelectPage: (pageId: string) => void;
+  onSelectPage: (pageId: string, href?: string) => void;
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   className?: string;
@@ -56,35 +58,74 @@ export default function Sidebar({
 
       <div className="flex-1 overflow-y-auto">
         <div className="p-2">
-          {pages.map((page) => (
-            <div
-              key={page.id}
-              onClick={() => {
-                onSelectPage(page.id);
-                if (window.innerWidth < 768) {
-                  setSidebarOpen(false);
-                }
-              }}
-              className={`flex items-center p-2 mb-1 text-sm rounded cursor-pointer truncate ${
+          {pages.map((page) => {
+            const commonProps = {
+              key: page.id,
+              className: `flex items-center p-2 mb-1 text-sm rounded cursor-pointer truncate ${
                 activePageId === page.id
                   ? "bg-blue-100 text-blue-800"
                   : "text-gray-700 hover:bg-gray-100"
-              }`}
-            >
-              {page.icon && <span className="mr-2">{page.icon}</span>}
-              {activePageId === page.id && onUpdatePageTitle ? (
-                <input
-                  type="text"
-                  value={page.title}
-                  onChange={(e) => onUpdatePageTitle(page.id, e.target.value)}
-                  onClick={(e) => e.stopPropagation()}
-                  className="w-full bg-transparent border-none focus:outline-none focus:ring-0"
-                />
-              ) : (
-                <span>{page.title}</span>
-              )}
-            </div>
-          ))}
+              }`,
+            };
+
+            const content = (
+              <>
+                {page.icon && <span className="mr-2">{page.icon}</span>}
+                {activePageId === page.id && onUpdatePageTitle ? (
+                  <input
+                    type="text"
+                    value={page.title}
+                    onChange={(e) => onUpdatePageTitle(page.id, e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full bg-transparent border-none focus:outline-none focus:ring-0"
+                  />
+                ) : (
+                  <span>{page.title}</span>
+                )}
+              </>
+            );
+
+            if (page.href) {
+              return (
+                <Link
+                  key={page.id}
+                  href={page.href}
+                  onClick={() => {
+                    onSelectPage(page.id, page.href);
+                    if (window.innerWidth < 768) {
+                      setSidebarOpen(false);
+                    }
+                  }}
+                  className={`flex items-center p-2 mb-1 text-sm rounded cursor-pointer truncate ${
+                    activePageId === page.id
+                      ? "bg-blue-100 text-blue-800"
+                      : "text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  {content}
+                </Link>
+              );
+            } else {
+              return (
+                <div
+                  key={page.id}
+                  onClick={() => {
+                    onSelectPage(page.id);
+                    if (window.innerWidth < 768) {
+                      setSidebarOpen(false);
+                    }
+                  }}
+                  className={`flex items-center p-2 mb-1 text-sm rounded cursor-pointer truncate ${
+                    activePageId === page.id
+                      ? "bg-blue-100 text-blue-800"
+                      : "text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  {content}
+                </div>
+              );
+            }
+          })}
         </div>
       </div>
     </div>

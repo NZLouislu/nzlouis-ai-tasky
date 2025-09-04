@@ -235,7 +235,7 @@ export default function Workspace() {
                           onClick={() => setShowCoverOptions(!showCoverOptions)}
                           className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-2 py-1 rounded"
                         >
-                          <Image size={16} className="mr-1" />
+                          <Image size={16} className="mr-1" aria-label="Add cover" />
                           Add Cover
                         </button>
                       )}

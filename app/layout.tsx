@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
@@ -18,6 +17,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "NZLouis AI Tasky",
   description: "Smart Tasky with AI",
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({
@@ -27,13 +29,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen flex flex-col`}
-      >
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen flex flex-col`}>
         <Navbar />
-
         <main className="flex-1 pt-16 pb-4">{children}</main>
-
         <Footer className="shrink-0" />
       </body>
     </html>
