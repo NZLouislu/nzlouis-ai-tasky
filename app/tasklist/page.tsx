@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import TaskList from "@/components/TaskList";
 import { boardData } from "@/lib/boardData";
 import Sidebar from "@/components/Sidebar";
@@ -9,6 +9,21 @@ import Breadcrumb from "@/components/Breadcrumb";
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activePage, setActivePage] = useState("task-board");
+  const [navbarVisible, setNavbarVisible] = useState(true);
+
+  useEffect(() => {
+    let lastScrollY = window.scrollY;
+    const handleScroll = () => {
+      if (window.scrollY > lastScrollY) {
+        setNavbarVisible(false);
+      } else {
+        setNavbarVisible(true);
+      }
+      lastScrollY = window.scrollY;
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const pages = [
     { id: "task-board", title: "Task Board", icon: "📋" },
@@ -61,12 +76,12 @@ export default function Page() {
         onSelectPage={setActivePage}
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
-        className="top-16"
+        className={navbarVisible ? "top-16" : "top-0"}
       />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col ml-0 md:ml-64 lg:ml-64">
-        <div className="fixed top-16 left-0 right-0 z-40 bg-white/30 backdrop-blur-md border-b border-gray-200 md:left-64 lg:left-64">
+        <div className={`fixed ${navbarVisible ? "top-16" : "top-0"} left-0 right-0 z-40 bg-white/30 backdrop-blur-md border-b border-gray-200 md:left-64 lg:left-64 transition-all duration-300`}>
           <div className="p-4 md:pl-4 lg:pl-4">
             <Breadcrumb items={[
               { label: "Tasks", icon: "📝" },
@@ -86,7 +101,7 @@ export default function Page() {
           </button>
         </div>
 
-        <div className="flex-1 flex flex-col overflow-hidden pt-16 md:pt-20">
+        <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${navbarVisible ? "pt-16 md:pt-20" : "pt-0 md:pt-4"}`}>
           {renderContent()}
         </div>
       </div>
