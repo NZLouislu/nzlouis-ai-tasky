@@ -59,15 +59,6 @@ export default function Sidebar({
       <div className="flex-1 overflow-y-auto">
         <div className="p-2">
           {pages.map((page) => {
-            const commonProps = {
-              key: page.id,
-              className: `flex items-center p-2 mb-1 text-sm rounded cursor-pointer truncate ${
-                activePageId === page.id
-                  ? "bg-blue-100 text-blue-800"
-                  : "text-gray-700 hover:bg-gray-100"
-              }`,
-            };
-
             const content = (
               <>
                 {page.icon && <span className="mr-2">{page.icon}</span>}
