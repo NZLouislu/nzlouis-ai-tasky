@@ -21,8 +21,6 @@ import Task from "./Task";
 import ColumnContainer from "./ColumnContainer";
 import { Card, Column } from "./types";
 
-
-
 export default function TaskList({ initialBoard }: { initialBoard: Column[] }) {
   const [board, setBoard] = useState<Column[]>(
     initialBoard.map((c) => ({ ...c, cards: [...c.cards] }))
@@ -137,34 +135,44 @@ export default function TaskList({ initialBoard }: { initialBoard: Column[] }) {
 
   if (isMobile) {
     return (
-      <div className="w-full max-w-[900px] px-2 md:px-2 lg:px-8 py-2">
-        <div className="flex flex-col gap-4">
+      <div className="w-full max-w-[900px] mx-auto px-4 md:px-6 lg:px-8 py-6">
+        <div className="flex flex-col gap-6">
           {board.map((column) => (
-            <div key={column.id} className="bg-gray-100 rounded-lg p-4 w-full">
-              <h3 className="font-bold text-gray-700 mb-3 text-base">
-                {column.title}
-              </h3>
-              <div className="flex flex-col">
-                {column.cards.map((card) => (
-                  <div
-                    key={card.id}
-                    className="bg-white rounded-lg shadow p-4 mb-3"
-                  >
-                    <h4 className="font-semibold text-gray-800 text-base">
-                      {card.title}
-                    </h4>
-                    {card.description && (
-                      <p className="text-gray-500 text-sm mt-1">
-                        {card.description}
-                      </p>
-                    )}
-                    {card.due && (
-                      <span className="text-gray-400 text-xs mt-2 block">
-                        Due: {card.due}
-                      </span>
-                    )}
-                  </div>
-                ))}
+            <div key={column.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="p-4 border-b border-gray-200">
+                <h3 className="font-semibold text-gray-900 text-lg flex items-center">
+                  {column.title}
+                  <span className="ml-auto text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                    {column.cards.length}
+                  </span>
+                </h3>
+              </div>
+              <div className="p-4">
+                <div className="flex flex-col gap-3">
+                  {column.cards.map((card) => (
+                    <div
+                      key={card.id}
+                      className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:shadow-sm transition-shadow"
+                    >
+                      <h4 className="font-semibold text-gray-900 text-base mb-2">
+                        {card.title}
+                      </h4>
+                      {card.description && (
+                        <p className="text-gray-600 text-sm mb-3 leading-relaxed">
+                          {card.description}
+                        </p>
+                      )}
+                      {card.due && (
+                        <div className="flex items-center text-sm text-gray-500">
+                          <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          {card.due}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           ))}
@@ -181,27 +189,29 @@ export default function TaskList({ initialBoard }: { initialBoard: Column[] }) {
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="w-full max-w-[900px] px-2 md:px-2 lg:px-8 flex flex-row gap-4 p-2">
-        {board.map((column) => (
-          <ColumnContainer
-            key={column.id}
-            id={column.id}
-            title={column.title}
-            onOverChange={(isOver) => {
-              if (isOver) setOverColumnId(column.id);
-              else if (overColumnId === column.id) setOverColumnId(null);
-            }}
-          >
-            <SortableContext
-              items={column.cards.map((c) => c.id)}
-              strategy={verticalListSortingStrategy}
+      <div className="w-full max-w-[900px] mx-auto px-4 md:px-6 lg:px-8 py-6">
+        <div className="flex flex-row gap-6 overflow-x-auto pb-4">
+          {board.map((column) => (
+            <ColumnContainer
+              key={column.id}
+              id={column.id}
+              title={column.title}
+              onOverChange={(isOver) => {
+                if (isOver) setOverColumnId(column.id);
+                else if (overColumnId === column.id) setOverColumnId(null);
+              }}
             >
-              {column.cards.map((card) => (
-                <Task key={card.id} task={card} />
-              ))}
-            </SortableContext>
-          </ColumnContainer>
-        ))}
+              <SortableContext
+                items={column.cards.map((c) => c.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {column.cards.map((card) => (
+                  <Task key={card.id} task={card} />
+                ))}
+              </SortableContext>
+            </ColumnContainer>
+          ))}
+        </div>
       </div>
       <DragOverlay>
         {activeCard ? <Task task={activeCard} /> : null}
