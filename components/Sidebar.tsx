@@ -17,6 +17,7 @@ interface SidebarProps {
   pages: Page[];
   activePageId: string;
   onAddPage?: () => void;
+  onAddSubPage?: (parentPageId: string) => void;
   onUpdatePageTitle?: (pageId: string, newTitle: string) => void;
   onSelectPage: (pageId: string, href?: string) => void;
   sidebarOpen: boolean;
@@ -30,6 +31,7 @@ export default function Sidebar({
   pages,
   activePageId,
   onAddPage,
+  onAddSubPage,
   onUpdatePageTitle,
   onSelectPage,
   sidebarOpen,
@@ -131,9 +133,11 @@ export default function Sidebar({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    // Add sub-page logic would be handled by parent component
+                    if (onAddSubPage) {
+                      onAddSubPage(page.id);
+                    }
                   }}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-gray-600 rounded transition-opacity"
+                  className="opacity-0 group-hover:opacity-100 p-1 text-green-600 hover:text-green-800 rounded transition-opacity"
                   title="Add sub-page"
                 >
                   <Plus size={12} />
@@ -168,9 +172,9 @@ export default function Sidebar({
         <div className="px-4 py-2 border-b border-gray-200">
           <button
             onClick={onAddPage}
-            className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg w-full transition-colors"
+            className="flex items-center text-sm text-green-600 hover:text-green-800 hover:bg-gray-100 px-3 py-2 rounded-lg w-full transition-colors"
           >
-            <Plus size={16} className="mr-2" />
+            <Plus size={16} className="mr-2 text-green-600" />
             New Page
           </button>
         </div>

@@ -82,6 +82,20 @@ export default function Blog() {
     setActivePostId(newPost.id);
   };
 
+  const addNewSubPost = (parentId: string) => {
+    const newSubPost: Post = {
+      id: `${parentId}-sub-${Date.now()}`,
+      title: `Sub post ${posts.find(p => p.id === parentId)?.children?.length || 0 + 1}`,
+      content: [],
+    };
+    setPosts(prev => prev.map(post =>
+      post.id === parentId
+        ? { ...post, children: [...(post.children || []), newSubPost] }
+        : post
+    ));
+    setActivePostId(newSubPost.id);
+  };
+
   const updatePostTitle = (postId: string, newTitle: string) => {
     setPosts(
       posts.map((post) =>
@@ -173,6 +187,7 @@ export default function Blog() {
         pages={posts.map(p => ({ id: p.id, title: p.title, icon: p.icon, children: p.children }))}
         activePageId={activePostId}
         onAddPage={addNewPost}
+        onAddSubPage={addNewSubPost}
         onUpdatePageTitle={updatePostTitle}
         onSelectPage={setActivePostId}
         sidebarOpen={sidebarOpen}
@@ -202,7 +217,7 @@ export default function Blog() {
         <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${navbarVisible ? "pt-20" : "pt-4"}`}>
           <div className="flex-1 overflow-auto">
             <div className="py-8">
-              <div className="max-w-[900px] mx-auto px-4 md:px-6 lg:px-8">
+              <div className="max-w-[900px] mx-auto px-2 md:px-6 lg:px-8">
                 <div className="flex justify-start">
                   <div className="w-full">
                     {/* Cover */}
@@ -373,26 +388,6 @@ export default function Blog() {
                             className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-4xl font-bold text-gray-800 placeholder-gray-400"
                           />
                         </div>
-                        <button
-                          onClick={() => {
-                            const newSubPost: Post = {
-                              id: `${activePostId}-sub-${Date.now()}`,
-                              title: `Sub post ${activePost.children?.length || 0 + 1}`,
-                              content: [],
-                            };
-                            setPosts(prev => prev.map(post =>
-                              post.id === activePostId
-                                ? { ...post, children: [...(post.children || []), newSubPost] }
-                                : post
-                            ));
-                          }}
-                          className="ml-4 p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                          title="Add sub-post"
-                        >
-                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                          </svg>
-                        </button>
                       </div>
                     </div>
 

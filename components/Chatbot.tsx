@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { useAISettings } from "@/lib/useAISettings";
 import { getVisionModels } from "@/lib/aiConfig";
@@ -15,7 +15,10 @@ type Message = {
 
 export default function Chatbot() {
   const { settings, getCurrentModel, getApiKey } = useAISettings();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState("default");
+  const [sessionMessages, setSessionMessages] = useState<Record<string, Message[]>>({
+    "default": []
+  });
   const [inputValue, setInputValue] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -25,14 +28,20 @@ export default function Chatbot() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputAreaRef = useRef<HTMLDivElement | null>(null);
   const [inputAreaHeight, setInputAreaHeight] = useState<number>(180);
+  
+  const messages = sessionMessages[currentSessionId] || [];
+  
+  const handleNewSession = () => {
+    const newId = `session-${Date.now()}`;
+    setSessionMessages(prev => ({ ...prev, [newId]: [] }));
+    setCurrentSessionId(newId);
+    setInputValue("");
+    setPreviewImage(null);
+  };
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  useEffect(() => {
-    adjustTextareaHeight();
-  }, [inputValue]);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -74,13 +83,17 @@ export default function Chatbot() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const adjustTextareaHeight = () => {
+  const adjustTextareaHeight = useCallback(() => {
     const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = "auto";
       textarea.style.height = `${Math.min(textarea.scrollHeight, 150)}px`;
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [inputValue, adjustTextareaHeight]);
 
   const handleImageUpload = (file: File) => {
     if (file && file.type.startsWith("image/")) {
@@ -138,10 +151,11 @@ export default function Chatbot() {
       timestamp: new Date(),
       ...(previewImage && { image: previewImage })
     };
-    setMessages(prev => [...prev, newMessage]);
-    setInputValue("");
-    setPreviewImage(null);
-    setIsLoading(true);
+    
+    // Save current messages before updating state
+    const currentMessages = [...messages];
+    
+    // Update state with new user message and loading message
     const loadingMessage: Message = {
       id: Date.now() + 1,
       text: "",
@@ -149,11 +163,21 @@ export default function Chatbot() {
       timestamp: new Date(),
       isLoading: true
     };
-    setMessages(prev => [...prev, loadingMessage]);
+    
+    setSessionMessages(prev => {
+      const updated = { ...prev };
+      updated[currentSessionId] = [...currentMessages, newMessage, loadingMessage];
+      return updated;
+    });
+    
+    setInputValue("");
+    setPreviewImage(null);
+    setIsLoading(true);
     try {
+      // Use saved currentMessages (without new messages) for request
       const chatMessages = [
         { role: "system", content: settings.systemPrompt },
-        ...messages.map(msg => ({
+        ...currentMessages.map(msg => ({
           role: msg.sender === "user" ? "user" : "assistant",
           content: msg.text,
           ...(msg.image && { image: msg.image })
@@ -164,6 +188,7 @@ export default function Chatbot() {
           ...(newMessage.image && { image: newMessage.image })
         }
       ];
+      
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
@@ -177,14 +202,36 @@ export default function Chatbot() {
           apiKey: apiKey
         })
       });
+      
       if (!response.ok) {
         throw new Error("Failed to get response from AI");
       }
+      
       const data = await response.json();
-      setMessages(prev => prev.map(msg => msg.isLoading ? { ...msg, text: data.response, isLoading: false } : msg));
+      
+      // Update only the loading message for the current session
+      setSessionMessages(prev => {
+        const updated = { ...prev };
+        updated[currentSessionId] = updated[currentSessionId].map(msg =>
+          msg.id === loadingMessage.id
+            ? { ...msg, text: data.response, isLoading: false }
+            : msg
+        );
+        return updated;
+      });
     } catch (error) {
       console.error("Chat error:", error);
-      setMessages(prev => prev.map(msg => msg.isLoading ? { ...msg, text: "Sorry, I encountered an error. Please try again.", isLoading: false } : msg));
+      
+      // Update only the loading message for the current session
+      setSessionMessages(prev => {
+        const updated = { ...prev };
+        updated[currentSessionId] = updated[currentSessionId].map(msg =>
+          msg.id === loadingMessage.id
+            ? { ...msg, text: "Sorry, I encountered an error. Please try again.", isLoading: false }
+            : msg
+        );
+        return updated;
+      });
     } finally {
       setIsLoading(false);
       setTimeout(() => scrollToBottom(), 120);
@@ -242,6 +289,11 @@ export default function Chatbot() {
           </div>
           <div className="flex items-center space-x-2">
             {currentModel?.supportsVision && <div className="bg-white/20 rounded-full px-2 py-1 text-xs">👁️ Vision</div>}
+            <button onClick={handleNewSession} className="bg-white/20 hover:bg-white/30 rounded-full p-2 transition-colors" title="New chat session">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+              </svg>
+            </button>
             <button onClick={() => setShowModelSelector(!showModelSelector)} className="bg-white/20 hover:bg-white/30 rounded-full p-2 transition-colors" title="Change model">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 3a1 1 0 01.707.293l3 3a1 1 0 01-1.414 1.414L10 5.414 7.707 7.707a1 1 0 01-1.414-1.414l3-3A1 1 0 0110 3zm-3.707 9.293a1 1 0 011.414 0L10 14.586l2.293-2.293a1 1 0 011.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />

@@ -22,12 +22,25 @@ import ColumnContainer from "./ColumnContainer";
 import { Card, Column } from "./types";
 
 export default function TaskList({ initialBoard }: { initialBoard: Column[] }) {
-  const [board, setBoard] = useState<Column[]>(
+  const [boards, setBoards] = useState<Column[][]>([
     initialBoard.map((c) => ({ ...c, cards: [...c.cards] }))
-  );
+  ]);
+  const [currentBoardIndex, setCurrentBoardIndex] = useState(0);
   const [activeCard, setActiveCard] = useState<Card | null>(null);
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  
+  const board = boards[currentBoardIndex];
+  
+  const handleCreateNewBoard = () => {
+    const newBoard = [
+      { id: "todo-col", title: "To Do", cards: [] },
+      { id: "in-progress-col", title: "In Progress", cards: [] },
+      { id: "done-col", title: "Done", cards: [] }
+    ];
+    setBoards(prev => [...prev, newBoard]);
+    setCurrentBoardIndex(prev => prev + 1);
+  };
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 640);
@@ -128,7 +141,11 @@ export default function TaskList({ initialBoard }: { initialBoard: Column[] }) {
       );
       newBoard[destColIndex].cards.splice(destCardIndex, 0, moved);
     }
-    setBoard(newBoard);
+    setBoards(prev => {
+      const updated = [...prev];
+      updated[currentBoardIndex] = newBoard;
+      return updated;
+    });
     setActiveCard(null);
     setOverColumnId(null);
   };
@@ -136,6 +153,18 @@ export default function TaskList({ initialBoard }: { initialBoard: Column[] }) {
   if (isMobile) {
     return (
       <div className="w-full max-w-[900px] mx-auto px-4 md:px-6 lg:px-8 py-6">
+        <div className="flex items-center mb-4">
+          <h2 className="text-xl font-bold text-gray-900 mr-4">Task Boards</h2>
+          <button
+            onClick={handleCreateNewBoard}
+            className="bg-blue-600 text-white rounded-full p-2 hover:bg-blue-700 transition-colors"
+            title="Create new task board"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
         <div className="flex flex-col gap-6">
           {board.map((column) => (
             <div key={column.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -190,6 +219,18 @@ export default function TaskList({ initialBoard }: { initialBoard: Column[] }) {
       onDragEnd={handleDragEnd}
     >
       <div className="w-full max-w-[900px] mx-auto px-4 md:px-6 lg:px-8 py-6">
+        <div className="flex items-center mb-4">
+          <h2 className="text-xl font-bold text-gray-900 mr-4">Task Boards</h2>
+          <button
+            onClick={handleCreateNewBoard}
+            className="bg-blue-600 text-white rounded-full p-2 hover:bg-blue-700 transition-colors"
+            title="Create new task board"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
         <div className="flex flex-row gap-6 overflow-x-auto pb-4">
           {board.map((column) => (
             <ColumnContainer
