@@ -17,21 +17,23 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
 
   const insertImageDataUrl = useCallback(
     (dataUrl: string) => {
-      const pos = editor.getTextCursorPosition();
-      const targetBlock: any = pos?.block as any;
-      editor.insertBlocks(
-        [
-          {
-            type: "image",
-            props: {
-              url: dataUrl,
-              caption: "",
-            },
+      const blocks: PartialBlock[] = [
+        {
+          type: "image",
+          props: {
+            url: dataUrl,
+            caption: "",
           },
-        ],
-        targetBlock,
-        "after"
-      );
+        },
+      ];
+
+      const pos = editor.getTextCursorPosition();
+      if (pos && pos.block) {
+        editor.insertBlocks(blocks, pos.block, "after");
+      } else {
+        editor.insertBlocks(blocks, editor.document[editor.document.length - 1], "after");
+      }
+
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
       if (onChange) onChange(editor.document);
     },
