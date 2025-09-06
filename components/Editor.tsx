@@ -17,7 +17,6 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
 
   const insertImageDataUrl = useCallback(
     (dataUrl: string) => {
-      const pos = editor.getTextCursorPosition();
       editor.insertBlocks(
         [
           {
@@ -28,7 +27,6 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
             },
           },
         ],
-        pos ? pos.block : undefined,
         "after"
       );
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
