@@ -224,7 +224,7 @@ export default function Workspace() {
         <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${navbarVisible ? "pt-20" : "pt-4"}`}>
           <div className="flex-1 overflow-auto">
             <div className="py-8">
-              <div className="max-w-[900px] mx-auto px-2 md:px-6 lg:px-8">
+              <div className="max-w-[900px] mx-auto pl-5 md:px-6 lg:px-8">
                 <div className="flex justify-start">
                   <div className="w-full">
                     {/* Cover */}
