@@ -17,6 +17,7 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
 
   const insertImageDataUrl = useCallback(
     (dataUrl: string) => {
+      const pos = editor.getTextCursorPosition();
       editor.insertBlocks(
         [
           {
@@ -27,6 +28,7 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
             },
           },
         ],
+        pos ? pos.block : undefined,
         "after"
       );
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
@@ -74,11 +76,10 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
       btn.className = "bn-local-image-btn";
       btn.textContent = "Upload local image";
       btn.style.marginLeft = "8px";
-      btn.style.padding = "4px 8px";
+      btn.style.padding = "6px 10px";
       btn.style.borderRadius = "4px";
       btn.style.border = "1px solid #d0d0d0";
       btn.style.background = "#fff";
-      btn.style.fontSize = "12px";
       btn.onclick = (e) => {
         e.stopPropagation();
         fileInput?.click();
