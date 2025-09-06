@@ -18,6 +18,7 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
   const insertImageDataUrl = useCallback(
     (dataUrl: string) => {
       const pos = editor.getTextCursorPosition();
+      const targetBlock: any = pos?.block as any;
       editor.insertBlocks(
         [
           {
@@ -28,7 +29,7 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
             },
           },
         ],
-        pos ? pos.block : undefined,
+        targetBlock,
         "after"
       );
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
@@ -111,9 +112,13 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
         const nodes = Array.from(m.addedNodes) as HTMLElement[];
         for (const node of nodes) {
           if (!(node instanceof HTMLElement)) continue;
-          const embedInput = node.querySelector<HTMLInputElement>('input[placeholder="Enter URL"], input[placeholder="Enter image URL"], input[placeholder="Enter URL here"]');
+          const embedInput = node.querySelector<HTMLInputElement>(
+            'input[placeholder="Enter URL"], input[placeholder="Enter image URL"], input[placeholder="Enter URL here"]'
+          );
           if (embedInput) injectButtonToEmbed(embedInput);
-          const nestedInputs = node.querySelectorAll<HTMLInputElement>('input[placeholder="Enter URL"], input[placeholder="Enter image URL"], input[placeholder="Enter URL here"]');
+          const nestedInputs = node.querySelectorAll<HTMLInputElement>(
+            'input[placeholder="Enter URL"], input[placeholder="Enter image URL"], input[placeholder="Enter URL here"]'
+          );
           nestedInputs.forEach((i) => injectButtonToEmbed(i));
         }
       }
@@ -121,7 +126,9 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
 
     observer.observe(document.body, { childList: true, subtree: true });
 
-    const existing = document.querySelectorAll<HTMLInputElement>('input[placeholder="Enter URL"], input[placeholder="Enter image URL"], input[placeholder="Enter URL here"]');
+    const existing = document.querySelectorAll<HTMLInputElement>(
+      'input[placeholder="Enter URL"], input[placeholder="Enter image URL"], input[placeholder="Enter URL here"]'
+    );
     existing.forEach((i) => injectButtonToEmbed(i));
 
     document.addEventListener("paste", handlePaste, true);
@@ -131,7 +138,9 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
       fileInput?.removeEventListener("change", onGlobalFileChange);
       document.removeEventListener("paste", handlePaste, true);
       if (globalFileInputRef.current) {
-        try { document.body.removeChild(globalFileInputRef.current); } catch {}
+        try {
+          document.body.removeChild(globalFileInputRef.current);
+        } catch {}
         globalFileInputRef.current = null;
       }
     };
