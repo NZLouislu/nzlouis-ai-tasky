@@ -24,8 +24,23 @@ type Message = {
 
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [navbarVisible, setNavbarVisible] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
+
+  useEffect(() => {
+    let lastScrollY = window.scrollY;
+    const handleScroll = () => {
+      if (window.scrollY > lastScrollY) {
+        setNavbarVisible(false);
+      } else {
+        setNavbarVisible(true);
+      }
+      lastScrollY = window.scrollY;
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const { settings, getCurrentModel, getApiKey } = useAISettings();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -305,11 +320,11 @@ export default function Page() {
         onSelectPage={handleSelectPage}
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
-        className="top-16"
+        className={navbarVisible ? "top-16" : "top-0"}
       />
 
       <div className="flex-1 flex flex-col ml-0 md:ml-64">
-        <div className="fixed top-16 left-0 right-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200 md:left-64">
+        <div className={`fixed ${navbarVisible ? "top-16" : "top-0"} left-0 right-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200 md:left-64 transition-all duration-300`}>
           <div className="px-4 md:px-6 py-3">
             <Breadcrumb items={breadcrumbItems} />
           </div>
@@ -326,7 +341,7 @@ export default function Page() {
           </button>
         </div>
 
-        <div className="flex-1 flex flex-col pt-20 md:pt-20">
+        <div className={`flex-1 flex flex-col ${navbarVisible ? "pt-20" : "pt-4"} transition-all duration-300`}>
           <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full px-4 md:px-6">
             <div className="flex-1 overflow-y-auto py-6 space-y-6" style={{ paddingBottom: inputHeight + 24 }}>
               {messages.length === 0 ? (

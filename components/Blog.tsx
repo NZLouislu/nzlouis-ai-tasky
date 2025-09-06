@@ -264,7 +264,7 @@ export default function Blog() {
                     )}
 
                     {/* Title + Actions */}
-                    <div className="mb-6">
+                    <div className="mb-6 pl-[23px] md:pl-0">
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center space-x-4">
                           {!activePost.icon && !activePost.cover && (
@@ -392,7 +392,7 @@ export default function Blog() {
                     </div>
 
                     {/* Editor */}
-                    <div className="min-h-[400px] -ml-8">
+                    <div className="min-h-[400px] -ml-8 pl-[23px] md:pl-0">
                       <Editor
                         initialContent={activePost.content}
                         onChange={updatePostContent}
