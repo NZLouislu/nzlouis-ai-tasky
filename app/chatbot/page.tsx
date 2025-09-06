@@ -176,26 +176,85 @@ export default function Page() {
       isLoading: true
     };
     setMessages(prev => [...prev, loadingMessage]);
+
     try {
       const chatMessages = [
         { role: "system", content: settings.systemPrompt },
         ...messages.map(msg => ({ role: msg.sender === "user" ? "user" : "assistant", content: msg.text, ...(msg.image && { image: msg.image }) })),
         { role: "user", content: newMessage.text, ...(newMessage.image && { image: newMessage.image }) }
       ];
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          modelId: settings.selectedModel,
-          messages: chatMessages,
-          temperature: settings.temperature,
-          maxTokens: settings.maxTokens,
-          apiKey
-        })
-      });
-      if (!response.ok) throw new Error("Failed to get response from AI");
-      const data = await response.json();
-      setMessages(prev => prev.map(msg => (msg.isLoading ? { ...msg, text: data.response, isLoading: false } : msg)));
+
+      const isGeminiModel = currentModel.provider === "google";
+      const useStreaming = isGeminiModel;
+
+      if (useStreaming) {
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            modelId: settings.selectedModel,
+            messages: chatMessages,
+            temperature: settings.temperature,
+            maxTokens: settings.maxTokens,
+            apiKey,
+            stream: true
+          })
+        });
+
+        if (!response.ok) throw new Error("Failed to get response from AI");
+
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        let accumulatedText = "";
+
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n');
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6);
+                if (data === '[DONE]') break;
+
+                try {
+                  const parsed = JSON.parse(data);
+                  if (parsed.text) {
+                    accumulatedText += parsed.text;
+                    setMessages(prev => prev.map(msg =>
+                      msg.isLoading ? { ...msg, text: accumulatedText } : msg
+                    ));
+                  }
+                } catch {
+                  // Ignore parsing errors
+                }
+              }
+            }
+          }
+        }
+
+        setMessages(prev => prev.map(msg =>
+          msg.isLoading ? { ...msg, text: accumulatedText, isLoading: false } : msg
+        ));
+      } else {
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            modelId: settings.selectedModel,
+            messages: chatMessages,
+            temperature: settings.temperature,
+            maxTokens: settings.maxTokens,
+            apiKey
+          })
+        });
+        if (!response.ok) throw new Error("Failed to get response from AI");
+        const data = await response.json();
+        setMessages(prev => prev.map(msg => (msg.isLoading ? { ...msg, text: data.response, isLoading: false } : msg)));
+      }
     } catch (error) {
       console.error("Chat error:", error);
       setMessages(prev => prev.map(msg => (msg.isLoading ? { ...msg, text: "Sorry, I encountered an error. Please try again.", isLoading: false } : msg)));
@@ -216,7 +275,9 @@ export default function Page() {
             <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></div>
             <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
           </div>
-          <span className="text-sm text-gray-500">AI is thinking...</span>
+          <span className="text-sm text-gray-500">
+            {message.text ? "AI is typing..." : "AI is thinking..."}
+          </span>
         </div>
       );
     }

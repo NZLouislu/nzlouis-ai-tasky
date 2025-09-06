@@ -132,6 +132,26 @@ export default function Blog() {
     );
   };
 
+  const handleCoverFileUpload = (file: File) => {
+    if (file && file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        setPostCover(activePostId, {
+          type: "image",
+          value: result,
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCoverFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.length) {
+      handleCoverFileUpload(e.target.files[0]);
+    }
+  };
+
   const iconOptions = ["📝", "📄", "📑", "📊", "📋", "📌", "⭐", "💡"];
 
   const colorOptions = [
@@ -304,12 +324,19 @@ export default function Blog() {
 
                           <div>
                             <h3 className="text-sm font-medium text-gray-700 mb-3">
-                              Image URL
+                              Upload Image
                             </h3>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleCoverFileSelect}
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Or enter image URL below</p>
                             <input
                               type="text"
                               placeholder="Enter image URL"
-                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent mt-2"
                               onBlur={(e) => {
                                 if (e.target.value) {
                                   setPostCover(activePostId, {
@@ -346,11 +373,31 @@ export default function Blog() {
                             className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-4xl font-bold text-gray-800 placeholder-gray-400"
                           />
                         </div>
+                        <button
+                          onClick={() => {
+                            const newSubPost: Post = {
+                              id: `${activePostId}-sub-${Date.now()}`,
+                              title: `Sub post ${activePost.children?.length || 0 + 1}`,
+                              content: [],
+                            };
+                            setPosts(prev => prev.map(post =>
+                              post.id === activePostId
+                                ? { ...post, children: [...(post.children || []), newSubPost] }
+                                : post
+                            ));
+                          }}
+                          className="ml-4 p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                          title="Add sub-post"
+                        >
+                          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                        </button>
                       </div>
                     </div>
 
                     {/* Editor */}
-                    <div className="min-h-[400px]">
+                    <div className="min-h-[400px] -ml-8">
                       <Editor
                         initialContent={activePost.content}
                         onChange={updatePostContent}

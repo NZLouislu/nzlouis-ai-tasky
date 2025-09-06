@@ -11,6 +11,7 @@ interface ChatRequest {
   temperature?: number;
   maxTokens?: number;
   apiKey?: string;
+  stream?: boolean;
 }
 
 interface ChatMessage {
@@ -52,7 +53,7 @@ async function callOpenAI(model: AIModel, messages: ChatMessage[], temperature: 
   return data.choices[0].message.content;
 }
 
-async function callGoogle(model: AIModel, messages: ChatMessage[], temperature: number, maxTokens: number, apiKey: string) {
+async function callGoogle(model: AIModel, messages: ChatMessage[], temperature: number, maxTokens: number, apiKey: string, stream: boolean = false) {
   const contents = messages.map(msg => ({
     role: msg.role === 'assistant' ? 'model' : 'user',
     parts: msg.image
@@ -60,7 +61,11 @@ async function callGoogle(model: AIModel, messages: ChatMessage[], temperature: 
       : [{ text: msg.content }]
   }));
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${apiKey}`, {
+  const endpoint = stream
+    ? `https://generativelanguage.googleapis.com/v1beta/models/${model.id}:streamGenerateContent?alt=sse&key=${apiKey}`
+    : `https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${apiKey}`;
+
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -76,6 +81,10 @@ async function callGoogle(model: AIModel, messages: ChatMessage[], temperature: 
 
   if (!response.ok) {
     throw new Error(`Google API error: ${response.statusText}`);
+  }
+
+  if (stream) {
+    return response;
   }
 
   const data = await response.json();
@@ -131,7 +140,7 @@ async function callOpenRouter(model: AIModel, messages: ChatMessage[], temperatu
 export async function POST(request: NextRequest) {
   try {
     const body: ChatRequest = await request.json();
-    const { modelId, messages, temperature = 0.7, maxTokens = 2048, apiKey } = body;
+    const { modelId, messages, temperature = 0.7, maxTokens = 2048, apiKey, stream = false } = body;
 
     const model = getModelById(modelId);
     if (!model) {
@@ -145,6 +154,91 @@ export async function POST(request: NextRequest) {
 
     if (provider.apiKeyRequired && !apiKey) {
       return NextResponse.json({ error: 'API key required' }, { status: 400 });
+    }
+
+    if (stream && provider.id === 'google') {
+      const contents = messages.map(msg => ({
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: msg.image
+          ? [{ text: msg.content }, { inline_data: { mime_type: 'image/jpeg', data: msg.image.split(',')[1] } }]
+          : [{ text: msg.content }]
+      }));
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.id}:streamGenerateContent?alt=sse&key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents,
+          generationConfig: {
+            temperature,
+            maxOutputTokens: maxTokens,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Google API error: ${response.statusText}`);
+      }
+
+      const streamResponse = new ReadableStream({
+        async start(controller) {
+          const reader = response.body?.getReader();
+          if (!reader) {
+            controller.close();
+            return;
+          }
+
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+
+              for (let i = 0; i < lines.length - 1; i++) {
+                const line = lines[i].trim();
+                if (line.startsWith('data: ')) {
+                  const dataStr = line.slice(6);
+                  if (dataStr === '[DONE]') {
+                    controller.enqueue('data: [DONE]\n\n');
+                    continue;
+                  }
+
+                  try {
+                    const data = JSON.parse(dataStr);
+                    if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+                      const text = data.candidates[0].content.parts[0].text;
+                      controller.enqueue(`data: ${JSON.stringify({ text })}\n\n`);
+                    }
+                  } catch {
+                    // Ignore parsing errors for incomplete chunks
+                  }
+                }
+              }
+
+              buffer = lines[lines.length - 1];
+            }
+
+            controller.close();
+          } catch (error) {
+            controller.error(error);
+          }
+        },
+      });
+
+      return new Response(streamResponse, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        },
+      });
     }
 
     let response: string;

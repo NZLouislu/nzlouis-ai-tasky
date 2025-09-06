@@ -92,46 +92,60 @@ export default function Sidebar({
             {content}
           </Link>
         ) : (
-          <div
-            onClick={() => {
-              if (hasChildren) {
-                toggleExpanded(page.id);
-              } else {
-                onSelectPage(page.id);
-                if (window.innerWidth < 768) {
-                  setSidebarOpen(false);
-                }
-              }
-            }}
-            className={`flex items-center px-3 py-2 text-sm rounded-lg cursor-pointer transition-colors ${
-              isActive
-                ? "bg-blue-100 text-blue-800"
-                : "text-gray-700 hover:bg-gray-100"
-            }`}
-            style={{ paddingLeft: `${12 + level * 16}px` }}
-          >
-            {hasChildren && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
+          <div className="group">
+            <div
+              onClick={() => {
+                if (hasChildren) {
                   toggleExpanded(page.id);
-                }}
-                className="mr-1 p-0.5 rounded hover:bg-gray-200"
-              >
-                {isExpanded ? (
-                  <ChevronDown size={12} />
-                ) : (
-                  <ChevronRight size={12} />
-                )}
-              </button>
-            )}
-            {content}
-          </div>
-        )}
+                } else {
+                  onSelectPage(page.id);
+                  if (window.innerWidth < 768) {
+                    setSidebarOpen(false);
+                  }
+                }
+              }}
+              className={`flex items-center px-3 py-2 text-sm rounded-lg cursor-pointer transition-colors ${
+                isActive
+                  ? "bg-blue-100 text-blue-800"
+                  : "text-gray-700 hover:bg-gray-100"
+              }`}
+              style={{ paddingLeft: `${12 + level * 16}px` }}
+            >
+              {hasChildren && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleExpanded(page.id);
+                  }}
+                  className="mr-1 p-0.5 rounded hover:bg-gray-200"
+                >
+                  {isExpanded ? (
+                    <ChevronDown size={12} />
+                  ) : (
+                    <ChevronRight size={12} />
+                  )}
+                </button>
+              )}
+              <div className="flex-1">{content}</div>
+              {level === 0 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Add sub-page logic would be handled by parent component
+                  }}
+                  className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-gray-600 rounded transition-opacity"
+                  title="Add sub-page"
+                >
+                  <Plus size={12} />
+                </button>
+              )}
+            </div>
 
-        {hasChildren && isExpanded && (
-          <div className="ml-2">
-            {page.children!.map(child => renderPage(child, level + 1))}
+            {hasChildren && isExpanded && (
+              <div className="ml-2">
+                {page.children!.map(child => renderPage(child, level + 1))}
+              </div>
+            )}
           </div>
         )}
       </div>
