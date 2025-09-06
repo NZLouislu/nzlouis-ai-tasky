@@ -12,8 +12,13 @@ interface EditorProps {
 }
 
 export default function Editor({ initialContent, onChange }: EditorProps) {
-  const editor = useCreateBlockNote({ initialContent });
   const editorRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+
+  const editor = useCreateBlockNote({
+    initialContent,
+  });
 
   const handleChange = () => {
     if (onChange) {
@@ -39,7 +44,6 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
         reader.onload = (event) => {
           const result = event.target?.result as string;
           if (result) {
-            // Insert image block at cursor position
             editor.insertBlocks([{
               type: "image",
               props: {
@@ -53,21 +57,120 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
       });
     };
 
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = Array.from(e.clipboardData?.items || []);
+      const imageItems = items.filter(item => item.type.startsWith('image/'));
+
+      if (imageItems.length > 0) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+
+        imageItems.forEach(item => {
+          const file = item.getAsFile();
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              const result = event.target?.result as string;
+              if (result) {
+                editor.insertBlocks([{
+                  type: "image",
+                  props: {
+                    url: result,
+                    caption: "",
+                  },
+                }], editor.getTextCursorPosition().block, "after");
+              }
+            };
+            reader.readAsDataURL(file);
+          }
+        });
+      }
+    };
+
     const editorElement = editorRef.current;
     if (editorElement) {
-      editorElement.addEventListener('dragover', handleDragOver);
-      editorElement.addEventListener('drop', handleDrop);
+      editorElement.addEventListener('dragover', handleDragOver, true);
+      editorElement.addEventListener('drop', handleDrop, true);
+      editorElement.addEventListener('paste', handlePaste, true);
 
       return () => {
-        editorElement.removeEventListener('dragover', handleDragOver);
-        editorElement.removeEventListener('drop', handleDrop);
+        editorElement.removeEventListener('dragover', handleDragOver, true);
+        editorElement.removeEventListener('drop', handleDrop, true);
+        editorElement.removeEventListener('paste', handlePaste, true);
       };
     }
   }, [editor]);
 
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    files.forEach(file => {
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const result = event.target?.result as string;
+          if (result) {
+            editor.insertBlocks([{
+              type: "image",
+              props: {
+                url: result,
+                caption: "",
+              },
+            }], editor.getTextCursorPosition().block, "after");
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  };
+
   return (
     <div ref={editorRef} className="w-full">
-      <BlockNoteView editor={editor} onChange={handleChange} />
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileInputChange}
+        accept="image/*"
+        multiple
+        className="hidden"
+      />
+      <div
+        onPaste={(e) => {
+          const items = Array.from(e.clipboardData?.items || []);
+          const imageItems = items.filter(item => item.type.startsWith('image/'));
+
+          if (imageItems.length > 0) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            imageItems.forEach(item => {
+              const file = item.getAsFile();
+              if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                  const result = event.target?.result as string;
+                  if (result) {
+                    editor.insertBlocks([{
+                      type: "image",
+                      props: {
+                        url: result,
+                        caption: "",
+                      },
+                    }], editor.getTextCursorPosition().block, "after");
+                  }
+                };
+                reader.readAsDataURL(file);
+              }
+            });
+          }
+        }}
+      >
+        <BlockNoteView
+          editor={editor}
+          onChange={handleChange}
+          theme="light"
+        />
+      </div>
     </div>
   );
 }
