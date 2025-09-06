@@ -5,6 +5,7 @@ import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import { PartialBlock } from "@blocknote/core";
 import { useEffect, useRef } from "react";
+import { Image } from "lucide-react";
 
 interface EditorProps {
   initialContent?: PartialBlock[];
@@ -124,6 +125,10 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
     });
   };
 
+  const handleImageSelect = () => {
+    fileInputRef.current?.click();
+  };
+
   return (
     <div ref={editorRef} className="w-full">
       <input
@@ -134,6 +139,18 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
         multiple
         className="hidden"
       />
+
+      <div className="mb-2 flex items-center gap-2 border-b border-gray-200 pb-2">
+        <button
+          onClick={handleImageSelect}
+          className="flex items-center gap-2 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+          title="Insert image"
+        >
+          <Image size={16} />
+          Add Image
+        </button>
+      </div>
+
       <div
         onPaste={(e) => {
           const items = Array.from(e.clipboardData?.items || []);
@@ -169,6 +186,7 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
           editor={editor}
           onChange={handleChange}
           theme="light"
+          sideMenu={false}
         />
       </div>
     </div>
