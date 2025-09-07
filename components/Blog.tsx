@@ -2,9 +2,11 @@
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { PartialBlock } from "@blocknote/core";
-import { Plus, Image, Trash2, Menu, MoreHorizontal } from "lucide-react";
+import { Plus, Image, Trash2, Menu, MoreHorizontal, MessageCircle, X } from "lucide-react";
 import Sidebar from "./Sidebar";
 import Breadcrumb from "./Breadcrumb";
+import ChatbotInput from "./ChatbotInput";
+import { useAISettings } from "@/lib/useAISettings";
 
 const Editor = dynamic(() => import("./Editor"), {
   ssr: false,
@@ -55,6 +57,13 @@ export default function Blog() {
   const [showCoverActions, setShowCoverActions] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [navbarVisible, setNavbarVisible] = useState(true);
+  const [showChatbot, setShowChatbot] = useState(false);
+  const [chatInputValue, setChatInputValue] = useState("");
+  const [chatPreviewImage, setChatPreviewImage] = useState<string | null>(null);
+  const [chatIsLoading, setChatIsLoading] = useState(false);
+  const [chatMessages, setChatMessages] = useState<Array<{id: number, text: string, sender: "user" | "bot", timestamp: Date, isLoading?: boolean}>>([]);
+
+  const { getCurrentModel, getApiKey } = useAISettings();
 
   useEffect(() => {
     let lastScrollY = window.scrollY;
@@ -166,6 +175,137 @@ export default function Blog() {
     }
   };
 
+  const handleChatSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (chatInputValue.trim() === "" && !chatPreviewImage) return;
+
+    const userMessage = {
+      id: Date.now(),
+      text: chatInputValue,
+      sender: "user" as const,
+      timestamp: new Date()
+    };
+
+    setChatMessages(prev => [...prev, userMessage]);
+    setChatInputValue("");
+    setChatPreviewImage(null);
+    setChatIsLoading(true);
+
+    try {
+      const currentBlogContent = activePost.content.map((block, index) => {
+        if (block.type === "paragraph" && block.content) {
+          const text = Array.isArray(block.content)
+            ? block.content.map(item => {
+                if (typeof item === "string") return item;
+                if (item && typeof item === "object" && "text" in item) return item.text;
+                return "";
+              }).join("")
+            : String(block.content);
+          return `Paragraph ${index + 1}: ${text}`;
+        }
+        if (block.type === "heading" && block.content) {
+          const text = Array.isArray(block.content)
+            ? block.content.map(item => {
+                if (typeof item === "string") return item;
+                if (item && typeof item === "object" && "text" in item) return item.text;
+                return "";
+              }).join("")
+            : String(block.content);
+          return `Heading: ${text}`;
+        }
+        return "";
+      }).filter(text => text.length > 0).join("\n\n");
+
+      const systemPrompt = `You are a helpful AI assistant for blog writing. The user is currently writing a blog post with the following content:
+
+${currentBlogContent}
+
+Help them improve their blog by:
+- Adding new content when they request it
+- Modifying existing content
+- Providing suggestions
+- Answering questions about their blog
+
+When they ask to add content, modify content, or make changes, respond with the updated content in a clear format.`;
+
+      const chatMessagesForAPI = [
+        { role: "system", content: systemPrompt },
+        ...chatMessages.map(msg => ({
+          role: msg.sender === "user" ? "user" : "assistant",
+          content: msg.text
+        })),
+        {
+          role: "user",
+          content: userMessage.text,
+          ...(chatPreviewImage && { image: chatPreviewImage })
+        }
+      ];
+
+      const currentModel = getCurrentModel();
+      if (!currentModel) {
+        alert("Please select a model in settings");
+        return;
+      }
+      const apiKey = getApiKey(currentModel.provider);
+      if (currentModel.provider !== "google" && !apiKey) {
+        alert(`Please set your ${currentModel.provider} API key in settings`);
+        return;
+      }
+
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          modelId: currentModel.id,
+          messages: chatMessagesForAPI,
+          temperature: 0.7,
+          maxTokens: 2000,
+          apiKey
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to get response from AI");
+      }
+
+      const data = await response.json();
+
+      const aiMessage = {
+        id: Date.now(),
+        text: data.response,
+        sender: "bot" as const,
+        timestamp: new Date()
+      };
+
+      setChatMessages(prev => [...prev, aiMessage]);
+
+      processBlogModification(data.response);
+
+    } catch (error) {
+      console.error("Chat error:", error);
+      const errorMessage = {
+        id: Date.now(),
+        text: "Sorry, I encountered an error. Please try again.",
+        sender: "bot" as const,
+        timestamp: new Date()
+      };
+
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setChatIsLoading(false);
+    }
+  };
+
+  const processBlogModification = (aiResponse: string) => {
+    const newBlock: PartialBlock = {
+      type: "paragraph",
+      content: [{ type: "text", text: aiResponse, styles: {} }]
+    };
+    updatePostContent([...activePost.content, newBlock]);
+  };
+
   const iconOptions = ["📝", "📄", "📑", "📊", "📋", "📌", "⭐", "💡"];
 
   const colorOptions = [
@@ -214,13 +354,12 @@ export default function Blog() {
           </button>
         </div>
 
-        <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${navbarVisible ? "pt-20" : "pt-4"}`}>
-          <div className="flex-1 overflow-auto">
+        <div className={`flex-1 flex overflow-hidden transition-all duration-300 ${navbarVisible ? "pt-20" : "pt-4"}`}>
+          <div className={`flex-1 overflow-auto ${showChatbot ? "lg:mr-0" : ""}`}>
             <div className="py-8">
               <div className="max-w-[900px] mx-auto pl-5 md:px-6 lg:px-8">
                 <div className="flex justify-start">
                   <div className="w-full">
-                    {/* Cover */}
                     {activePost.cover && (
                       <div
                         className="relative mb-8 rounded-lg overflow-hidden"
@@ -263,7 +402,6 @@ export default function Blog() {
                       </div>
                     )}
 
-                    {/* Title + Actions */}
                     <div className="mb-6 pl-[23px] md:pl-0">
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center space-x-4">
@@ -282,7 +420,7 @@ export default function Blog() {
                               onClick={() => setShowCoverOptions(!showCoverOptions)}
                               className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors"
                             >
-                              <Image size={16} className="mr-2" />
+                              <Image size={16} className="mr-2" aria-hidden="true" />
                               Add Cover
                             </button>
                           )}
@@ -391,8 +529,7 @@ export default function Blog() {
                       </div>
                     </div>
 
-                    {/* Editor */}
-                    <div className="min-h-[400px] -ml-8 pl-[23px] md:pl-0">
+                    <div className="min-h-[400px] -ml-8 pl-[23px] md:pl-0 pr-2">
                       <Editor
                         initialContent={activePost.content}
                         onChange={updatePostContent}
@@ -403,8 +540,124 @@ export default function Blog() {
               </div>
             </div>
           </div>
+
+          {showChatbot && (
+            <div className="hidden lg:flex w-[48rem] border-l border-gray-200 bg-white flex-col">
+              <div className="bg-blue-600 text-white p-4 border-b border-gray-200">
+                <h3 className="font-semibold">AI Blog Assistant</h3>
+                <p className="text-sm text-blue-100">Ask me to help with your blog content</p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {chatMessages.length === 0 && (
+                  <div className="text-center text-gray-500 text-sm">
+                    <p>👋 Hi! I can help you with your blog by:</p>
+                    <ul className="mt-2 text-left">
+                      <li>• Adding new content</li>
+                      <li>• Modifying existing text</li>
+                      <li>• Providing suggestions</li>
+                      <li>• Answering questions</li>
+                    </ul>
+                  </div>
+                )}
+                {chatMessages.map(message => (
+                  <div key={message.id} className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[80%] p-3 rounded-lg ${message.sender === "user" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-800"}`}>
+                      {message.isLoading ? (
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></div>
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
+                        </div>
+                      ) : (
+                        <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="border-t border-gray-200 bg-white">
+                <div className="p-4">
+                  <ChatbotInput
+                    inputValue={chatInputValue}
+                    setInputValue={setChatInputValue}
+                    previewImage={chatPreviewImage}
+                    setPreviewImage={setChatPreviewImage}
+                    onSubmit={handleChatSubmit}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      <button
+        onClick={() => setShowChatbot(!showChatbot)}
+        className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-lg transition-colors z-50"
+        title="AI Assistant"
+      >
+        {showChatbot ? <X size={24} /> : <MessageCircle size={24} />}
+      </button>
+
+      {showChatbot && (
+        <div className="lg:hidden fixed inset-0 bg-white z-50 flex flex-col">
+          <div className="bg-blue-600 text-white p-4 border-b border-gray-200 flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold">AI Blog Assistant</h3>
+              <p className="text-sm text-blue-100">Ask me to help with your blog content</p>
+            </div>
+            <button
+              onClick={() => setShowChatbot(false)}
+              className="p-2 text-white hover:bg-blue-700 rounded-lg transition-colors"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {chatMessages.length === 0 && (
+              <div className="text-center text-gray-500 text-sm">
+                <p>👋 Hi! I can help you with your blog by:</p>
+                <ul className="mt-2 text-left">
+                  <li>• Adding new content</li>
+                  <li>• Modifying existing text</li>
+                  <li>• Providing suggestions</li>
+                  <li>• Answering questions</li>
+                </ul>
+              </div>
+            )}
+            {chatMessages.map(message => (
+              <div key={message.id} className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[80%] p-3 rounded-lg ${message.sender === "user" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-800"}`}>
+                  {message.isLoading ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
+                    </div>
+                  ) : (
+                    <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="border-t border-gray-200 bg-white">
+            <div className="p-4">
+              <ChatbotInput
+                inputValue={chatInputValue}
+                setInputValue={setChatInputValue}
+                previewImage={chatPreviewImage}
+                setPreviewImage={setChatPreviewImage}
+                onSubmit={handleChatSubmit}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

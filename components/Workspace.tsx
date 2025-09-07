@@ -5,49 +5,15 @@ import { PartialBlock } from "@blocknote/core";
 import { Plus, Image, Trash2, Menu, MoreHorizontal } from "lucide-react";
 import Sidebar from "./Sidebar";
 import Breadcrumb from "./Breadcrumb";
+import { mockPages, Page } from "@/lib/mockData";
 
 const Editor = dynamic(() => import("./Editor"), {
   ssr: false,
   loading: () => <div className="p-4 text-gray-500">Loading editor...</div>
 });
 
-interface Page {
-  id: string;
-  title: string;
-  content: PartialBlock[];
-  icon?: string;
-  cover?: {
-    type: "color" | "image";
-    value: string;
-  };
-  children?: Page[];
-}
-
 export default function Workspace() {
-  const [pages, setPages] = useState<Page[]>([
-    {
-      id: "page-1",
-      title: "My first page",
-      content: [
-        {
-          type: "paragraph",
-          content: "Welcome to your new page!",
-        },
-      ],
-      children: [
-        {
-          id: "page-1-1",
-          title: "Sub page 1",
-          content: [],
-        },
-        {
-          id: "page-1-2",
-          title: "Sub page 2",
-          content: [],
-        }
-      ]
-    },
-  ]);
+  const [pages, setPages] = useState<Page[]>(mockPages);
 
   const [activePageId, setActivePageId] = useState<string>("page-1");
   const [showIconSelector, setShowIconSelector] = useState(false);
@@ -73,23 +39,45 @@ export default function Workspace() {
   const activePage = pages.find((page) => page.id === activePageId) || pages[0];
 
   const addNewWorkspacePage = () => {
+    const pageNumber = pages.length + 1;
     const newPage: Page = {
       id: `page-${Date.now()}`,
-      title: `Workspace ${pages.length + 1}`,
-      content: [],
+      title: `Page ${pageNumber}`,
+      content: [
+        {
+          type: "paragraph",
+          content: `Welcome to Page ${pageNumber}! This is an independent page with its own content.`
+        },
+        {
+          type: "paragraph",
+          content: "You can edit this content and add more blocks as needed."
+        }
+      ],
     };
     setPages([...pages, newPage]);
     setActivePageId(newPage.id);
   };
 
-  const addNewSubPage = () => {
+  const addNewSubPage = (parentPageId?: string) => {
+    const parentId = parentPageId || activePageId;
+    const parentPage = pages.find(p => p.id === parentId);
+    const subPageNumber = (parentPage?.children?.length || 0) + 1;
     const newSubPage: Page = {
-      id: `${activePageId}-sub-${Date.now()}`,
-      title: `Sub page ${(activePage.children?.length || 0) + 1}`,
-      content: [],
+      id: `${parentId}-sub-${Date.now()}`,
+      title: `Sub page ${subPageNumber}`,
+      content: [
+        {
+          type: "paragraph",
+          content: `This is Sub page ${subPageNumber} of ${parentPage?.title || 'parent page'}.`
+        },
+        {
+          type: "paragraph",
+          content: "Sub pages have their own independent content and can be organized hierarchically."
+        }
+      ],
     };
     setPages(prev => prev.map(page =>
-      page.id === activePageId
+      page.id === parentId
         ? { ...page, children: [...(page.children || []), newSubPage] }
         : page
     ));
@@ -184,10 +172,10 @@ export default function Workspace() {
       <Sidebar
         title="Workspace"
         icon="📁"
-        pages={pages.map(p => ({ id: p.id, title: p.title, icon: p.icon, children: p.children }))}
+        pages={pages.map(p => ({ id: p.id, title: p.title, icon: p.icon, children: p.children?.map(c => ({ id: c.id, title: c.title, icon: c.icon })) }))}
         activePageId={activePageId}
         onAddPage={addNewWorkspacePage}
-        onAddSubPage={addNewSubPage}
+        onAddSubPage={(parentPageId) => addNewSubPage(parentPageId)}
         onUpdatePageTitle={updatePageTitle}
         onSelectPage={setActivePageId}
         sidebarOpen={sidebarOpen}
@@ -289,7 +277,7 @@ export default function Workspace() {
                               onClick={() => setShowCoverOptions(!showCoverOptions)}
                               className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors"
                             >
-                              <Image size={16} className="mr-2" />
+                              <Image size={16} className="mr-2" aria-hidden="true" />
                               Add Cover
                             </button>
                           )}
@@ -399,7 +387,7 @@ export default function Workspace() {
                     </div>
 
                     {/* Editor */}
-                    <div className="min-h-[400px] -ml-8 pl-[23px] md:pl-0">
+                    <div className="min-h-[400px] -ml-8 pl-[23px] md:pl-0 pr-2">
                       <Editor
                         initialContent={activePage.content}
                         onChange={updatePageContent}
