@@ -25,10 +25,16 @@ interface SidebarPage {
 export default function BlogAdminPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [navbarVisible, setNavbarVisible] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
 
   const { posts, comments, featureToggles, setPosts, setFeatureToggles } = useBlogStore();
+
+  useEffect(() => {
+    checkAuthentication();
+  }, []);
 
   useEffect(() => {
     let lastScrollY = window.scrollY;
@@ -43,6 +49,22 @@ export default function BlogAdminPage() {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  const checkAuthentication = async () => {
+    try {
+      const response = await fetch('/api/admin/verify');
+      const data = await response.json();
+      if (data.authenticated) {
+        setIsAuthenticated(true);
+      } else {
+        router.push('/blog/admin/login');
+      }
+    } catch (error) {
+      router.push('/blog/admin/login');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadPosts = useCallback(async () => {
     try {
@@ -297,6 +319,18 @@ export default function BlogAdminPage() {
       </div>
     );
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="flex h-screen bg-gray-50">
