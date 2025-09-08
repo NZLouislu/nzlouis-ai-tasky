@@ -1,16 +1,15 @@
 "use client";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import Image from "next/image";
 import { useAISettings } from "@/lib/useAISettings";
 
-type Message = {
-  id: number;
-  text: string;
-  sender: "user" | "bot";
-  timestamp: Date;
-  image?: string;
-  isLoading?: boolean;
-};
+
+interface MentionItem {
+  id: string;
+  type: "page" | "heading" | "paragraph";
+  title: string;
+  content?: string;
+}
 
 interface ChatbotInputProps {
   inputValue: string;
@@ -18,6 +17,7 @@ interface ChatbotInputProps {
   previewImage: string | null;
   setPreviewImage: (image: string | null) => void;
   onSubmit: (e: React.FormEvent) => void;
+  mentionItems?: MentionItem[];
 }
 
 export default function ChatbotInput({
@@ -25,12 +25,16 @@ export default function ChatbotInput({
   setInputValue,
   previewImage,
   setPreviewImage,
-  onSubmit
+  onSubmit,
+  mentionItems = []
 }: ChatbotInputProps) {
   const { getCurrentModel } = useAISettings();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputAreaRef = useRef<HTMLDivElement | null>(null);
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
 
   const currentModel = getCurrentModel();
 
@@ -90,7 +94,78 @@ export default function ChatbotInput({
     e.preventDefault();
   };
 
+  const filteredMentions = useMemo(() => {
+    if (!mentionQuery) return mentionItems.slice(0, 5);
+    return mentionItems.filter(item =>
+      item.title.toLowerCase().includes(mentionQuery.toLowerCase()) ||
+      item.content?.toLowerCase().includes(mentionQuery.toLowerCase())
+    ).slice(0, 5);
+  }, [mentionItems, mentionQuery]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setInputValue(value);
+
+    const cursorPosition = e.target.selectionStart;
+    const textBeforeCursor = value.substring(0, cursorPosition);
+    const atIndex = textBeforeCursor.lastIndexOf("@");
+
+    if (atIndex !== -1 && atIndex === textBeforeCursor.length - 1) {
+      setShowMentions(true);
+      setMentionQuery("");
+      setSelectedMentionIndex(0);
+    } else if (atIndex !== -1) {
+      const query = textBeforeCursor.substring(atIndex + 1);
+      if (query.includes(" ")) {
+        setShowMentions(false);
+      } else {
+        setShowMentions(true);
+        setMentionQuery(query);
+        setSelectedMentionIndex(0);
+      }
+    } else {
+      setShowMentions(false);
+    }
+
+    adjustTextareaHeight();
+  };
+
+  const handleMentionSelect = (mention: MentionItem) => {
+    const cursorPosition = textareaRef.current?.selectionStart || 0;
+    const textBeforeCursor = inputValue.substring(0, cursorPosition);
+    const atIndex = textBeforeCursor.lastIndexOf("@");
+    const textAfterCursor = inputValue.substring(cursorPosition);
+
+    const newText = textBeforeCursor.substring(0, atIndex) + `@${mention.title}` + textAfterCursor;
+    setInputValue(newText);
+    setShowMentions(false);
+
+    setTimeout(() => {
+      const newCursorPosition = atIndex + mention.title.length + 1;
+      textareaRef.current?.setSelectionRange(newCursorPosition, newCursorPosition);
+      textareaRef.current?.focus();
+    }, 0);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (showMentions) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSelectedMentionIndex(prev => Math.min(prev + 1, filteredMentions.length - 1));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedMentionIndex(prev => Math.max(prev - 1, 0));
+      } else if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        if (filteredMentions[selectedMentionIndex]) {
+          handleMentionSelect(filteredMentions[selectedMentionIndex]);
+        }
+      } else if (e.key === "Escape") {
+        setShowMentions(false);
+      }
+      return;
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       const formEvent = new Event("submit", { bubbles: true, cancelable: true }) as unknown as React.FormEvent;
@@ -136,7 +211,7 @@ export default function ChatbotInput({
               </button>
             )}
 
-            <textarea ref={textareaRef} value={inputValue} onChange={(e) => { setInputValue(e.target.value); adjustTextareaHeight(); }} onKeyDown={handleKeyDown} placeholder={currentModel?.supportsVision ? "Type your message or upload an image..." : "Type your message..."} className="flex-1 px-4 py-3 focus:outline-none resize-none max-h-32" rows={3} />
+            <textarea ref={textareaRef} value={inputValue} onChange={handleInputChange} onKeyDown={handleKeyDown} placeholder={currentModel?.supportsVision ? "Type your message or upload an image..." : "Type your message..."} className="flex-1 px-4 py-3 focus:outline-none resize-none max-h-32" rows={3} />
 
             <button type="submit" className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white px-4 py-3 hover:opacity-90 transition-opacity disabled:opacity-50 self-stretch" disabled={!inputValue.trim() && !previewImage}>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -144,6 +219,32 @@ export default function ChatbotInput({
               </svg>
             </button>
           </div>
+
+          {showMentions && filteredMentions.length > 0 && (
+            <div className="absolute bottom-full left-4 right-4 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto z-10">
+              {filteredMentions.map((mention, index) => (
+                <button
+                  key={mention.id}
+                  onClick={() => handleMentionSelect(mention)}
+                  className={`w-full text-left px-4 py-2 hover:bg-gray-50 flex items-center space-x-3 ${
+                    index === selectedMentionIndex ? "bg-blue-50" : ""
+                  }`}
+                >
+                  <div className={`w-3 h-3 rounded-full ${
+                    mention.type === "page" ? "bg-blue-500" :
+                    mention.type === "heading" ? "bg-green-500" : "bg-gray-500"
+                  }`}></div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-900 truncate">{mention.title}</div>
+                    {mention.content && (
+                      <div className="text-xs text-gray-500 truncate">{mention.content}</div>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-400 capitalize">{mention.type}</div>
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="flex justify-between items-center mt-2">
             <p className="text-xs text-gray-500">+Enter for newline • {currentModel ? `${currentModel.name} • ` : ""}{currentModel?.isFree ? "Free model" : `~$${currentModel?.pricing.input}/1K tokens`}</p>

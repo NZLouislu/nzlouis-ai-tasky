@@ -2,9 +2,10 @@
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { PartialBlock } from "@blocknote/core";
-import { Plus, Image, Trash2, Menu, MoreHorizontal } from "lucide-react";
+import { Plus, Image, Trash2, Menu, MoreHorizontal, MessageCircle, X } from "lucide-react";
 import Sidebar from "./Sidebar";
 import Breadcrumb from "./Breadcrumb";
+import UnifiedChatbot from "./UnifiedChatbot";
 import { mockPages, Page } from "@/lib/mockData";
 
 const Editor = dynamic(() => import("./Editor"), {
@@ -21,6 +22,7 @@ export default function Workspace() {
   const [showCoverActions, setShowCoverActions] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [navbarVisible, setNavbarVisible] = useState(true);
+  const [showChatbot, setShowChatbot] = useState(false);
 
   useEffect(() => {
     let lastScrollY = window.scrollY;
@@ -98,6 +100,59 @@ export default function Workspace() {
         page.id === activePageId ? { ...page, content: newContent } : page
       )
     );
+  };
+
+  const handlePageModification = async (modification: { type: string; target?: string; content?: string; title?: string }): Promise<string> => {
+    switch (modification.type) {
+      case "add":
+        if (!modification.content) return "Content is required for add operation";
+        const newBlock: PartialBlock = {
+          type: "paragraph",
+          content: [{ type: "text", text: modification.content, styles: {} }]
+        };
+        updatePageContent([...activePage.content, newBlock]);
+        return `Added content to the page`;
+
+      case "edit":
+        if (!modification.content) return "Content is required for edit operation";
+        const editBlock: PartialBlock = {
+          type: "paragraph",
+          content: [{ type: "text", text: `Edited: ${modification.content}`, styles: {} }]
+        };
+        updatePageContent([...activePage.content, editBlock]);
+        return `Edited content on the page`;
+
+      case "create_page":
+        addNewWorkspacePage();
+        return `Created new page: "${modification.title || 'Untitled'}"`;
+
+      case "set_title":
+        if (!modification.title) return "Title is required for set title operation";
+        updatePageTitle(activePageId, modification.title);
+        return `Set page title to: "${modification.title}"`;
+
+      case "add_heading":
+        if (!modification.content) return "Content is required for add heading operation";
+        const headingBlock: PartialBlock = {
+          type: "heading",
+          content: [{ type: "text", text: modification.content, styles: {} }],
+          props: { level: 1 }
+        };
+        updatePageContent([...activePage.content, headingBlock]);
+        return `Added heading: "${modification.content}"`;
+
+      case "add_paragraph":
+        if (!modification.content) return "Content is required for add paragraph operation";
+        const paraBlock: PartialBlock = {
+          type: "paragraph",
+          content: [{ type: "text", text: modification.content, styles: {} }]
+        };
+        updatePageContent([...activePage.content, paraBlock]);
+        return `Added paragraph: "${modification.content}"`;
+
+      default:
+        return "Unknown modification type";
+    }
   };
 
   const setPageIcon = (pageId: string, icon: string) => {
@@ -209,8 +264,8 @@ export default function Workspace() {
           </button>
         </div>
 
-        <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${navbarVisible ? "pt-20" : "pt-4"}`}>
-          <div className="flex-1 overflow-auto">
+        <div className={`flex-1 flex overflow-hidden transition-all duration-300 ${navbarVisible ? "pt-20" : "pt-4"}`}>
+          <div className={`flex-1 overflow-auto ${showChatbot ? "lg:mr-0" : ""}`}>
             <div className="py-8">
               <div className="max-w-[900px] mx-auto pl-5 md:px-6 lg:px-8">
                 <div className="flex justify-start">
@@ -277,7 +332,7 @@ export default function Workspace() {
                               onClick={() => setShowCoverOptions(!showCoverOptions)}
                               className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors"
                             >
-                              <Image size={16} className="mr-2" aria-hidden="true" />
+                              <Image size={16} className="mr-2" />
                               Add Cover
                             </button>
                           )}
@@ -394,12 +449,84 @@ export default function Workspace() {
                       />
                     </div>
                   </div>
+        
+                  {showChatbot && (
+                    <div className="hidden lg:flex w-[48rem] border-l border-gray-200 bg-white flex-col">
+                      <div className="bg-blue-600 text-white p-4 border-b border-gray-200">
+                        <h3 className="font-semibold">AI Workspace Assistant</h3>
+                        <p className="text-sm text-blue-100">Use commands to modify your workspace</p>
+                      </div>
+        
+                      <div className="flex-1 p-4">
+                        <div className="text-sm text-gray-600 space-y-2">
+                          <p><strong>Available commands:</strong></p>
+                          <ul className="list-disc list-inside space-y-1">
+                            <li><code>/add [content]</code> - Add new content</li>
+                            <li><code>/create page [title]</code> - Create new page</li>
+                            <li><code>/set title [title]</code> - Change page title</li>
+                            <li><code>/add heading [text]</code> - Add heading</li>
+                            <li><code>/add paragraph [text]</code> - Add paragraph</li>
+                          </ul>
+                          <p className="mt-4"><strong>@ mentions:</strong></p>
+                          <p>Type @ to see available page elements</p>
+                        </div>
+                      </div>
+        
+                      <div className="border-t border-gray-200">
+                        <UnifiedChatbot mode="workspace" onPageModification={handlePageModification} />
+                      </div>
+                    </div>
+                  )}
                 </div>
+        
+                {showChatbot && (
+                  <div className="lg:hidden fixed inset-0 bg-white z-50 flex flex-col">
+                    <div className="bg-blue-600 text-white p-4 border-b border-gray-200 flex items-center justify-between">
+                      <div>
+                        <h3 className="font-semibold">AI Workspace Assistant</h3>
+                        <p className="text-sm text-blue-100">Use commands to modify your workspace</p>
+                      </div>
+                      <button
+                        onClick={() => setShowChatbot(false)}
+                        className="p-2 text-white hover:bg-blue-700 rounded-lg transition-colors"
+                      >
+                        <X size={20} />
+                      </button>
+                    </div>
+        
+                    <div className="flex-1 p-4">
+                      <div className="text-sm text-gray-600 space-y-2">
+                        <p><strong>Available commands:</strong></p>
+                        <ul className="list-disc list-inside space-y-1">
+                          <li><code>/add [content]</code> - Add new content</li>
+                          <li><code>/create page [title]</code> - Create new page</li>
+                          <li><code>/set title [title]</code> - Change page title</li>
+                          <li><code>/add heading [text]</code> - Add heading</li>
+                          <li><code>/add paragraph [text]</code> - Add paragraph</li>
+                        </ul>
+                        <p className="mt-4"><strong>@ mentions:</strong></p>
+                        <p>Type @ to see available page elements</p>
+                      </div>
+                    </div>
+        
+                    <div className="border-t border-gray-200">
+                      <UnifiedChatbot mode="workspace" onPageModification={handlePageModification} />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      <button
+        onClick={() => setShowChatbot(!showChatbot)}
+        className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-lg transition-colors z-50"
+        title="AI Assistant"
+      >
+        {showChatbot ? <X size={24} /> : <MessageCircle size={24} />}
+      </button>
     </div>
   );
 }

@@ -1,9 +1,10 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Menu } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import Breadcrumb from "@/components/Breadcrumb";
-import UnifiedChatbot from "@/components/UnifiedChatbot";
-import { useRouter, usePathname } from "next/navigation";
+import CommentsPanel from "@/components/blog/comments/CommentsPanel";
 
 interface SidebarPage {
   id: string;
@@ -12,11 +13,10 @@ interface SidebarPage {
   href?: string;
 }
 
-export default function Page() {
+export default function BlogCommentsPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [navbarVisible, setNavbarVisible] = useState(true);
   const router = useRouter();
-  const pathname = usePathname();
 
   useEffect(() => {
     let lastScrollY = window.scrollY;
@@ -32,21 +32,17 @@ export default function Page() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const activePageId = pathname === "/chatbot/settings" ? "settings" : "chatbot";
-
   const pages: SidebarPage[] = [
-    { id: "chatbot", title: "AI Chatbot", icon: "🤖", href: "/chatbot" },
-    { id: "settings", title: "Settings", icon: "⚙️", href: "/chatbot/settings" },
+    { id: "overview", title: "Overview", icon: "📊", href: "/blog/admin" },
+    { id: "analytics", title: "Analytics", icon: "📈", href: "/blog/admin/analytics" },
+    { id: "comments", title: "Comments", icon: "💬", href: "/blog/admin/comments" },
+    { id: "features", title: "Features", icon: "⚙️", href: "/blog/admin/features" },
   ];
 
   const breadcrumbItems = [
-    { label: "Home", href: "/" },
-    { label: "Chatbot", href: "/chatbot", icon: "💬" },
+    { label: "Blog Admin", href: "/blog/admin", icon: "⚙️" },
+    { label: "Comments", href: "/blog/admin/comments", icon: "💬" },
   ];
-
-  if (pathname === "/chatbot/settings") {
-    breadcrumbItems.push({ label: "Settings", href: "/chatbot/settings", icon: "⚙️" });
-  }
 
   const handleSelectPage = (pageId: string, href?: string) => {
     if (href) {
@@ -60,10 +56,10 @@ export default function Page() {
   return (
     <div className="flex h-screen bg-gray-50">
       <Sidebar
-        title="AI Assistant"
-        icon="🤖"
+        title="Blog Admin"
+        icon="⚙️"
         pages={pages}
-        activePageId={activePageId}
+        activePageId="comments"
         onSelectPage={handleSelectPage}
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
@@ -82,14 +78,14 @@ export default function Page() {
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="text-gray-600 hover:text-gray-900 p-2 rounded-lg hover:bg-gray-100"
           >
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
+            <Menu size={20} />
           </button>
         </div>
 
-        <div className={`flex-1 flex flex-col ${navbarVisible ? "pt-20" : "pt-4"} transition-all duration-300`}>
-          <UnifiedChatbot mode="standalone" />
+        <div className={`flex-1 overflow-auto ${navbarVisible ? "pt-20" : "pt-4"} transition-all duration-300`}>
+          <div className="h-full">
+            <CommentsPanel postId="" />
+          </div>
         </div>
       </div>
     </div>

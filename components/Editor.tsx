@@ -4,7 +4,9 @@ import "@blocknote/mantine/style.css";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import { PartialBlock } from "@blocknote/core";
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
+import AIContinuationPanel from "./AIContinuationPanel";
+import { Sparkles } from "lucide-react";
 
 interface EditorProps {
   initialContent?: PartialBlock[];
@@ -14,6 +16,11 @@ interface EditorProps {
 export default function Editor({ initialContent, onChange }: EditorProps) {
   const editor = useCreateBlockNote({ initialContent });
   const globalFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [showAIPanel, setShowAIPanel] = useState(false);
+  const [aiPanelPosition, setAIPanelPosition] = useState({ x: 0, y: 0 });
+  const [selectedText, setSelectedText] = useState("");
+  const [contextBefore, setContextBefore] = useState("");
+  const [contextAfter, setContextAfter] = useState("");
 
   const insertImageDataUrl = useCallback(
     (dataUrl: string) => {
@@ -39,6 +46,55 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
     },
     [editor, onChange]
   );
+
+  const handleTextSelection = useCallback(() => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+
+    const selectedText = selection.toString().trim();
+    if (!selectedText) return;
+
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+
+    setSelectedText(selectedText);
+    setAIPanelPosition({
+      x: rect.left + rect.width / 2,
+      y: rect.top - 10
+    });
+
+    const editorElement = document.querySelector('.bn-editor');
+    if (editorElement) {
+      const editorRect = editorElement.getBoundingClientRect();
+      const relativeX = rect.left - editorRect.left;
+      const relativeY = rect.top - editorRect.top;
+
+      setAIPanelPosition({
+        x: relativeX + rect.width / 2,
+        y: relativeY - 10
+      });
+    }
+
+    setContextBefore("Previous content context");
+    setContextAfter("Following content context");
+    setShowAIPanel(true);
+  }, []);
+
+  const handleAIAccept = useCallback((suggestion: string) => {
+    const pos = editor.getTextCursorPosition();
+    if (pos && pos.block) {
+      editor.insertBlocks([{
+        type: "paragraph",
+        content: [{ type: "text", text: suggestion, styles: {} }]
+      }], pos.block, "after");
+    }
+    setShowAIPanel(false);
+    if (onChange) onChange(editor.document);
+  }, [editor, onChange]);
+
+  const handleAIClose = useCallback(() => {
+    setShowAIPanel(false);
+  }, []);
 
   useEffect(() => {
     if (!globalFileInputRef.current) {
@@ -133,12 +189,41 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
     );
     existing.forEach((i) => injectButtonToEmbed(i));
 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === "k" || e.key === "K") {
+          e.preventDefault();
+          handleTextSelection();
+        }
+      }
+    };
+
+    const handleSelectionChange = () => {
+      const selection = window.getSelection();
+      if (selection && selection.toString().trim()) {
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          setTimeout(() => {
+            const currentSelection = window.getSelection();
+            if (currentSelection && currentSelection.toString().trim()) {
+              handleTextSelection();
+            }
+          }, 500);
+        }
+      }
+    };
+
     document.addEventListener("paste", handlePaste, true);
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("selectionchange", handleSelectionChange);
 
     return () => {
       observer.disconnect();
       fileInput?.removeEventListener("change", onGlobalFileChange);
       document.removeEventListener("paste", handlePaste, true);
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("selectionchange", handleSelectionChange);
       if (globalFileInputRef.current) {
         try {
           document.body.removeChild(globalFileInputRef.current);
@@ -146,13 +231,34 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
         globalFileInputRef.current = null;
       }
     };
-  }, [editor, insertImageDataUrl, onChange]);
+  }, [editor, insertImageDataUrl, onChange, handleTextSelection]);
 
   return (
-    <div className="w-full">
+    <div className="w-full relative">
+      <div className="mb-2 flex items-center justify-between text-sm text-gray-500">
+        <div className="flex items-center space-x-2">
+          <Sparkles className="h-4 w-4" />
+          <span>AI Writing Assistant</span>
+        </div>
+        <div className="text-xs">
+          Select text and press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+K</kbd> for AI suggestions
+        </div>
+      </div>
+
       <div style={{ marginBottom: 12 }}>
         <BlockNoteView editor={editor} onChange={() => onChange?.(editor.document)} theme="light" />
       </div>
+
+      {showAIPanel && (
+        <AIContinuationPanel
+          selectedText={selectedText}
+          contextBefore={contextBefore}
+          contextAfter={contextAfter}
+          onAccept={handleAIAccept}
+          onClose={handleAIClose}
+          position={aiPanelPosition}
+        />
+      )}
     </div>
   );
 }

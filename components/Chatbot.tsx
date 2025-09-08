@@ -14,7 +14,25 @@ type Message = {
   isLoading?: boolean;
 };
 
-export default function Chatbot() {
+interface MentionItem {
+  id: string;
+  type: "page" | "heading" | "paragraph";
+  title: string;
+  content?: string;
+}
+
+interface PageModification {
+  type: "add" | "edit" | "delete" | "create_page" | "set_title" | "add_heading" | "add_paragraph";
+  target?: string;
+  content?: string;
+  title?: string;
+}
+
+interface ChatbotProps {
+  onPageModification?: (modification: PageModification) => Promise<string>;
+}
+
+export default function Chatbot({ onPageModification }: ChatbotProps = {}) {
   const { settings, getCurrentModel, getApiKey } = useAISettings();
   const [currentSessionId, setCurrentSessionId] = useState("default");
   const [sessionMessages, setSessionMessages] = useState<Record<string, Message[]>>({
@@ -22,12 +40,78 @@ export default function Chatbot() {
   });
   const [inputValue, setInputValue] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const messages = useMemo(() => sessionMessages[currentSessionId] || [], [sessionMessages, currentSessionId]);
-  
+
+  const generateMentionItems = (): MentionItem[] => {
+    return [
+      { id: "current-page", type: "page", title: "Current Page", content: "The page you're currently viewing" },
+      { id: "heading-1", type: "heading", title: "Heading 1", content: "Main heading style" },
+      { id: "heading-2", type: "heading", title: "Heading 2", content: "Sub heading style" },
+      { id: "paragraph", type: "paragraph", title: "Paragraph", content: "Regular text content" },
+    ];
+  };
+
+  const parsePageModification = (text: string): PageModification | null => {
+    const lowerText = text.toLowerCase().trim();
+
+    if (lowerText.startsWith("/add ")) {
+      return { type: "add", content: text.substring(5).trim() };
+    }
+    if (lowerText.startsWith("/edit ")) {
+      const parts = text.substring(6).split(" ");
+      if (parts.length >= 2) {
+        const target = parts[0];
+        const content = parts.slice(1).join(" ");
+        return { type: "edit", target, content };
+      }
+    }
+    if (lowerText.startsWith("/delete ")) {
+      return { type: "delete", target: text.substring(8).trim() };
+    }
+    if (lowerText.startsWith("/create page ")) {
+      return { type: "create_page", title: text.substring(13).trim() };
+    }
+    if (lowerText.startsWith("/set title ")) {
+      return { type: "set_title", title: text.substring(11).trim() };
+    }
+    if (lowerText.startsWith("/add heading ")) {
+      return { type: "add_heading", content: text.substring(13).trim() };
+    }
+    if (lowerText.startsWith("/add paragraph ")) {
+      return { type: "add_paragraph", content: text.substring(15).trim() };
+    }
+
+    return null;
+  };
+
+  const handlePageModification = async (modification: PageModification): Promise<string> => {
+    if (onPageModification) {
+      return await onPageModification(modification);
+    }
+    // Fallback response if no callback provided
+    switch (modification.type) {
+      case "add":
+        return `Added content: "${modification.content}"`;
+      case "edit":
+        return `Edited ${modification.target} with: "${modification.content}"`;
+      case "delete":
+        return `Deleted: ${modification.target}`;
+      case "create_page":
+        return `Created new page: "${modification.title}"`;
+      case "set_title":
+        return `Set page title to: "${modification.title}"`;
+      case "add_heading":
+        return `Added heading: "${modification.content}"`;
+      case "add_paragraph":
+        return `Added paragraph: "${modification.content}"`;
+      default:
+        return "Unknown modification type";
+    }
+  };
+
   const handleNewSession = () => {
     const newId = `session-${Date.now()}`;
     setSessionMessages(prev => ({ ...prev, [newId]: [] }));
@@ -76,7 +160,6 @@ export default function Chatbot() {
     
     setInputValue("");
     setPreviewImage(null);
-    setIsLoading(true);
     try {
       // Use saved currentMessages (without new messages) for request
       const chatMessages = [
@@ -112,20 +195,39 @@ export default function Chatbot() {
       }
       
       const data = await response.json();
-      
-      // Add AI response message
-      const aiMessage: Message = {
-        id: Date.now(),
-        text: data.response,
-        sender: "bot",
-        timestamp: new Date()
-      };
 
-      setSessionMessages(prev => {
-        const updated = { ...prev };
-        updated[currentSessionId] = [...updated[currentSessionId], aiMessage];
-        return updated;
-      });
+      // Check for page modification commands in user input
+      const modification = parsePageModification(newMessage.text);
+      if (modification) {
+        // Handle page modification directly
+        const result = await handlePageModification(modification);
+        const aiMessage: Message = {
+          id: Date.now(),
+          text: result,
+          sender: "bot",
+          timestamp: new Date()
+        };
+
+        setSessionMessages(prev => {
+          const updated = { ...prev };
+          updated[currentSessionId] = [...updated[currentSessionId], aiMessage];
+          return updated;
+        });
+      } else {
+        // Regular AI response
+        const aiMessage: Message = {
+          id: Date.now(),
+          text: data.response,
+          sender: "bot",
+          timestamp: new Date()
+        };
+
+        setSessionMessages(prev => {
+          const updated = { ...prev };
+          updated[currentSessionId] = [...updated[currentSessionId], aiMessage];
+          return updated;
+        });
+      }
     } catch (error) {
       console.error("Chat error:", error);
       
@@ -143,7 +245,6 @@ export default function Chatbot() {
         return updated;
       });
     } finally {
-      setIsLoading(false);
       setTimeout(() => scrollToBottom(), 120);
     }
   };
@@ -266,6 +367,7 @@ export default function Chatbot() {
         previewImage={previewImage}
         setPreviewImage={setPreviewImage}
         onSubmit={handleSubmit}
+        mentionItems={generateMentionItems()}
       />
     </div>
   );

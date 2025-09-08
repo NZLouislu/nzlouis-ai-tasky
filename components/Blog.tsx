@@ -5,8 +5,8 @@ import { PartialBlock } from "@blocknote/core";
 import { Plus, Image, Trash2, Menu, MoreHorizontal, MessageCircle, X } from "lucide-react";
 import Sidebar from "./Sidebar";
 import Breadcrumb from "./Breadcrumb";
-import ChatbotInput from "./ChatbotInput";
-import { useAISettings } from "@/lib/useAISettings";
+import UnifiedChatbot from "./UnifiedChatbot";
+import { useBlogStore } from "@/lib/stores/blog-store";
 
 const Editor = dynamic(() => import("./Editor"), {
   ssr: false,
@@ -58,12 +58,6 @@ export default function Blog() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [navbarVisible, setNavbarVisible] = useState(true);
   const [showChatbot, setShowChatbot] = useState(false);
-  const [chatInputValue, setChatInputValue] = useState("");
-  const [chatPreviewImage, setChatPreviewImage] = useState<string | null>(null);
-  const [chatIsLoading, setChatIsLoading] = useState(false);
-  const [chatMessages, setChatMessages] = useState<Array<{id: number, text: string, sender: "user" | "bot", timestamp: Date, isLoading?: boolean}>>([]);
-
-  const { getCurrentModel, getApiKey } = useAISettings();
 
   useEffect(() => {
     let lastScrollY = window.scrollY;
@@ -175,136 +169,60 @@ export default function Blog() {
     }
   };
 
-  const handleChatSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (chatInputValue.trim() === "" && !chatPreviewImage) return;
 
-    const userMessage = {
-      id: Date.now(),
-      text: chatInputValue,
-      sender: "user" as const,
-      timestamp: new Date()
-    };
+  const handlePageModification = async (modification: { type: string; target?: string; content?: string; title?: string }): Promise<string> => {
+    switch (modification.type) {
+      case "add":
+        if (!modification.content) return "Content is required for add operation";
+        const newBlock: PartialBlock = {
+          type: "paragraph",
+          content: [{ type: "text", text: modification.content, styles: {} }]
+        };
+        updatePostContent([...activePost.content, newBlock]);
+        return `Added content to the blog post`;
 
-    setChatMessages(prev => [...prev, userMessage]);
-    setChatInputValue("");
-    setChatPreviewImage(null);
-    setChatIsLoading(true);
+      case "edit":
+        if (!modification.content) return "Content is required for edit operation";
+        const editBlock: PartialBlock = {
+          type: "paragraph",
+          content: [{ type: "text", text: `Edited: ${modification.content}`, styles: {} }]
+        };
+        updatePostContent([...activePost.content, editBlock]);
+        return `Edited content in the blog post`;
 
-    try {
-      const currentBlogContent = activePost.content.map((block, index) => {
-        if (block.type === "paragraph" && block.content) {
-          const text = Array.isArray(block.content)
-            ? block.content.map(item => {
-                if (typeof item === "string") return item;
-                if (item && typeof item === "object" && "text" in item) return item.text;
-                return "";
-              }).join("")
-            : String(block.content);
-          return `Paragraph ${index + 1}: ${text}`;
-        }
-        if (block.type === "heading" && block.content) {
-          const text = Array.isArray(block.content)
-            ? block.content.map(item => {
-                if (typeof item === "string") return item;
-                if (item && typeof item === "object" && "text" in item) return item.text;
-                return "";
-              }).join("")
-            : String(block.content);
-          return `Heading: ${text}`;
-        }
-        return "";
-      }).filter(text => text.length > 0).join("\n\n");
+      case "create_page":
+        addNewPost();
+        return `Created new blog post: "${modification.title || 'Untitled'}"`;
 
-      const systemPrompt = `You are a helpful AI assistant for blog writing. The user is currently writing a blog post with the following content:
+      case "set_title":
+        if (!modification.title) return "Title is required for set title operation";
+        updatePostTitle(activePostId, modification.title);
+        return `Set blog post title to: "${modification.title}"`;
 
-${currentBlogContent}
+      case "add_heading":
+        if (!modification.content) return "Content is required for add heading operation";
+        const headingBlock: PartialBlock = {
+          type: "heading",
+          content: [{ type: "text", text: modification.content, styles: {} }],
+          props: { level: 1 }
+        };
+        updatePostContent([...activePost.content, headingBlock]);
+        return `Added heading: "${modification.content}"`;
 
-Help them improve their blog by:
-- Adding new content when they request it
-- Modifying existing content
-- Providing suggestions
-- Answering questions about their blog
+      case "add_paragraph":
+        if (!modification.content) return "Content is required for add paragraph operation";
+        const paraBlock: PartialBlock = {
+          type: "paragraph",
+          content: [{ type: "text", text: modification.content, styles: {} }]
+        };
+        updatePostContent([...activePost.content, paraBlock]);
+        return `Added paragraph: "${modification.content}"`;
 
-When they ask to add content, modify content, or make changes, respond with the updated content in a clear format.`;
-
-      const chatMessagesForAPI = [
-        { role: "system", content: systemPrompt },
-        ...chatMessages.map(msg => ({
-          role: msg.sender === "user" ? "user" : "assistant",
-          content: msg.text
-        })),
-        {
-          role: "user",
-          content: userMessage.text,
-          ...(chatPreviewImage && { image: chatPreviewImage })
-        }
-      ];
-
-      const currentModel = getCurrentModel();
-      if (!currentModel) {
-        alert("Please select a model in settings");
-        return;
-      }
-      const apiKey = getApiKey(currentModel.provider);
-      if (currentModel.provider !== "google" && !apiKey) {
-        alert(`Please set your ${currentModel.provider} API key in settings`);
-        return;
-      }
-
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          modelId: currentModel.id,
-          messages: chatMessagesForAPI,
-          temperature: 0.7,
-          maxTokens: 2000,
-          apiKey
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to get response from AI");
-      }
-
-      const data = await response.json();
-
-      const aiMessage = {
-        id: Date.now(),
-        text: data.response,
-        sender: "bot" as const,
-        timestamp: new Date()
-      };
-
-      setChatMessages(prev => [...prev, aiMessage]);
-
-      processBlogModification(data.response);
-
-    } catch (error) {
-      console.error("Chat error:", error);
-      const errorMessage = {
-        id: Date.now(),
-        text: "Sorry, I encountered an error. Please try again.",
-        sender: "bot" as const,
-        timestamp: new Date()
-      };
-
-      setChatMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setChatIsLoading(false);
+      default:
+        return "Unknown modification type";
     }
   };
 
-  const processBlogModification = (aiResponse: string) => {
-    const newBlock: PartialBlock = {
-      type: "paragraph",
-      content: [{ type: "text", text: aiResponse, styles: {} }]
-    };
-    updatePostContent([...activePost.content, newBlock]);
-  };
 
   const iconOptions = ["📝", "📄", "📑", "📊", "📋", "📌", "⭐", "💡"];
 
@@ -548,44 +466,24 @@ When they ask to add content, modify content, or make changes, respond with the 
                 <p className="text-sm text-blue-100">Ask me to help with your blog content</p>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {chatMessages.length === 0 && (
-                  <div className="text-center text-gray-500 text-sm">
-                    <p>👋 Hi! I can help you with your blog by:</p>
-                    <ul className="mt-2 text-left">
-                      <li>• Adding new content</li>
-                      <li>• Modifying existing text</li>
-                      <li>• Providing suggestions</li>
-                      <li>• Answering questions</li>
-                    </ul>
-                  </div>
-                )}
-                {chatMessages.map(message => (
-                  <div key={message.id} className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}>
-                    <div className={`max-w-[80%] p-3 rounded-lg ${message.sender === "user" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-800"}`}>
-                      {message.isLoading ? (
-                        <div className="flex items-center space-x-2">
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></div>
-                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
-                        </div>
-                      ) : (
-                        <p className="text-sm whitespace-pre-wrap">{message.text}</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
+              <div className="flex-1 p-4">
+                <div className="text-sm text-gray-600 space-y-2">
+                  <p><strong>Available commands:</strong></p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li><code>/add [content]</code> - Add new content</li>
+                    <li><code>/create page [title]</code> - Create new posts</li>
+                    <li><code>/set title [title]</code> - Change post title</li>
+                    <li><code>/add heading [text]</code> - Add headings</li>
+                    <li><code>/add paragraph [text]</code> - Add paragraphs</li>
+                  </ul>
+                  <p className="mt-4"><strong>@ mentions:</strong></p>
+                  <p>Type @ to see available page elements</p>
+                </div>
               </div>
 
               <div className="border-t border-gray-200 bg-white">
                 <div className="p-4">
-                  <ChatbotInput
-                    inputValue={chatInputValue}
-                    setInputValue={setChatInputValue}
-                    previewImage={chatPreviewImage}
-                    setPreviewImage={setChatPreviewImage}
-                    onSubmit={handleChatSubmit}
-                  />
+                  <UnifiedChatbot mode="workspace" onPageModification={handlePageModification} />
                 </div>
               </div>
             </div>
@@ -597,8 +495,9 @@ When they ask to add content, modify content, or make changes, respond with the 
         onClick={() => setShowChatbot(!showChatbot)}
         className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-lg transition-colors z-50"
         title="AI Assistant"
+        aria-label="Toggle AI Assistant"
       >
-        {showChatbot ? <X size={24} /> : <MessageCircle size={24} />}
+        {showChatbot ? <X size={24} aria-hidden="true" /> : <MessageCircle size={24} aria-hidden="true" />}
       </button>
 
       {showChatbot && (
@@ -616,45 +515,23 @@ When they ask to add content, modify content, or make changes, respond with the 
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {chatMessages.length === 0 && (
-              <div className="text-center text-gray-500 text-sm">
-                <p>👋 Hi! I can help you with your blog by:</p>
-                <ul className="mt-2 text-left">
-                  <li>• Adding new content</li>
-                  <li>• Modifying existing text</li>
-                  <li>• Providing suggestions</li>
-                  <li>• Answering questions</li>
-                </ul>
-              </div>
-            )}
-            {chatMessages.map(message => (
-              <div key={message.id} className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[80%] p-3 rounded-lg ${message.sender === "user" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-800"}`}>
-                  {message.isLoading ? (
-                    <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
-                    </div>
-                  ) : (
-                    <p className="text-sm whitespace-pre-wrap">{message.text}</p>
-                  )}
-                </div>
-              </div>
-            ))}
+          <div className="flex-1 p-4">
+            <div className="text-sm text-gray-600 space-y-2">
+              <p><strong>Available commands:</strong></p>
+              <ul className="list-disc list-inside space-y-1">
+                <li><code>/add [content]</code> - Add new content</li>
+                <li><code>/create page [title]</code> - Create new posts</li>
+                <li><code>/set title [title]</code> - Change post title</li>
+                <li><code>/add heading [text]</code> - Add headings</li>
+                <li><code>/add paragraph [text]</code> - Add paragraphs</li>
+              </ul>
+              <p className="mt-4"><strong>@ mentions:</strong></p>
+              <p>Type @ to see available page elements</p>
+            </div>
           </div>
 
           <div className="border-t border-gray-200 bg-white">
-            <div className="p-4">
-              <ChatbotInput
-                inputValue={chatInputValue}
-                setInputValue={setChatInputValue}
-                previewImage={chatPreviewImage}
-                setPreviewImage={setChatPreviewImage}
-                onSubmit={handleChatSubmit}
-              />
-            </div>
+            <UnifiedChatbot mode="workspace" onPageModification={handlePageModification} />
           </div>
         </div>
       )}
