@@ -1,18 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react'
 import { useBlogStore } from '@/lib/stores/blog-store'
-import { useOptimisticList } from '@/lib/hooks/use-optimistic-update'
 import { Trash2, MessageCircle, User } from 'lucide-react'
-
-interface Comment {
-  id: string
-  post_id: string
-  name: string | null
-  email: string | null
-  comment: string
-  is_anonymous: boolean
-  created_at: string
-}
 
 interface CommentsPanelProps {
   postId: string
@@ -20,6 +9,7 @@ interface CommentsPanelProps {
 
 export default function CommentsPanel({ postId }: CommentsPanelProps) {
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
 
   const posts = useBlogStore(state => state.posts)
   const comments = useBlogStore(state => state.comments)
@@ -28,6 +18,10 @@ export default function CommentsPanel({ postId }: CommentsPanelProps) {
   const currentComments = selectedPostId ? comments[selectedPostId] || [] : []
 
   const optimisticComments = currentComments
+
+  useEffect(() => {
+    loadAllComments()
+  }, [])
 
   useEffect(() => {
     if (postId && posts.find(p => p.post_id === postId)) {
@@ -41,7 +35,39 @@ export default function CommentsPanel({ postId }: CommentsPanelProps) {
     }
   }, [selectedPostId])
 
+  const loadAllComments = async () => {
+    const postsNeedingComments = posts.filter(post => !comments[post.post_id])
+
+    if (postsNeedingComments.length === 0) {
+      setLoading(false)
+      return
+    }
+
+    try {
+      setLoading(true)
+      const commentPromises = postsNeedingComments.map(async (post) => {
+        try {
+          const response = await fetch(`/api/blog/comments?postId=${post.post_id}`)
+          if (response.ok) {
+            const data = await response.json()
+            setComments(post.post_id, data)
+          }
+        } catch (error) {
+          console.error(`Failed to fetch comments for post ${post.post_id}:`, error)
+        }
+      })
+
+      await Promise.all(commentPromises)
+    } catch (error) {
+      console.error('Failed to load all comments:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const fetchComments = async (postId: string) => {
+    if (comments[postId]) return
+
     try {
       const response = await fetch(`/api/blog/comments?postId=${postId}`)
       if (response.ok) {
@@ -88,22 +114,28 @@ export default function CommentsPanel({ postId }: CommentsPanelProps) {
           Blog Posts
         </h3>
         <div className="space-y-2">
-          {posts.map(post => (
-            <button
-              key={post.post_id}
-              onClick={() => setSelectedPostId(post.post_id)}
-              className={`w-full text-left p-3 rounded-lg transition-colors ${
-                selectedPostId === post.post_id
-                  ? 'bg-blue-50 border border-blue-200'
-                  : 'hover:bg-gray-50 border border-gray-200'
-              }`}
-            >
-              <div className="font-medium text-sm truncate">{post.title || 'Untitled Post'}</div>
-              <div className="text-xs text-gray-500 mt-1">
-                {comments[post.post_id]?.length || 0} comments
-              </div>
-            </button>
-          ))}
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            </div>
+          ) : (
+            posts.map(post => (
+              <button
+                key={post.post_id}
+                onClick={() => setSelectedPostId(post.post_id)}
+                className={`w-full text-left p-3 rounded-lg transition-colors ${
+                  selectedPostId === post.post_id
+                    ? 'bg-blue-50 border border-blue-200'
+                    : 'hover:bg-gray-50 border border-gray-200'
+                }`}
+              >
+                <div className="font-medium text-sm truncate">{post.title || 'Untitled Post'}</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {comments[post.post_id]?.length || 0} comments
+                </div>
+              </button>
+            ))
+          )}
         </div>
       </div>
 

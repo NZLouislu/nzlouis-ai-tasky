@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react'
-import { BarChart3, TrendingUp, Users, MessageCircle, Eye, Heart, Download } from 'lucide-react'
+import { BarChart3, MessageCircle, Eye, Heart, Download } from 'lucide-react'
+import { useBlogStore } from '@/lib/stores/blog-store'
 
 interface DailyStats {
   date: string
@@ -35,14 +36,21 @@ interface DailyStatsSummary {
 }
 
 export default function BlogAnalytics() {
-  const [analytics, setAnalytics] = useState<AnalyticsData[]>([])
+  const { analytics: storeAnalytics, setAnalytics } = useBlogStore()
+  const [analytics, setAnalyticsState] = useState<AnalyticsData[]>([])
   const [dailyStats, setDailyStats] = useState<DailyStatsSummary[]>([])
   const [period, setPeriod] = useState('30')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchAnalytics()
-  }, [period])
+    if (storeAnalytics && storeAnalytics.posts && storeAnalytics.dailyStats) {
+      setAnalyticsState(storeAnalytics.posts)
+      setDailyStats(storeAnalytics.dailyStats)
+      setLoading(false)
+    } else {
+      fetchAnalytics()
+    }
+  }, [storeAnalytics, period])
 
   const fetchAnalytics = async () => {
     try {
@@ -50,7 +58,12 @@ export default function BlogAnalytics() {
       const response = await fetch(`/api/blog/analytics/posts?period=${period}`)
       if (response.ok) {
         const data = await response.json()
-        setAnalytics(data.posts || [])
+        const analyticsData = {
+          posts: data.posts || [],
+          dailyStats: data.dailyStats || []
+        }
+        setAnalytics(analyticsData)
+        setAnalyticsState(data.posts || [])
         setDailyStats(data.dailyStats || [])
       }
     } catch (error) {

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { blogDb, Database } from '@/lib/supabase/blog-client'
+import { Database } from '@/lib/supabase/blog-client'
 
 type Post = Database['public']['Tables']['post_stats']['Row'] & {
   content?: Array<{
@@ -19,11 +19,43 @@ type Post = Database['public']['Tables']['post_stats']['Row'] & {
 type Comment = Database['public']['Tables']['comments']['Row']
 type FeatureToggles = Database['public']['Tables']['feature_toggles']['Row']
 
+interface AnalyticsData {
+  posts: Array<{
+    post_id: string
+    title: string
+    views: number
+    likes: number
+    ai_questions: number
+    ai_summaries: number
+    totalViews: number
+    totalLikes: number
+    totalComments: number
+    totalAIQuestions: number
+    totalAISummaries: number
+    dailyData: Array<{
+      date: string
+      views: number
+      likes: number
+      ai_questions: number
+      ai_summaries: number
+    }>
+  }>
+  dailyStats: Array<{
+    date: string
+    views: number
+    likes: number
+    comments: number
+    aiQuestions: number
+    aiSummaries: number
+  }>
+}
+
 interface BlogState {
   posts: Post[]
   currentPostId: string | null
   comments: Record<string, Comment[]>
   featureToggles: FeatureToggles | null
+  analytics: AnalyticsData | null
   isLoading: boolean
   error: string | null
 
@@ -37,15 +69,17 @@ interface BlogState {
   deleteComment: (commentId: string) => void
   setFeatureToggles: (toggles: FeatureToggles) => void
   updateFeatureToggle: (key: keyof FeatureToggles, value: boolean) => void
+  setAnalytics: (analytics: AnalyticsData) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
 }
 
-export const useBlogStore = create<BlogState>((set, get) => ({
+export const useBlogStore = create<BlogState>((set) => ({
   posts: [],
   currentPostId: null,
   comments: {},
   featureToggles: null,
+  analytics: null,
   isLoading: false,
   error: null,
 
@@ -96,6 +130,8 @@ export const useBlogStore = create<BlogState>((set, get) => ({
       [key]: value
     } : null
   })),
+
+  setAnalytics: (analytics) => set({ analytics }),
 
   setLoading: (isLoading) => set({ isLoading }),
 

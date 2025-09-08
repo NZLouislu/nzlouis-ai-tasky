@@ -42,6 +42,11 @@ export default function BlogFeaturesPage() {
   }, []);
 
   const loadFeatureToggles = useCallback(async () => {
+    if (featureToggles) {
+      setLocalToggles(featureToggles);
+      return;
+    }
+
     try {
       const response = await fetch('/api/blog/features');
       if (response.ok) {
@@ -52,7 +57,7 @@ export default function BlogFeaturesPage() {
     } catch (error) {
       console.error('Failed to load feature toggles:', error);
     }
-  }, [setFeatureToggles]);
+  }, [setFeatureToggles, featureToggles]);
 
   useEffect(() => {
     loadFeatureToggles();

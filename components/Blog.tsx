@@ -6,7 +6,6 @@ import { Plus, Image, Trash2, Menu, MoreHorizontal, MessageCircle, X } from "luc
 import Sidebar from "./Sidebar";
 import Breadcrumb from "./Breadcrumb";
 import UnifiedChatbot from "./UnifiedChatbot";
-import { useBlogStore } from "@/lib/stores/blog-store";
 
 const Editor = dynamic(() => import("./Editor"), {
   ssr: false,

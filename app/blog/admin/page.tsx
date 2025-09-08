@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   BarChart3,
   MessageCircle,
@@ -27,8 +27,8 @@ export default function BlogAdminPage() {
   const [navbarVisible, setNavbarVisible] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [activeView, setActiveView] = useState('overview');
   const router = useRouter();
-  const pathname = usePathname();
 
   const { posts, comments, featureToggles, setPosts, setFeatureToggles } = useBlogStore();
 
@@ -67,6 +67,8 @@ export default function BlogAdminPage() {
   };
 
   const loadPosts = useCallback(async () => {
+    if (posts.length > 0) return;
+
     try {
       const response = await fetch('/api/blog/posts');
       if (response.ok) {
@@ -76,9 +78,11 @@ export default function BlogAdminPage() {
     } catch (error) {
       console.error('Failed to load posts:', error);
     }
-  }, [setPosts]);
+  }, [setPosts, posts.length]);
 
   const loadFeatureToggles = useCallback(async () => {
+    if (featureToggles) return;
+
     try {
       const response = await fetch('/api/blog/features');
       if (response.ok) {
@@ -88,17 +92,14 @@ export default function BlogAdminPage() {
     } catch (error) {
       console.error('Failed to load feature toggles:', error);
     }
-  }, [setFeatureToggles]);
+  }, [setFeatureToggles, featureToggles]);
 
   useEffect(() => {
-    // Load initial data
     loadPosts();
     loadFeatureToggles();
   }, [loadPosts, loadFeatureToggles]);
 
-  const activePageId = pathname === "/blog/admin/analytics" ? "analytics" :
-                      pathname === "/blog/admin/comments" ? "comments" :
-                      pathname === "/blog/admin/features" ? "features" : "overview";
+  const activePageId = activeView;
 
   const pages: SidebarPage[] = [
     { id: "overview", title: "Overview", icon: "📊", href: "/blog/admin" },
@@ -111,18 +112,16 @@ export default function BlogAdminPage() {
     { label: "Blog Admin", href: "/blog/admin", icon: "⚙️" },
   ];
 
-  if (pathname === "/blog/admin/analytics") {
+  if (activeView === "analytics") {
     breadcrumbItems.push({ label: "Analytics", href: "/blog/admin/analytics", icon: "📈" });
-  } else if (pathname === "/blog/admin/comments") {
+  } else if (activeView === "comments") {
     breadcrumbItems.push({ label: "Comments", href: "/blog/admin/comments", icon: "💬" });
-  } else if (pathname === "/blog/admin/features") {
+  } else if (activeView === "features") {
     breadcrumbItems.push({ label: "Features", href: "/blog/admin/features", icon: "⚙️" });
   }
 
   const handleSelectPage = (pageId: string, href?: string) => {
-    if (href) {
-      router.push(href);
-    }
+    setActiveView(pageId);
     if (window.innerWidth < 768) {
       setSidebarOpen(false);
     }
@@ -219,7 +218,7 @@ export default function BlogAdminPage() {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <button
-              onClick={() => router.push("/blog/admin/analytics")}
+              onClick={() => setActiveView("analytics")}
               className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left"
             >
               <BarChart3 className="h-6 w-6 text-blue-600 mb-2" />
@@ -228,7 +227,7 @@ export default function BlogAdminPage() {
             </button>
 
             <button
-              onClick={() => router.push("/blog/admin/comments")}
+              onClick={() => setActiveView("comments")}
               className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left"
             >
               <MessageCircle className="h-6 w-6 text-green-600 mb-2" />
@@ -237,7 +236,7 @@ export default function BlogAdminPage() {
             </button>
 
             <button
-              onClick={() => router.push("/blog/admin/features")}
+              onClick={() => setActiveView("features")}
               className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left"
             >
               <Settings className="h-6 w-6 text-purple-600 mb-2" />
