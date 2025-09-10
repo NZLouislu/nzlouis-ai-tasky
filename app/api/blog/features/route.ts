@@ -3,6 +3,14 @@ import { blogDb } from '@/lib/supabase/blog-client'
 
 export async function GET() {
   try {
+    // Check if blogDb is available
+    if (!blogDb) {
+      return NextResponse.json(
+        { error: 'Blog database not configured' },
+        { status: 503 }
+      )
+    }
+
     const { data, error } = await blogDb
       .from('feature_toggles')
       .select('total_views, total_likes, total_comments, ai_summaries, ai_questions')
@@ -57,6 +65,14 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
+    // Check if blogDb is available
+    if (!blogDb) {
+      return NextResponse.json(
+        { error: 'Blog database not configured' },
+        { status: 503 }
+      )
+    }
+
     const body = await request.json()
     const {
       total_views,

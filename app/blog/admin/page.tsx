@@ -14,6 +14,7 @@ import Breadcrumb from "@/components/Breadcrumb";
 import BlogAnalytics from "@/components/blog/analytics/BlogAnalytics";
 import CommentsPanel from "@/components/blog/comments/CommentsPanel";
 import { useBlogStore } from "@/lib/stores/blog-store";
+import { verifyAuth } from '@/lib/auth';
 
 interface SidebarPage {
   id: string;
@@ -52,14 +53,14 @@ export default function BlogAdminPage() {
 
   const checkAuthentication = async () => {
     try {
-      const response = await fetch('/api/admin/verify');
-      const data = await response.json();
-      if (data.authenticated) {
+      const isAuth = await verifyAuth();
+      if (isAuth) {
         setIsAuthenticated(true);
       } else {
         router.push('/blog/admin/login');
       }
     } catch (error) {
+      console.error('Authentication check failed:', error);
       router.push('/blog/admin/login');
     } finally {
       setLoading(false);

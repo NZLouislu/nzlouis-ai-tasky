@@ -1,34 +1,34 @@
 "use client";
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { login, isEmbeddedBrowser } from '@/lib/auth';
 
 export default function AdminLoginPage() {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const isEmbedded = isEmbeddedBrowser();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
-      const response = await fetch('/api/admin/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-
-      if (response.ok) {
-        router.push('/blog/admin');
+      const result = await login(username, password);
+      
+      if (result.success) {
+        // Small delay to ensure token is set, especially important for embedded browsers
+        setTimeout(() => {
+          router.push("/blog/admin");
+        }, isEmbedded ? 200 : 50);
       } else {
-        const errorData = await response.json();
-        setError(errorData.error || 'Login failed');
+        setError(result.error || "Login failed");
       }
     } catch (error) {
-      setError('Network error. Please try again.');
+      setError("Network error. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -91,9 +91,16 @@ export default function AdminLoginPage() {
               disabled={loading}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Signing in...' : 'Sign in'}
+              {loading ? "Signing in..." : "Sign in"}
             </button>
           </div>
+          
+          {/* Debug info for embedded browsers */}
+          {isEmbedded && (
+            <div className="text-xs text-gray-500 text-center">
+              Running in embedded browser mode
+            </div>
+          )}
         </form>
       </div>
     </div>
