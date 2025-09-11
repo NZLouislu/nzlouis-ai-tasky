@@ -8,15 +8,14 @@ import {
   Trash2,
   Menu,
   MoreHorizontal,
-  MessageCircle,
-  X,
   GripVertical,
   Book,
+  X,
+  MessageCircle,
 } from "lucide-react";
 import Sidebar from "./Sidebar";
 import Breadcrumb from "./Breadcrumb";
 import UnifiedChatbot from "./UnifiedChatbot";
-import ChatbotInput from "./ChatbotInput";
 
 const Editor = dynamic(() => import("./Editor"), {
   ssr: false,
@@ -68,12 +67,10 @@ export default function Blog() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [navbarVisible, setNavbarVisible] = useState(true);
-  const [showChatbot, setShowChatbot] = useState(true);
+  const [isChatbotVisible, setIsChatbotVisible] = useState(false);
   const [chatbotWidth, setChatbotWidth] = useState(600);
   const [isResizing, setIsResizing] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [chatbotInput, setChatbotInput] = useState("");
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -100,16 +97,6 @@ export default function Blog() {
     };
   }, []);
 
-  const handleToggleChatbot = () => {
-    setShowChatbot(!showChatbot);
-    if (isMobile) {
-      setSidebarOpen(false);
-    } else if (!showChatbot) {
-      // Only collapse sidebar if opening chatbot on desktop
-      setSidebarCollapsed(true);
-    }
-  };
-
   const handleToggleSidebar = () => {
     if (sidebarCollapsed) {
       setSidebarCollapsed(false);
@@ -127,12 +114,11 @@ export default function Blog() {
 
   const handleMouseMove = useCallback(
     (e: MouseEvent) => {
-      if (!isResizing || !containerRef.current) return;
+      if (!isResizing) return;
 
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const newWidth = containerRect.right - e.clientX;
+      const newWidth = window.innerWidth - e.clientX;
       const minWidth = 400;
-      const maxWidth = containerRect.width - 400;
+      const maxWidth = window.innerWidth - 400;
 
       setChatbotWidth(Math.max(minWidth, Math.min(maxWidth, newWidth)));
     },
@@ -362,7 +348,7 @@ export default function Blog() {
           onAddSubPage={addNewSubPost}
           onUpdatePageTitle={updatePostTitle}
           onSelectPage={setActivePostId}
-          sidebarOpen={sidebarOpen && !(showChatbot && isMobile)}
+          sidebarOpen={sidebarOpen && !(isChatbotVisible && isMobile)}
           setSidebarOpen={setSidebarOpen}
           className={navbarVisible ? "top-16" : "top-0"}
           onCollapse={handleToggleSidebar}
@@ -426,7 +412,7 @@ export default function Blog() {
           }`}
         >
           <div className="flex-1 overflow-y-auto">
-            <div className="py-8 pb-24">
+            <div className="pt-8">
               <div className="max-w-[900px] mx-auto pl-5 md:px-6 lg:px-8">
                 <div className="flex justify-start">
                   <div className="w-full">
@@ -619,69 +605,59 @@ export default function Blog() {
               </div>
             </div>
           </div>
-
-          {showChatbot && !isMobile && (
-            <>
-              <div
-                className="w-1.5 bg-gray-200 hover:bg-gray-300 cursor-col-resize flex-shrink-0 flex items-center justify-center"
-                onMouseDown={handleMouseDown}
-              >
-                <GripVertical size={16} className="text-gray-600" />
-              </div>
-
-              <div
-                className="bg-white border-l border-gray-200 flex flex-col flex-shrink-0 relative"
-                style={{ width: chatbotWidth }}
-              >
-                <div className="p-4 border-b border-gray-200 flex-shrink-0">
-                  <div className="flex items-center justify-center">
-                    <h3 className="font-semibold">AI Blog Assistant</h3>
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto pb-20">
-                  <UnifiedChatbot
-                    mode="workspace"
-                    onPageModification={handlePageModification}
-                  />
-                </div>
-
-                <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-white">
-                  <ChatbotInput
-                    inputValue={chatbotInput}
-                    setInputValue={setChatbotInput}
-                    previewImage={previewImage}
-                    setPreviewImage={setPreviewImage}
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      console.log("Submit:", chatbotInput);
-                      setChatbotInput("");
-                      setPreviewImage(null);
-                    }}
-                  />
-                </div>
-              </div>
-            </>
-          )}
         </div>
       </div>
 
-      {/* This is the floating chatbot toggle button */}
-      <button
-        onClick={handleToggleChatbot}
-        className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-lg transition-colors z-30"
-        title="AI Assistant"
-        aria-label="Toggle AI Assistant"
-      >
-        {showChatbot ? (
-          <X size={24} aria-hidden="true" />
-        ) : (
-          <MessageCircle size={24} aria-hidden="true" />
-        )}
-      </button>
+      {isChatbotVisible && !isMobile && (
+        <>
+          <div
+            className="fixed right-0 top-0 bottom-0 w-1.5 bg-gray-200 hover:bg-gray-300 cursor-col-resize z-20 flex items-center justify-center transition-all duration-300 flex-shrink-0"
+            onMouseDown={handleMouseDown}
+            style={{ right: `${chatbotWidth}px` }}
+          >
+            <GripVertical size={16} className="text-gray-600" />
+          </div>
+          <div
+            className="fixed right-0 top-0 bottom-0 bg-white shadow-xl flex flex-col z-10 transition-all duration-300"
+            style={{ width: chatbotWidth }}
+          >
+            <div className="p-4 border-b border-gray-200 flex-shrink-0 relative">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold">AI Blog Assistant</h3>
+                <button
+                  onClick={() => setIsChatbotVisible(false)}
+                  className="p-1 text-gray-500 hover:text-gray-700 rounded hover:bg-gray-100 transition-colors"
+                  title="Close Chatbot"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              <UnifiedChatbot
+                mode="workspace"
+                onPageModification={handlePageModification}
+              />
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Right bottom Chatbot icon */}
+      {!isChatbotVisible && !isMobile && (
+        <button
+          onClick={() => setIsChatbotVisible(true)}
+          className="fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-colors z-30"
+          title="Open Chatbot"
+          style={{ width: "56px", height: "56px" }}
+        >
+          <MessageCircle size={24} />
+        </button>
+      )}
 
       {/* This is the mobile chatbot view */}
-      {showChatbot && isMobile && (
+      {isChatbotVisible && isMobile && (
         <div className="lg:hidden fixed inset-0 bg-white z-50 flex flex-col">
           <div className="p-4 border-b border-gray-200 flex items-center justify-center flex-shrink-0">
             <h3 className="font-semibold">AI Blog Assistant</h3>
@@ -691,21 +667,6 @@ export default function Blog() {
             <UnifiedChatbot
               mode="workspace"
               onPageModification={handlePageModification}
-            />
-          </div>
-
-          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-white flex-shrink-0">
-            <ChatbotInput
-              inputValue={chatbotInput}
-              setInputValue={setChatbotInput}
-              previewImage={previewImage}
-              setPreviewImage={setPreviewImage}
-              onSubmit={(e) => {
-                e.preventDefault();
-                console.log("Submit:", chatbotInput);
-                setChatbotInput("");
-                setPreviewImage(null);
-              }}
             />
           </div>
         </div>

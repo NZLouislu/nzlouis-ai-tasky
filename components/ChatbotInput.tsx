@@ -1,6 +1,5 @@
 "use client";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import Image from "next/image";
 import { useAISettings } from "@/lib/useAISettings";
 import { ArrowUp, Paperclip } from "lucide-react";
 
@@ -60,6 +59,7 @@ export default function ChatbotInput({
       for (const item of items) {
         if (item.type.startsWith("image/")) {
           e.preventDefault();
+          e.stopPropagation(); // 阻止事件冒泡
           const file = item.getAsFile();
           if (file) handleImageUpload(file);
           return;
@@ -153,27 +153,7 @@ export default function ChatbotInput({
   return (
     <div className="w-full">
       <form onSubmit={onSubmit} className="relative">
-        {previewImage && (
-          <div className="p-2">
-            <div className="relative inline-block">
-              <Image
-                src={previewImage}
-                alt="Preview"
-                width={80}
-                height={80}
-                className="rounded-lg"
-              />
-              <button
-                type="button"
-                onClick={() => setPreviewImage(null)}
-                className="absolute -top-2 -right-2 bg-gray-700 text-white rounded-full h-5 w-5 flex items-center justify-center text-xs"
-              >
-                &times;
-              </button>
-            </div>
-          </div>
-        )}
-        <div className="relative flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500">
+        <div className="relative flex items-center">
           {supportsVision && (
             <button
               type="button"
@@ -196,7 +176,7 @@ export default function ChatbotInput({
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             placeholder="Type your message..."
-            className="w-full pl-2 pr-10 py-2 resize-none border-none focus:outline-none focus:ring-0 bg-transparent"
+            className="w-full pl-2 pr-12 py-2 resize-none border-none focus:outline-none focus:ring-0 bg-transparent"
             rows={1}
             style={{ minHeight: "40px" }}
           />

@@ -1,4 +1,3 @@
-// UnifiedChatbot with optimized UI
 "use client";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useChat } from "@/lib/hooks/use-chat";
@@ -6,11 +5,11 @@ import { v4 as uuidv4 } from "uuid";
 import { sendChatMessage } from "@/lib/AssistantRuntime";
 import { useAISettings } from "@/lib/useAISettings";
 import Image from "next/image";
-import { X } from "lucide-react";
+import { X, ArrowUp, Paperclip } from "lucide-react";
 
 interface Message {
   id: string;
-  content: string;
+  content: string | { text: string; image?: string };
   role: string;
   timestamp: string;
 }
@@ -77,9 +76,11 @@ export default function UnifiedChatbot({
       for (const item of items) {
         if (item.type.startsWith("image/")) {
           e.preventDefault();
+          e.stopPropagation(); // 阻止事件冒泡
           const file = item.getAsFile();
           if (file) {
             handleImageUpload(file);
+            console.log("Chatbot handlePaste: Image pasted and handled", file.name || "pasted image");
           }
           return;
         }
@@ -89,7 +90,9 @@ export default function UnifiedChatbot({
         const file = e.clipboardData.files[0];
         if (file.type.startsWith("image/")) {
           e.preventDefault();
+          e.stopPropagation(); // 阻止事件冒泡
           handleImageUpload(file);
+          console.log("Chatbot handlePaste: Image pasted and handled", file.name || "pasted image");
         }
       }
     };
@@ -109,19 +112,20 @@ export default function UnifiedChatbot({
 
       const userMessage: Message = {
         id: uuidv4(),
-        content: text,
+        content: previewImage ? { text, image: previewImage } : text,
         role: "user",
         timestamp: new Date().toISOString(),
       };
 
       appendMessage(userMessage);
       setInput("");
+      setPreviewImage(null);
       setIsLoading(true);
 
       try {
         const reply = await sendChatMessage(
           text,
-          undefined,
+          previewImage || undefined,
           {
             systemPrompt: settings.systemPrompt,
             selectedModel: settings.selectedModel,
@@ -151,17 +155,59 @@ export default function UnifiedChatbot({
         setIsLoading(false);
       }
     },
-    [appendMessage, getCurrentModel, onPageModification, getApiKey, settings]
+    [appendMessage, getCurrentModel, onPageModification, getApiKey, settings, previewImage]
   );
 
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter") {
+        if (e.ctrlKey) {
+          e.preventDefault();
+          const textarea = e.currentTarget;
+          const start = textarea.selectionStart;
+          const end = textarea.selectionEnd;
+          setInput((prev) => prev.substring(0, start) + "\n" + prev.substring(end));
+          setTimeout(() => {
+            textarea.setSelectionRange(start + 1, start + 1);
+            textarea.focus();
+          }, 0);
+        } else {
+          e.preventDefault();
+          if (input.trim()) {
+            handleSubmit(input);
+          }
+        }
+      }
+    },
+    [input, handleSubmit]
+  );
+
+  const renderMessageContent = useCallback((content: string | { text: string; image?: string }) => {
+    if (typeof content === "string") {
+      return <div className="whitespace-pre-wrap">{content}</div>;
+    }
+    return (
+      <div>
+        <div className="whitespace-pre-wrap mb-2">{content.text}</div>
+        {content.image && (
+          <div className="mt-2">
+            <Image
+              src={content.image}
+              alt="Attached image"
+              width={300}
+              height={200}
+              className="rounded-lg max-w-full h-auto"
+            />
+          </div>
+        )}
+      </div>
+    );
+  }, []);
+
   return (
-    <div
-      className={`flex flex-col ${
-        mode === "standalone" ? "h-full" : "h-[500px]"
-      } bg-white`}
-    >
-      <div className="flex-1 overflow-y-auto px-6 py-4 pb-24">
-        <div className="max-w-4xl mx-auto space-y-6">
+    <div className={`unified-chatbot flex flex-col h-full bg-white ${mode === "standalone" ? "" : "relative"}`}>
+      <div className={`flex-1 overflow-y-auto px-6 py-4 ${mode === "workspace" ? "pb-24" : ""}`}>
+        <div className="w-full space-y-6">
           {messages.length === 0 && (
             <div className="text-center py-12">
               <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -189,7 +235,7 @@ export default function UnifiedChatbot({
                     : "bg-gray-100 text-gray-900 mr-12"
                 }`}
               >
-                <div className="whitespace-pre-wrap">{message.content}</div>
+                {renderMessageContent(message.content)}
                 <div
                   className={`text-xs mt-2 opacity-70 ${
                     message.role === "user" ? "text-blue-100" : "text-gray-500"
@@ -204,7 +250,7 @@ export default function UnifiedChatbot({
                         if (onPageModification) {
                           await onPageModification({
                             type: "add",
-                            content: message.content,
+                            content: typeof message.content === "string" ? message.content : message.content.text,
                           });
                         }
                       }}
@@ -240,35 +286,159 @@ export default function UnifiedChatbot({
           <div ref={messagesEndRef} />
         </div>
       </div>
-      <div className="fixed bottom-0 left-0 right-0 md:left-64 bg-white border-t shadow-lg">
-        <div className="max-w-4xl mx-auto p-4">
-          {previewImage && (
-            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700">
-                  Image Preview
-                </span>
+      {mode === "standalone" ? (
+        <div className="border-t bg-white p-4 shrink-0 fixed bottom-0 left-0 right-0 md:left-64">
+          <div className="w-full">
+            {previewImage && (
+              <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-700">
+                    Image Preview
+                  </span>
+                  <button
+                    onClick={() => setPreviewImage(null)}
+                    className="text-gray-500 hover:text-gray-700 p-1 rounded hover:bg-gray-200"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="relative max-w-xs">
+                  <Image
+                    src={previewImage}
+                    alt="Preview"
+                    width={200}
+                    height={128}
+                    className="max-h-32 rounded-lg"
+                  />
+                </div>
+              </div>
+            )}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (input.trim()) {
+                  handleSubmit(input);
+                }
+              }}
+              className="relative"
+            >
+              <div className="flex items-end space-x-2">
                 <button
-                  onClick={() => setPreviewImage(null)}
-                  className="text-gray-500 hover:text-gray-700 p-1 rounded hover:bg-gray-200"
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2 text-gray-500 hover:text-gray-700 flex-shrink-0"
                 >
-                  <X size={16} />
+                  <Paperclip size={20} />
+                </button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={(e) => {
+                    if (e.target.files?.length) {
+                      handleImageUpload(e.target.files[0]);
+                    }
+                  }}
+                  accept="image/*"
+                  className="hidden"
+                />
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Type your message..."
+                  className="flex-1 resize-none border border-gray-300 rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent max-h-32 overflow-y-auto"
+                  rows={3}
+                  style={{ minHeight: "80px" }}
+                />
+                <button
+                  type="submit"
+                  className="p-2 text-gray-500 hover:text-blue-500 flex-shrink-0 disabled:opacity-50"
+                  disabled={!input.trim() && !previewImage}
+                >
+                  <ArrowUp size={20} />
                 </button>
               </div>
-              <div className="relative max-w-xs">
-                <Image
-                  src={previewImage}
-                  alt="Preview"
-                  width={200}
-                  height={128}
-                  className="max-h-32 rounded-lg"
-                />
-              </div>
-            </div>
-          )}
-          
+            </form>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="absolute bottom-0 left-0 right-0 bg-white border-t z-10 p-4">
+          <div className="w-full">
+            {previewImage && (
+              <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-700">
+                    Image Preview
+                  </span>
+                  <button
+                    onClick={() => setPreviewImage(null)}
+                    className="text-gray-500 hover:text-gray-700 p-1 rounded hover:bg-gray-200"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="relative max-w-xs">
+                  <Image
+                    src={previewImage}
+                    alt="Preview"
+                    width={200}
+                    height={128}
+                    className="max-h-32 rounded-lg"
+                  />
+                </div>
+              </div>
+            )}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (input.trim()) {
+                  handleSubmit(input);
+                }
+              }}
+              className="relative"
+            >
+              <div className="flex items-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2 text-gray-500 hover:text-gray-700 flex-shrink-0"
+                >
+                  <Paperclip size={20} />
+                </button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={(e) => {
+                    if (e.target.files?.length) {
+                      handleImageUpload(e.target.files[0]);
+                    }
+                  }}
+                  accept="image/*"
+                  className="hidden"
+                />
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Type your message..."
+                  className="flex-1 resize-none border border-gray-300 rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent max-h-32 overflow-y-auto"
+                  rows={3}
+                  style={{ minHeight: "80px" }}
+                />
+                <button
+                  type="submit"
+                  className="p-2 text-gray-500 hover:text-blue-500 flex-shrink-0 disabled:opacity-50"
+                  disabled={!input.trim() && !previewImage}
+                >
+                  <ArrowUp size={20} />
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

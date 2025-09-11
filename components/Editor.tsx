@@ -194,6 +194,9 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
     };
 
     const handlePaste = (e: ClipboardEvent) => {
+      if (e.target && (e.target as Element).closest('.unified-chatbot')) {
+        return;
+      }
       const items = Array.from(e.clipboardData?.items || []);
       const imageItems = items.filter(
         (it) => it.kind === "file" && it.type.startsWith("image/")
