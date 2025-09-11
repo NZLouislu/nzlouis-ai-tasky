@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { PartialBlock } from "@blocknote/core";
 import {
   Plus,
-  Image,
+  Image as ImageIcon,
   Trash2,
   Menu,
   MoreHorizontal,
@@ -68,13 +68,13 @@ export default function Blog() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [navbarVisible, setNavbarVisible] = useState(true);
-  const [showChatbot, setShowChatbot] = useState(false);
+  const [showChatbot, setShowChatbot] = useState(true);
   const [chatbotWidth, setChatbotWidth] = useState(600);
   const [isResizing, setIsResizing] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [chatbotInput, setChatbotInput] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const resizeRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const checkIsMobile = () => {
@@ -104,7 +104,8 @@ export default function Blog() {
     setShowChatbot(!showChatbot);
     if (isMobile) {
       setSidebarOpen(false);
-    } else {
+    } else if (!showChatbot) {
+      // Only collapse sidebar if opening chatbot on desktop
       setSidebarCollapsed(true);
     }
   };
@@ -126,18 +127,14 @@ export default function Blog() {
 
   const handleMouseMove = useCallback(
     (e: MouseEvent) => {
-      if (!isResizing) return;
+      if (!isResizing || !containerRef.current) return;
 
-      const containerWidth = window.innerWidth;
-      const sidebarWidth = window.innerWidth >= 768 ? 256 : 0;
-      const maxWidth = containerWidth - sidebarWidth - 400;
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const newWidth = containerRect.right - e.clientX;
       const minWidth = 400;
+      const maxWidth = containerRect.width - 400;
 
-      const newWidth = Math.max(
-        minWidth,
-        Math.min(maxWidth, containerWidth - e.clientX)
-      );
-      setChatbotWidth(newWidth);
+      setChatbotWidth(Math.max(minWidth, Math.min(maxWidth, newWidth)));
     },
     [isResizing]
   );
@@ -162,8 +159,6 @@ export default function Blog() {
     return () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
     };
   }, [isResizing, handleMouseMove, handleMouseUp]);
 
@@ -207,12 +202,9 @@ export default function Blog() {
 
   const updatePostContent = (newContent: PartialBlock[]) => {
     setPosts(
-      posts.map((post) => {
-        if (post.id === activePostId) {
-          return { ...post, content: newContent };
-        }
-        return post;
-      })
+      posts.map((post) =>
+        post.id === activePostId ? { ...post, content: newContent } : post
+      )
     );
   };
 
@@ -401,7 +393,7 @@ export default function Blog() {
         <div
           className={`fixed ${
             navbarVisible ? "top-16" : "top-0"
-          } left-0 right-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200 transition-all duration-200 ${
+          } left-0 right-0 z-20 bg-white/80 backdrop-blur-md border-b border-gray-200 transition-all duration-200 ${
             sidebarCollapsed ? "md:left-12" : "md:left-64"
           }`}
         >
@@ -428,16 +420,12 @@ export default function Blog() {
         </div>
 
         <div
+          ref={containerRef}
           className={`flex-1 flex overflow-hidden transition-all duration-300 ${
-            navbarVisible ? "pt-20" : "pt-4"
+            navbarVisible ? "pt-14" : "pt-0"
           }`}
         >
-          <div
-            className={`flex-1 overflow-auto transition-all duration-300`}
-            style={{
-              marginRight: showChatbot && !isMobile ? `${chatbotWidth}px` : "0",
-            }}
-          >
+          <div className="flex-1 overflow-y-auto">
             <div className="py-8 pb-24">
               <div className="max-w-[900px] mx-auto pl-5 md:px-6 lg:px-8">
                 <div className="flex justify-start">
@@ -509,12 +497,7 @@ export default function Blog() {
                               }
                               className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors"
                             >
-                              {/* eslint-disable-next-line jsx-a11y/alt-text */}
-                              <Image
-                                size={16}
-                                className="mr-2"
-                                aria-hidden="true"
-                              />
+                              <ImageIcon size={16} className="mr-2" />
                               Add Cover
                             </button>
                           )}
@@ -637,37 +620,33 @@ export default function Blog() {
             </div>
           </div>
 
-          {showChatbot && (
+          {showChatbot && !isMobile && (
             <>
               <div
-                ref={resizeRef}
-                className="hidden lg:flex fixed top-0 bottom-0 z-40 w-1 bg-gray-300 hover:bg-gray-400 cursor-col-resize group"
-                style={{ right: `${chatbotWidth - 4}px` }}
+                className="w-1.5 bg-gray-200 hover:bg-gray-300 cursor-col-resize flex-shrink-0 flex items-center justify-center"
                 onMouseDown={handleMouseDown}
               >
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <GripVertical size={16} className="text-gray-600" />
-                </div>
+                <GripVertical size={16} className="text-gray-600" />
               </div>
 
               <div
-                className="hidden lg:flex fixed top-0 right-0 bottom-0 border-l border-gray-200 bg-white flex-col z-50"
-                style={{ width: `${chatbotWidth}px` }}
+                className="bg-white border-l border-gray-200 flex flex-col flex-shrink-0 relative"
+                style={{ width: chatbotWidth }}
               >
-                <div className="p-4 border-b border-gray-200">
+                <div className="p-4 border-b border-gray-200 flex-shrink-0">
                   <div className="flex items-center justify-center">
                     <h3 className="font-semibold">AI Blog Assistant</h3>
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-hidden">
+                <div className="flex-1 overflow-y-auto pb-20">
                   <UnifiedChatbot
                     mode="workspace"
                     onPageModification={handlePageModification}
                   />
                 </div>
 
-                <div className="p-4 border-t border-gray-200 bg-white">
+                <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-white">
                   <ChatbotInput
                     inputValue={chatbotInput}
                     setInputValue={setChatbotInput}
@@ -675,7 +654,6 @@ export default function Blog() {
                     setPreviewImage={setPreviewImage}
                     onSubmit={(e) => {
                       e.preventDefault();
-                      // Handle submit logic here
                       console.log("Submit:", chatbotInput);
                       setChatbotInput("");
                       setPreviewImage(null);
@@ -688,9 +666,10 @@ export default function Blog() {
         </div>
       </div>
 
+      {/* This is the floating chatbot toggle button */}
       <button
         onClick={handleToggleChatbot}
-        className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-lg transition-colors z-50"
+        className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-lg transition-colors z-30"
         title="AI Assistant"
         aria-label="Toggle AI Assistant"
       >
@@ -701,20 +680,21 @@ export default function Blog() {
         )}
       </button>
 
-      {showChatbot && (
+      {/* This is the mobile chatbot view */}
+      {showChatbot && isMobile && (
         <div className="lg:hidden fixed inset-0 bg-white z-50 flex flex-col">
-          <div className="p-4 border-b border-gray-200 flex items-center justify-center">
+          <div className="p-4 border-b border-gray-200 flex items-center justify-center flex-shrink-0">
             <h3 className="font-semibold">AI Blog Assistant</h3>
           </div>
 
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-y-auto pb-20">
             <UnifiedChatbot
               mode="workspace"
               onPageModification={handlePageModification}
             />
           </div>
 
-          <div className="p-4 border-t border-gray-200 bg-white">
+          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-white flex-shrink-0">
             <ChatbotInput
               inputValue={chatbotInput}
               setInputValue={setChatbotInput}
@@ -722,7 +702,6 @@ export default function Blog() {
               setPreviewImage={setPreviewImage}
               onSubmit={(e) => {
                 e.preventDefault();
-                // Handle submit logic here
                 console.log("Submit:", chatbotInput);
                 setChatbotInput("");
                 setPreviewImage(null);

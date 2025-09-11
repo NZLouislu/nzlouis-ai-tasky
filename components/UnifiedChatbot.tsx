@@ -1,14 +1,12 @@
 // UnifiedChatbot with optimized UI
 "use client";
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Button } from "@/components/ui/button";
-import { PaperPlaneIcon } from "@radix-ui/react-icons";
 import { useChat } from "@/lib/hooks/use-chat";
 import { v4 as uuidv4 } from "uuid";
 import { sendChatMessage } from "@/lib/AssistantRuntime";
 import { useAISettings } from "@/lib/useAISettings";
 import Image from "next/image";
-import { Upload, X } from "lucide-react";
+import { X } from "lucide-react";
 
 interface Message {
   id: string;
@@ -268,67 +266,7 @@ export default function UnifiedChatbot({
               </div>
             </div>
           )}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSubmit(input);
-            }}
-            className="flex gap-3"
-          >
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={(e) => {
-                if (e.target.files?.length) {
-                  handleImageUpload(e.target.files[0]);
-                }
-              }}
-              accept="image/*"
-              className="hidden"
-            />
-            <div className="flex-1 relative">
-              <div className="flex items-center border border-gray-300 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-3 text-gray-500 hover:text-gray-700 hover:bg-gray-100 flex-shrink-0 h-full flex items-center justify-center"
-                  title="Upload image"
-                >
-                  <Upload size={18} />
-                </button>
-                <textarea
-                  ref={textareaRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      if (e.ctrlKey || e.shiftKey) {
-                        setTimeout(() => adjustTextareaHeight(), 0);
-                        return;
-                      } else {
-                        e.preventDefault();
-                        handleSubmit(input);
-                      }
-                    }
-                  }}
-                  placeholder="Type your message... (Enter to send, Ctrl+Enter or Shift+Enter for new line)"
-                  className="flex-1 border-0 focus:ring-0 focus:outline-none resize-none px-3 py-3 rounded-none bg-transparent"
-                  style={{
-                    minHeight: "44px",
-                    maxHeight: "120px",
-                    overflow: "auto",
-                  }}
-                />
-              </div>
-            </div>
-            <Button
-              type="submit"
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[80px]"
-              disabled={!input.trim() && !previewImage}
-            >
-              <PaperPlaneIcon className="w-4 h-4" />
-            </Button>
-          </form>
+          
         </div>
       </div>
     </div>
