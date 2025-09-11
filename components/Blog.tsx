@@ -509,6 +509,7 @@ export default function Blog() {
                               }
                               className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors"
                             >
+                              {/* eslint-disable-next-line jsx-a11y/alt-text */}
                               <Image
                                 size={16}
                                 className="mr-2"

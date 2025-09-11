@@ -182,6 +182,7 @@ export default function AIContinuationPanel({
         <button
           onClick={onClose}
           className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
+          title="Close panel"
         >
           <X className="h-4 w-4" />
         </button>

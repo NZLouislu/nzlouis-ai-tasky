@@ -199,6 +199,23 @@ export default function UnifiedChatbot({
                 >
                   {new Date(message.timestamp).toLocaleTimeString()}
                 </div>
+                {message.role === "assistant" && mode === "workspace" && (
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      onClick={async () => {
+                        if (onPageModification) {
+                          await onPageModification({
+                            type: "add",
+                            content: message.content,
+                          });
+                        }
+                      }}
+                      className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                    >
+                      Add to Blog
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ))}
