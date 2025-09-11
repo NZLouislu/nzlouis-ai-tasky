@@ -1,110 +1,122 @@
 "use client";
-import { useState, useEffect } from 'react'
-import { useBlogStore } from '@/lib/stores/blog-store'
-import { Trash2, MessageCircle, User } from 'lucide-react'
+import { useState, useEffect, useCallback } from "react";
+import { useBlogStore } from "@/lib/stores/blog-store";
+import { Trash2, MessageCircle, User } from "lucide-react";
 
 interface CommentsPanelProps {
-  postId: string
+  postId: string;
 }
 
 export default function CommentsPanel({ postId }: CommentsPanelProps) {
-  const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const posts = useBlogStore(state => state.posts)
-  const comments = useBlogStore(state => state.comments)
-  const setComments = useBlogStore(state => state.setComments)
+  const posts = useBlogStore((state) => state.posts);
+  const comments = useBlogStore((state) => state.comments);
+  const setComments = useBlogStore((state) => state.setComments);
 
-  const currentComments = selectedPostId ? comments[selectedPostId] || [] : []
+  const currentComments = selectedPostId ? comments[selectedPostId] || [] : [];
 
-  const optimisticComments = currentComments
+  const optimisticComments = currentComments;
 
-  useEffect(() => {
-    loadAllComments()
-  }, [])
+  const loadAllComments = useCallback(async () => {
+    const postsNeedingComments = posts.filter(
+      (post) => !comments[post.post_id]
+    );
 
-  useEffect(() => {
-    if (postId && posts.find(p => p.post_id === postId)) {
-      setSelectedPostId(postId)
+    if (postsNeedingComments.length === 0) {
+      setLoading(false);
+      return;
     }
-  }, [postId, posts])
+
+    try {
+      setLoading(true);
+      const commentPromises = postsNeedingComments.map(async (post) => {
+        try {
+          const response = await fetch(
+            `/api/blog/comments?postId=${post.post_id}`
+          );
+          if (response.ok) {
+            const data = await response.json();
+            setComments(post.post_id, data);
+          }
+        } catch (error) {
+          console.error(
+            `Failed to fetch comments for post ${post.post_id}:`,
+            error
+          );
+        }
+      });
+
+      await Promise.all(commentPromises);
+    } catch (error) {
+      console.error("Failed to load all comments:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [posts, comments, setComments]);
+
+  const fetchComments = useCallback(
+    async (postId: string) => {
+      if (comments[postId]) return;
+
+      try {
+        const response = await fetch(`/api/blog/comments?postId=${postId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setComments(postId, data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch comments:", error);
+      }
+    },
+    [comments, setComments]
+  );
+
+  useEffect(() => {
+    loadAllComments();
+  }, [loadAllComments]);
+
+  useEffect(() => {
+    if (postId && posts.find((p) => p.post_id === postId)) {
+      setSelectedPostId(postId);
+    }
+  }, [postId, posts]);
 
   useEffect(() => {
     if (selectedPostId) {
-      fetchComments(selectedPostId)
+      fetchComments(selectedPostId);
     }
-  }, [selectedPostId])
-
-  const loadAllComments = async () => {
-    const postsNeedingComments = posts.filter(post => !comments[post.post_id])
-
-    if (postsNeedingComments.length === 0) {
-      setLoading(false)
-      return
-    }
-
-    try {
-      setLoading(true)
-      const commentPromises = postsNeedingComments.map(async (post) => {
-        try {
-          const response = await fetch(`/api/blog/comments?postId=${post.post_id}`)
-          if (response.ok) {
-            const data = await response.json()
-            setComments(post.post_id, data)
-          }
-        } catch (error) {
-          console.error(`Failed to fetch comments for post ${post.post_id}:`, error)
-        }
-      })
-
-      await Promise.all(commentPromises)
-    } catch (error) {
-      console.error('Failed to load all comments:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchComments = async (postId: string) => {
-    if (comments[postId]) return
-
-    try {
-      const response = await fetch(`/api/blog/comments?postId=${postId}`)
-      if (response.ok) {
-        const data = await response.json()
-        setComments(postId, data)
-      }
-    } catch (error) {
-      console.error('Failed to fetch comments:', error)
-    }
-  }
+  }, [selectedPostId, fetchComments]);
 
   const handleDeleteComment = async (commentId: string) => {
     try {
       const response = await fetch(`/api/blog/comments/${commentId}`, {
-        method: 'DELETE'
-      })
+        method: "DELETE",
+      });
 
       if (response.ok) {
-        const updatedComments = optimisticComments.filter(c => c.id !== commentId)
+        const updatedComments = optimisticComments.filter(
+          (c) => c.id !== commentId
+        );
         if (selectedPostId) {
-          setComments(selectedPostId, updatedComments)
+          setComments(selectedPostId, updatedComments);
         }
       }
     } catch (error) {
-      console.error('Failed to delete comment:', error)
+      console.error("Failed to delete comment:", error);
     }
-  }
+  };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
 
   return (
     <div className="flex h-full bg-white">
@@ -119,17 +131,19 @@ export default function CommentsPanel({ postId }: CommentsPanelProps) {
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
             </div>
           ) : (
-            posts.map(post => (
+            posts.map((post) => (
               <button
                 key={post.post_id}
                 onClick={() => setSelectedPostId(post.post_id)}
                 className={`w-full text-left p-3 rounded-lg transition-colors ${
                   selectedPostId === post.post_id
-                    ? 'bg-blue-50 border border-blue-200'
-                    : 'hover:bg-gray-50 border border-gray-200'
+                    ? "bg-blue-50 border border-blue-200"
+                    : "hover:bg-gray-50 border border-gray-200"
                 }`}
               >
-                <div className="font-medium text-sm truncate">{post.title || 'Untitled Post'}</div>
+                <div className="font-medium text-sm truncate">
+                  {post.title || "Untitled Post"}
+                </div>
                 <div className="text-xs text-gray-500 mt-1">
                   {comments[post.post_id]?.length || 0} comments
                 </div>
@@ -144,7 +158,9 @@ export default function CommentsPanel({ postId }: CommentsPanelProps) {
           <>
             <div className="p-4 border-b border-gray-200">
               <h3 className="text-lg font-semibold">
-                Comments for: {posts.find(p => p.post_id === selectedPostId)?.title || 'Untitled Post'}
+                Comments for:{" "}
+                {posts.find((p) => p.post_id === selectedPostId)?.title ||
+                  "Untitled Post"}
               </h3>
             </div>
 
@@ -154,13 +170,15 @@ export default function CommentsPanel({ postId }: CommentsPanelProps) {
                   No comments yet. Be the first to comment!
                 </div>
               ) : (
-                optimisticComments.map(comment => (
+                optimisticComments.map((comment) => (
                   <div key={comment.id} className="bg-gray-50 rounded-lg p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center space-x-2 mb-2">
                         <User className="h-4 w-4 text-gray-400" />
                         <span className="text-sm font-medium">
-                          {comment.is_anonymous ? 'Anonymous' : (comment.name || 'Anonymous')}
+                          {comment.is_anonymous
+                            ? "Anonymous"
+                            : comment.name || "Anonymous"}
                         </span>
                         <span className="text-xs text-gray-500">
                           {formatDate(comment.created_at)}
@@ -173,12 +191,13 @@ export default function CommentsPanel({ postId }: CommentsPanelProps) {
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
-                    <p className="text-gray-700 whitespace-pre-wrap">{comment.comment}</p>
+                    <p className="text-gray-700 whitespace-pre-wrap">
+                      {comment.comment}
+                    </p>
                   </div>
                 ))
               )}
             </div>
-
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-500">
@@ -187,5 +206,5 @@ export default function CommentsPanel({ postId }: CommentsPanelProps) {
         )}
       </div>
     </div>
-  )
+  );
 }

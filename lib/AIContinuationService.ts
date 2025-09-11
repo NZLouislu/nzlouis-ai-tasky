@@ -13,10 +13,14 @@ export interface ContinuationResponse {
 }
 
 export class AIContinuationService {
-
   async generateContinuation(
     request: ContinuationRequest,
-    settings: { systemPrompt: string; selectedModel: string; temperature: number; maxTokens: number },
+    settings: {
+      systemPrompt: string;
+      selectedModel: string;
+      temperature: number;
+      maxTokens: number;
+    },
     getCurrentModel: () => { id: string; provider: string } | undefined,
     getApiKey: (provider: string) => string | null
   ): Promise<ContinuationResponse> {
@@ -64,36 +68,62 @@ Expanded version:`;
     }
 
     try {
-      const response = await sendChatMessage(prompt, undefined, settings, getCurrentModel, getApiKey);
+      const response = await sendChatMessage(
+        prompt,
+        undefined,
+        settings,
+        getCurrentModel,
+        getApiKey,
+        undefined
+      );
 
       return {
         suggestion: response,
-        confidence: 0.8
+        confidence: 0.8,
       };
     } catch (error) {
       console.error("AI continuation error:", error);
-      return {
-        suggestion: "Sorry, I couldn't generate a suggestion at this time.",
-        confidence: 0
-      };
+
+      if (error instanceof Error) {
+        if (
+          error.message.includes("rate limit") ||
+          error.message.includes("429")
+        ) {
+          throw new Error("请求过于频繁，请稍后再试");
+        } else if (
+          error.message.includes("quota") ||
+          error.message.includes("RESOURCE_EXHAUSTED")
+        ) {
+          throw new Error("API配额已用完，请检查您的计划和计费");
+        } else {
+          throw error;
+        }
+      }
+
+      throw new Error("生成AI建议失败");
     }
   }
 
   async getMultipleSuggestions(
     request: ContinuationRequest,
-    settings: { systemPrompt: string; selectedModel: string; temperature: number; maxTokens: number },
+    settings: {
+      systemPrompt: string;
+      selectedModel: string;
+      temperature: number;
+      maxTokens: number;
+    },
     getCurrentModel: () => { id: string; provider: string } | undefined,
-    getApiKey: (provider: string) => string | null,
-    count: number = 3
+    getApiKey: (provider: string) => string | null
   ): Promise<ContinuationResponse[]> {
-    const suggestions: ContinuationResponse[] = [];
+    // 为了避免配额问题，只生成一个建议
+    const suggestion = await this.generateContinuation(
+      request,
+      settings,
+      getCurrentModel,
+      getApiKey
+    );
 
-    for (let i = 0; i < count; i++) {
-      const suggestion = await this.generateContinuation(request, settings, getCurrentModel, getApiKey);
-      suggestions.push(suggestion);
-    }
-
-    return suggestions;
+    return [suggestion];
   }
 }
 

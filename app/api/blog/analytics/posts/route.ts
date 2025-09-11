@@ -3,6 +3,13 @@ import { blogDb } from '@/lib/supabase/blog-client'
 
 export async function GET(request: NextRequest) {
   try {
+    if (!blogDb) {
+      return NextResponse.json(
+        { error: 'Database connection not available' },
+        { status: 503 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const limit = parseInt(searchParams.get('limit') || '10')
     const period = searchParams.get('period') || '30' // days
@@ -20,13 +27,13 @@ export async function GET(request: NextRequest) {
 
     const posts = await Promise.all(
       postStats.map(async (post) => {
-        const { data: dailyData, error: dailyError } = await blogDb
+        const { data: dailyData, error: dailyError } = await blogDb!
           .from('daily_stats')
           .select('views, likes, ai_questions, ai_summaries, date')
           .eq('post_id', post.post_id)
           .gte('date', startDate.toISOString().split('T')[0])
 
-        const { data: commentsData, error: commentsError } = await blogDb
+        const { data: commentsData, error: commentsError } = await blogDb!
           .from('comments')
           .select('id')
           .eq('post_id', post.post_id)

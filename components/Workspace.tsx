@@ -2,7 +2,15 @@
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { PartialBlock } from "@blocknote/core";
-import { Plus, Image, Trash2, Menu, MoreHorizontal, MessageCircle, X } from "lucide-react";
+import {
+  Plus,
+  Image,
+  Trash2,
+  Menu,
+  MoreHorizontal,
+  MessageCircle,
+  X,
+} from "lucide-react";
 import Sidebar from "./Sidebar";
 import Breadcrumb from "./Breadcrumb";
 import UnifiedChatbot from "./UnifiedChatbot";
@@ -10,7 +18,7 @@ import { mockPages, Page } from "@/lib/mockData";
 
 const Editor = dynamic(() => import("./Editor"), {
   ssr: false,
-  loading: () => <div className="p-4 text-gray-500">Loading editor...</div>
+  loading: () => <div className="p-4 text-gray-500">Loading editor...</div>,
 });
 
 export default function Workspace() {
@@ -48,12 +56,12 @@ export default function Workspace() {
       content: [
         {
           type: "paragraph",
-          content: `Welcome to Page ${pageNumber}! This is an independent page with its own content.`
+          content: `Welcome to Page ${pageNumber}! This is an independent page with its own content.`,
         },
         {
           type: "paragraph",
-          content: "You can edit this content and add more blocks as needed."
-        }
+          content: "You can edit this content and add more blocks as needed.",
+        },
       ],
     };
     setPages([...pages, newPage]);
@@ -62,7 +70,7 @@ export default function Workspace() {
 
   const addNewSubPage = (parentPageId?: string) => {
     const parentId = parentPageId || activePageId;
-    const parentPage = pages.find(p => p.id === parentId);
+    const parentPage = pages.find((p) => p.id === parentId);
     const subPageNumber = (parentPage?.children?.length || 0) + 1;
     const newSubPage: Page = {
       id: `${parentId}-sub-${Date.now()}`,
@@ -70,19 +78,24 @@ export default function Workspace() {
       content: [
         {
           type: "paragraph",
-          content: `This is Sub page ${subPageNumber} of ${parentPage?.title || 'parent page'}.`
+          content: `This is Sub page ${subPageNumber} of ${
+            parentPage?.title || "parent page"
+          }.`,
         },
         {
           type: "paragraph",
-          content: "Sub pages have their own independent content and can be organized hierarchically."
-        }
+          content:
+            "Sub pages have their own independent content and can be organized hierarchically.",
+        },
       ],
     };
-    setPages(prev => prev.map(page =>
-      page.id === parentId
-        ? { ...page, children: [...(page.children || []), newSubPage] }
-        : page
-    ));
+    setPages((prev) =>
+      prev.map((page) =>
+        page.id === parentId
+          ? { ...page, children: [...(page.children || []), newSubPage] }
+          : page
+      )
+    );
     setActivePageId(newSubPage.id);
   };
 
@@ -102,50 +115,66 @@ export default function Workspace() {
     );
   };
 
-  const handlePageModification = async (modification: { type: string; target?: string; content?: string; title?: string }): Promise<string> => {
+  const handlePageModification = async (modification: {
+    type: string;
+    target?: string;
+    content?: string;
+    title?: string;
+  }): Promise<string> => {
     switch (modification.type) {
       case "add":
-        if (!modification.content) return "Content is required for add operation";
+        if (!modification.content)
+          return "Content is required for add operation";
         const newBlock: PartialBlock = {
           type: "paragraph",
-          content: [{ type: "text", text: modification.content, styles: {} }]
+          content: [{ type: "text", text: modification.content, styles: {} }],
         };
         updatePageContent([...activePage.content, newBlock]);
         return `Added content to the page`;
 
       case "edit":
-        if (!modification.content) return "Content is required for edit operation";
+        if (!modification.content)
+          return "Content is required for edit operation";
         const editBlock: PartialBlock = {
           type: "paragraph",
-          content: [{ type: "text", text: `Edited: ${modification.content}`, styles: {} }]
+          content: [
+            {
+              type: "text",
+              text: `Edited: ${modification.content}`,
+              styles: {},
+            },
+          ],
         };
         updatePageContent([...activePage.content, editBlock]);
         return `Edited content on the page`;
 
       case "create_page":
         addNewWorkspacePage();
-        return `Created new page: "${modification.title || 'Untitled'}"`;
+        return `Created new page: "${modification.title || "Untitled"}"`;
 
       case "set_title":
-        if (!modification.title) return "Title is required for set title operation";
+        if (!modification.title)
+          return "Title is required for set title operation";
         updatePageTitle(activePageId, modification.title);
         return `Set page title to: "${modification.title}"`;
 
       case "add_heading":
-        if (!modification.content) return "Content is required for add heading operation";
+        if (!modification.content)
+          return "Content is required for add heading operation";
         const headingBlock: PartialBlock = {
           type: "heading",
           content: [{ type: "text", text: modification.content, styles: {} }],
-          props: { level: 1 }
+          props: { level: 1 },
         };
         updatePageContent([...activePage.content, headingBlock]);
         return `Added heading: "${modification.content}"`;
 
       case "add_paragraph":
-        if (!modification.content) return "Content is required for add paragraph operation";
+        if (!modification.content)
+          return "Content is required for add paragraph operation";
         const paraBlock: PartialBlock = {
           type: "paragraph",
-          content: [{ type: "text", text: modification.content, styles: {} }]
+          content: [{ type: "text", text: modification.content, styles: {} }],
         };
         updatePageContent([...activePage.content, paraBlock]);
         return `Added paragraph: "${modification.content}"`;
@@ -227,7 +256,16 @@ export default function Workspace() {
       <Sidebar
         title="Workspace"
         icon="📁"
-        pages={pages.map(p => ({ id: p.id, title: p.title, icon: p.icon, children: p.children?.map(c => ({ id: c.id, title: c.title, icon: c.icon })) }))}
+        pages={pages.map((p) => ({
+          id: p.id,
+          title: p.title,
+          icon: p.icon,
+          children: p.children?.map((c) => ({
+            id: c.id,
+            title: c.title,
+            icon: c.icon,
+          })),
+        }))}
         activePageId={activePageId}
         onAddPage={addNewWorkspacePage}
         onAddSubPage={(parentPageId) => addNewSubPage(parentPageId)}
@@ -239,12 +277,21 @@ export default function Workspace() {
       />
 
       <div className="flex-1 flex flex-col ml-0 md:ml-64">
-        <div className={`fixed ${navbarVisible ? "top-16" : "top-0"} left-0 right-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200 md:left-64 transition-all duration-300`}>
+        <div
+          className={`fixed ${
+            navbarVisible ? "top-16" : "top-0"
+          } left-0 right-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200 md:left-64 transition-all duration-300`}
+        >
           <div className="px-4 md:px-6 py-3 flex items-center justify-between">
-            <Breadcrumb items={[
-              { label: "Workspace", icon: "📁" },
-              { label: activePage.title || "Untitled", icon: activePage.icon }
-            ]} />
+            <Breadcrumb
+              items={[
+                { label: "Workspace", icon: "📁" },
+                {
+                  label: activePage.title || "Untitled",
+                  icon: activePage.icon,
+                },
+              ]}
+            />
             <button
               onClick={addNewWorkspacePage}
               className="bg-blue-600 text-white rounded-full p-2 hover:bg-blue-700 transition-colors"
@@ -264,8 +311,14 @@ export default function Workspace() {
           </button>
         </div>
 
-        <div className={`flex-1 flex overflow-hidden transition-all duration-300 ${navbarVisible ? "pt-20" : "pt-4"}`}>
-          <div className={`flex-1 overflow-auto ${showChatbot ? "lg:mr-0" : ""}`}>
+        <div
+          className={`flex-1 flex overflow-hidden transition-all duration-300 ${
+            navbarVisible ? "pt-20" : "pt-4"
+          }`}
+        >
+          <div
+            className={`flex-1 overflow-auto ${showChatbot ? "lg:mr-0" : ""}`}
+          >
             <div className="py-8">
               <div className="max-w-[900px] mx-auto pl-5 md:px-6 lg:px-8">
                 <div className="flex justify-start">
@@ -281,7 +334,9 @@ export default function Workspace() {
                         }}
                       >
                         {activePage.cover.type === "color" ? (
-                          <div className={`h-full ${activePage.cover.value}`}></div>
+                          <div
+                            className={`h-full ${activePage.cover.value}`}
+                          ></div>
                         ) : (
                           <div
                             className="h-full bg-cover bg-center"
@@ -292,7 +347,8 @@ export default function Workspace() {
                         )}
                         <div
                           className={`absolute bottom-4 right-4 flex space-x-2 transition-opacity duration-200 ${
-                            showCoverActions || (!activePage.icon && !activePage.cover)
+                            showCoverActions ||
+                            (!activePage.icon && !activePage.cover)
                               ? "opacity-100"
                               : "opacity-0"
                           }`}
@@ -319,7 +375,9 @@ export default function Workspace() {
                         <div className="flex items-center space-x-4">
                           {!activePage.icon && !activePage.cover && (
                             <button
-                              onClick={() => setShowIconSelector(!showIconSelector)}
+                              onClick={() =>
+                                setShowIconSelector(!showIconSelector)
+                              }
                               className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors"
                             >
                               <Plus size={16} className="mr-2" />
@@ -329,10 +387,17 @@ export default function Workspace() {
 
                           {!activePage.cover && (
                             <button
-                              onClick={() => setShowCoverOptions(!showCoverOptions)}
+                              onClick={() =>
+                                setShowCoverOptions(!showCoverOptions)
+                              }
                               className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors"
                             >
-                              <Image size={16} className="mr-2" />
+                              <Image
+                                size={16}
+                                className="mr-2"
+                                aria-hidden="true"
+                                alt=""
+                              />
                               Add Cover
                             </button>
                           )}
@@ -397,7 +462,9 @@ export default function Workspace() {
                               onChange={handleCoverFileSelect}
                               className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             />
-                            <p className="text-xs text-gray-500 mt-1">Or enter image URL below</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Or enter image URL below
+                            </p>
                             <input
                               type="text"
                               placeholder="Enter image URL"
@@ -449,42 +516,69 @@ export default function Workspace() {
                       />
                     </div>
                   </div>
-        
+
                   {showChatbot && (
                     <div className="hidden lg:flex w-[48rem] border-l border-gray-200 bg-white flex-col">
                       <div className="bg-blue-600 text-white p-4 border-b border-gray-200">
-                        <h3 className="font-semibold">AI Workspace Assistant</h3>
-                        <p className="text-sm text-blue-100">Use commands to modify your workspace</p>
+                        <h3 className="font-semibold">
+                          AI Workspace Assistant
+                        </h3>
+                        <p className="text-sm text-blue-100">
+                          Use commands to modify your workspace
+                        </p>
                       </div>
-        
+
                       <div className="flex-1 p-4">
                         <div className="text-sm text-gray-600 space-y-2">
-                          <p><strong>Available commands:</strong></p>
+                          <p>
+                            <strong>Available commands:</strong>
+                          </p>
                           <ul className="list-disc list-inside space-y-1">
-                            <li><code>/add [content]</code> - Add new content</li>
-                            <li><code>/create page [title]</code> - Create new page</li>
-                            <li><code>/set title [title]</code> - Change page title</li>
-                            <li><code>/add heading [text]</code> - Add heading</li>
-                            <li><code>/add paragraph [text]</code> - Add paragraph</li>
+                            <li>
+                              <code>/add [content]</code> - Add new content
+                            </li>
+                            <li>
+                              <code>/create page [title]</code> - Create new
+                              page
+                            </li>
+                            <li>
+                              <code>/set title [title]</code> - Change page
+                              title
+                            </li>
+                            <li>
+                              <code>/add heading [text]</code> - Add heading
+                            </li>
+                            <li>
+                              <code>/add paragraph [text]</code> - Add paragraph
+                            </li>
                           </ul>
-                          <p className="mt-4"><strong>@ mentions:</strong></p>
+                          <p className="mt-4">
+                            <strong>@ mentions:</strong>
+                          </p>
                           <p>Type @ to see available page elements</p>
                         </div>
                       </div>
-        
+
                       <div className="border-t border-gray-200">
-                        <UnifiedChatbot mode="workspace" onPageModification={handlePageModification} />
+                        <UnifiedChatbot
+                          mode="workspace"
+                          onPageModification={handlePageModification}
+                        />
                       </div>
                     </div>
                   )}
                 </div>
-        
+
                 {showChatbot && (
                   <div className="lg:hidden fixed inset-0 bg-white z-50 flex flex-col">
                     <div className="bg-blue-600 text-white p-4 border-b border-gray-200 flex items-center justify-between">
                       <div>
-                        <h3 className="font-semibold">AI Workspace Assistant</h3>
-                        <p className="text-sm text-blue-100">Use commands to modify your workspace</p>
+                        <h3 className="font-semibold">
+                          AI Workspace Assistant
+                        </h3>
+                        <p className="text-sm text-blue-100">
+                          Use commands to modify your workspace
+                        </p>
                       </div>
                       <button
                         onClick={() => setShowChatbot(false)}
@@ -493,24 +587,41 @@ export default function Workspace() {
                         <X size={20} />
                       </button>
                     </div>
-        
+
                     <div className="flex-1 p-4">
                       <div className="text-sm text-gray-600 space-y-2">
-                        <p><strong>Available commands:</strong></p>
+                        <p>
+                          <strong>Available commands:</strong>
+                        </p>
                         <ul className="list-disc list-inside space-y-1">
-                          <li><code>/add [content]</code> - Add new content</li>
-                          <li><code>/create page [title]</code> - Create new page</li>
-                          <li><code>/set title [title]</code> - Change page title</li>
-                          <li><code>/add heading [text]</code> - Add heading</li>
-                          <li><code>/add paragraph [text]</code> - Add paragraph</li>
+                          <li>
+                            <code>/add [content]</code> - Add new content
+                          </li>
+                          <li>
+                            <code>/create page [title]</code> - Create new page
+                          </li>
+                          <li>
+                            <code>/set title [title]</code> - Change page title
+                          </li>
+                          <li>
+                            <code>/add heading [text]</code> - Add heading
+                          </li>
+                          <li>
+                            <code>/add paragraph [text]</code> - Add paragraph
+                          </li>
                         </ul>
-                        <p className="mt-4"><strong>@ mentions:</strong></p>
+                        <p className="mt-4">
+                          <strong>@ mentions:</strong>
+                        </p>
                         <p>Type @ to see available page elements</p>
                       </div>
                     </div>
-        
+
                     <div className="border-t border-gray-200">
-                      <UnifiedChatbot mode="workspace" onPageModification={handlePageModification} />
+                      <UnifiedChatbot
+                        mode="workspace"
+                        onPageModification={handlePageModification}
+                      />
                     </div>
                   </div>
                 )}

@@ -7,14 +7,14 @@ import {
   Settings,
   Menu,
   Eye,
-  Heart
+  Heart,
 } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import Breadcrumb from "@/components/Breadcrumb";
 import BlogAnalytics from "@/components/blog/analytics/BlogAnalytics";
 import CommentsPanel from "@/components/blog/comments/CommentsPanel";
 import { useBlogStore } from "@/lib/stores/blog-store";
-import { verifyAuth } from '@/lib/auth';
+import { verifyAuth } from "@/lib/auth";
 
 interface SidebarPage {
   id: string;
@@ -28,14 +28,31 @@ export default function BlogAdminPage() {
   const [navbarVisible, setNavbarVisible] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeView, setActiveView] = useState('overview');
+  const [activeView, setActiveView] = useState("overview");
   const router = useRouter();
 
-  const { posts, comments, featureToggles, setPosts, setFeatureToggles } = useBlogStore();
+  const { posts, comments, featureToggles, setPosts, setFeatureToggles } =
+    useBlogStore();
+
+  const checkAuthentication = useCallback(async () => {
+    try {
+      const isAuth = await verifyAuth();
+      if (isAuth) {
+        setIsAuthenticated(true);
+      } else {
+        router.push("/blog/admin/login");
+      }
+    } catch (error) {
+      console.error("Authentication check failed:", error);
+      router.push("/blog/admin/login");
+    } finally {
+      setLoading(false);
+    }
+  }, [router]);
 
   useEffect(() => {
     checkAuthentication();
-  }, []);
+  }, [checkAuthentication]);
 
   useEffect(() => {
     let lastScrollY = window.scrollY;
@@ -51,33 +68,17 @@ export default function BlogAdminPage() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const checkAuthentication = async () => {
-    try {
-      const isAuth = await verifyAuth();
-      if (isAuth) {
-        setIsAuthenticated(true);
-      } else {
-        router.push('/blog/admin/login');
-      }
-    } catch (error) {
-      console.error('Authentication check failed:', error);
-      router.push('/blog/admin/login');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const loadPosts = useCallback(async () => {
     if (posts.length > 0) return;
 
     try {
-      const response = await fetch('/api/blog/posts');
+      const response = await fetch("/api/blog/posts");
       if (response.ok) {
         const data = await response.json();
         setPosts(data);
       }
     } catch (error) {
-      console.error('Failed to load posts:', error);
+      console.error("Failed to load posts:", error);
     }
   }, [setPosts, posts.length]);
 
@@ -85,13 +86,13 @@ export default function BlogAdminPage() {
     if (featureToggles) return;
 
     try {
-      const response = await fetch('/api/blog/features');
+      const response = await fetch("/api/blog/features");
       if (response.ok) {
         const data = await response.json();
         setFeatureToggles(data);
       }
     } catch (error) {
-      console.error('Failed to load feature toggles:', error);
+      console.error("Failed to load feature toggles:", error);
     }
   }, [setFeatureToggles, featureToggles]);
 
@@ -104,9 +105,24 @@ export default function BlogAdminPage() {
 
   const pages: SidebarPage[] = [
     { id: "overview", title: "Overview", icon: "📊", href: "/blog/admin" },
-    { id: "analytics", title: "Analytics", icon: "📈", href: "/blog/admin/analytics" },
-    { id: "comments", title: "Comments", icon: "💬", href: "/blog/admin/comments" },
-    { id: "features", title: "Features", icon: "⚙️", href: "/blog/admin/features" },
+    {
+      id: "analytics",
+      title: "Analytics",
+      icon: "📈",
+      href: "/blog/admin/analytics",
+    },
+    {
+      id: "comments",
+      title: "Comments",
+      icon: "💬",
+      href: "/blog/admin/comments",
+    },
+    {
+      id: "features",
+      title: "Features",
+      icon: "⚙️",
+      href: "/blog/admin/features",
+    },
   ];
 
   const breadcrumbItems = [
@@ -114,14 +130,26 @@ export default function BlogAdminPage() {
   ];
 
   if (activeView === "analytics") {
-    breadcrumbItems.push({ label: "Analytics", href: "/blog/admin/analytics", icon: "📈" });
+    breadcrumbItems.push({
+      label: "Analytics",
+      href: "/blog/admin/analytics",
+      icon: "📈",
+    });
   } else if (activeView === "comments") {
-    breadcrumbItems.push({ label: "Comments", href: "/blog/admin/comments", icon: "💬" });
+    breadcrumbItems.push({
+      label: "Comments",
+      href: "/blog/admin/comments",
+      icon: "💬",
+    });
   } else if (activeView === "features") {
-    breadcrumbItems.push({ label: "Features", href: "/blog/admin/features", icon: "⚙️" });
+    breadcrumbItems.push({
+      label: "Features",
+      href: "/blog/admin/features",
+      icon: "⚙️",
+    });
   }
 
-  const handleSelectPage = (pageId: string, href?: string) => {
+  const handleSelectPage = (pageId: string) => {
     setActiveView(pageId);
     if (window.innerWidth < 768) {
       setSidebarOpen(false);
@@ -143,11 +171,20 @@ export default function BlogAdminPage() {
 
   const OverviewPanel = () => {
     const totalPosts = posts.length;
-    const totalComments = Object.values(comments).reduce((sum, postComments) => sum + postComments.length, 0);
+    const totalComments = Object.values(comments).reduce(
+      (sum, postComments) => sum + postComments.length,
+      0
+    );
     const totalViews = posts.reduce((sum, post) => sum + post.views, 0);
     const totalLikes = posts.reduce((sum, post) => sum + post.likes, 0);
-    const totalAISummaries = posts.reduce((sum, post) => sum + post.ai_summaries, 0);
-    const totalAIQuestions = posts.reduce((sum, post) => sum + post.ai_questions, 0);
+    const totalAISummaries = posts.reduce(
+      (sum, post) => sum + post.ai_summaries,
+      0
+    );
+    const totalAIQuestions = posts.reduce(
+      (sum, post) => sum + post.ai_questions,
+      0
+    );
 
     return (
       <div className="space-y-6">
@@ -169,7 +206,9 @@ export default function BlogAdminPage() {
               <Eye className="h-8 w-8 text-purple-600" />
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Total Views</p>
-                <p className="text-2xl font-bold text-gray-900">{totalViews.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {totalViews.toLocaleString()}
+                </p>
               </div>
             </div>
           </div>
@@ -179,7 +218,9 @@ export default function BlogAdminPage() {
               <Heart className="h-8 w-8 text-red-600" />
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Total Likes</p>
-                <p className="text-2xl font-bold text-gray-900">{totalLikes.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {totalLikes.toLocaleString()}
+                </p>
               </div>
             </div>
           </div>
@@ -188,8 +229,12 @@ export default function BlogAdminPage() {
             <div className="flex items-center">
               <MessageCircle className="h-8 w-8 text-green-600" />
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total Comments</p>
-                <p className="text-2xl font-bold text-gray-900">{totalComments}</p>
+                <p className="text-sm font-medium text-gray-600">
+                  Total Comments
+                </p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {totalComments}
+                </p>
               </div>
             </div>
           </div>
@@ -198,8 +243,12 @@ export default function BlogAdminPage() {
             <div className="flex items-center">
               <BarChart3 className="h-8 w-8 text-indigo-600" />
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">AI Summaries</p>
-                <p className="text-2xl font-bold text-gray-900">{totalAISummaries.toLocaleString()}</p>
+                <p className="text-sm font-medium text-gray-600">
+                  AI Summaries
+                </p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {totalAISummaries.toLocaleString()}
+                </p>
               </div>
             </div>
           </div>
@@ -208,15 +257,21 @@ export default function BlogAdminPage() {
             <div className="flex items-center">
               <MessageCircle className="h-8 w-8 text-orange-600" />
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">AI Questions</p>
-                <p className="text-2xl font-bold text-gray-900">{totalAIQuestions.toLocaleString()}</p>
+                <p className="text-sm font-medium text-gray-600">
+                  AI Questions
+                </p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {totalAIQuestions.toLocaleString()}
+                </p>
               </div>
             </div>
           </div>
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            Quick Actions
+          </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <button
               onClick={() => setActiveView("analytics")}
@@ -224,7 +279,9 @@ export default function BlogAdminPage() {
             >
               <BarChart3 className="h-6 w-6 text-blue-600 mb-2" />
               <h4 className="font-medium text-gray-900">View Analytics</h4>
-              <p className="text-sm text-gray-600">Detailed blog performance metrics</p>
+              <p className="text-sm text-gray-600">
+                Detailed blog performance metrics
+              </p>
             </button>
 
             <button
@@ -233,7 +290,9 @@ export default function BlogAdminPage() {
             >
               <MessageCircle className="h-6 w-6 text-green-600 mb-2" />
               <h4 className="font-medium text-gray-900">Manage Comments</h4>
-              <p className="text-sm text-gray-600">Moderate and manage blog comments</p>
+              <p className="text-sm text-gray-600">
+                Moderate and manage blog comments
+              </p>
             </button>
 
             <button
@@ -242,7 +301,9 @@ export default function BlogAdminPage() {
             >
               <Settings className="h-6 w-6 text-purple-600 mb-2" />
               <h4 className="font-medium text-gray-900">Feature Settings</h4>
-              <p className="text-sm text-gray-600">Configure blog feature toggles</p>
+              <p className="text-sm text-gray-600">
+                Configure blog feature toggles
+              </p>
             </button>
           </div>
         </div>
@@ -251,23 +312,25 @@ export default function BlogAdminPage() {
   };
 
   const FeatureTogglesPanel = () => {
-    const [localToggles, setLocalToggles] = useState(featureToggles || {
-      total_views: true,
-      total_likes: true,
-      total_comments: true,
-      ai_summaries: true,
-      ai_questions: true
-    });
+    const [localToggles, setLocalToggles] = useState(
+      featureToggles || {
+        total_views: true,
+        total_likes: true,
+        total_comments: true,
+        ai_summaries: true,
+        ai_questions: true,
+      }
+    );
 
     const handleToggleChange = async (key: string, value: boolean) => {
       const updatedToggles = { ...localToggles, [key]: value };
       setLocalToggles(updatedToggles);
 
       try {
-        const response = await fetch('/api/blog/features', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedToggles)
+        const response = await fetch("/api/blog/features", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updatedToggles),
         });
 
         if (response.ok) {
@@ -277,7 +340,7 @@ export default function BlogAdminPage() {
           setLocalToggles(localToggles);
         }
       } catch (error) {
-        console.error('Failed to update feature toggles:', error);
+        console.error("Failed to update feature toggles:", error);
         setLocalToggles(localToggles);
       }
     };
@@ -285,7 +348,9 @@ export default function BlogAdminPage() {
     return (
       <div className="space-y-6">
         <h2 className="text-2xl font-bold text-gray-900">Feature Toggles</h2>
-        <p className="text-gray-600">Control which features are visible on your blog</p>
+        <p className="text-gray-600">
+          Control which features are visible on your blog
+        </p>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
           <div className="p-6 space-y-6">
@@ -293,14 +358,17 @@ export default function BlogAdminPage() {
               <div key={key} className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-medium text-gray-900 capitalize">
-                    {key.replace('_', ' ')}
+                    {key.replace("_", " ")}
                   </h3>
                   <p className="text-sm text-gray-600">
-                    {key === 'total_views' && 'Show total view counts on posts'}
-                    {key === 'total_likes' && 'Show total like counts on posts'}
-                    {key === 'total_comments' && 'Show total comment counts on posts'}
-                    {key === 'ai_summaries' && 'Enable AI-generated post summaries'}
-                    {key === 'ai_questions' && 'Enable AI-powered question answering'}
+                    {key === "total_views" && "Show total view counts on posts"}
+                    {key === "total_likes" && "Show total like counts on posts"}
+                    {key === "total_comments" &&
+                      "Show total comment counts on posts"}
+                    {key === "ai_summaries" &&
+                      "Enable AI-generated post summaries"}
+                    {key === "ai_questions" &&
+                      "Enable AI-powered question answering"}
                   </p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
@@ -346,7 +414,11 @@ export default function BlogAdminPage() {
       />
 
       <div className="flex-1 flex flex-col ml-0 md:ml-64">
-        <div className={`fixed ${navbarVisible ? "top-16" : "top-0"} left-0 right-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200 md:left-64 transition-all duration-300`}>
+        <div
+          className={`fixed ${
+            navbarVisible ? "top-16" : "top-0"
+          } left-0 right-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200 md:left-64 transition-all duration-300`}
+        >
           <div className="px-4 md:px-6 py-3">
             <Breadcrumb items={breadcrumbItems} />
           </div>
@@ -361,10 +433,12 @@ export default function BlogAdminPage() {
           </button>
         </div>
 
-        <div className={`flex-1 overflow-auto ${navbarVisible ? "pt-20" : "pt-4"} transition-all duration-300`}>
-          <div className="max-w-7xl mx-auto p-6">
-            {renderContent()}
-          </div>
+        <div
+          className={`flex-1 overflow-auto ${
+            navbarVisible ? "pt-20" : "pt-4"
+          } transition-all duration-300`}
+        >
+          <div className="max-w-7xl mx-auto p-6">{renderContent()}</div>
         </div>
       </div>
     </div>

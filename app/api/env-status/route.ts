@@ -5,12 +5,10 @@ import {
 } from "@/lib/environment";
 
 export async function GET() {
-  // 在开发模式下打印调试信息
   debugEnvironmentVariables();
 
   const config = getEnvironmentConfig();
 
-  // 返回环境变量状态（不包含敏感信息）
   return NextResponse.json({
     status: "Environment variables loaded",
     configs: {

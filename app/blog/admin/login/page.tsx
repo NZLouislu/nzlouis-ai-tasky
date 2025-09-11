@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { login, isEmbeddedBrowser } from '@/lib/auth';
+import { login, isEmbeddedBrowser } from "@/lib/auth";
 
 export default function AdminLoginPage() {
   const [username, setUsername] = useState("");
@@ -18,16 +18,19 @@ export default function AdminLoginPage() {
 
     try {
       const result = await login(username, password);
-      
+
       if (result.success) {
         // Small delay to ensure token is set, especially important for embedded browsers
-        setTimeout(() => {
-          router.push("/blog/admin");
-        }, isEmbedded ? 200 : 50);
+        setTimeout(
+          () => {
+            router.push("/blog/admin");
+          },
+          isEmbedded ? 200 : 50
+        );
       } else {
         setError(result.error || "Login failed");
       }
-    } catch (error) {
+    } catch {
       setError("Network error. Please try again.");
     } finally {
       setLoading(false);
@@ -94,7 +97,7 @@ export default function AdminLoginPage() {
               {loading ? "Signing in..." : "Sign in"}
             </button>
           </div>
-          
+
           {/* Debug info for embedded browsers */}
           {isEmbedded && (
             <div className="text-xs text-gray-500 text-center">

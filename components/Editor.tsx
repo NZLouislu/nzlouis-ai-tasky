@@ -21,6 +21,23 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
   const [selectedText, setSelectedText] = useState("");
   const [contextBefore, setContextBefore] = useState("");
   const [contextAfter, setContextAfter] = useState("");
+  const lastContentRef = useRef<PartialBlock[]>(initialContent || []);
+  const selectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSelectionRef = useRef<string>("");
+
+  useEffect(() => {
+    if (
+      initialContent &&
+      JSON.stringify(initialContent) !== JSON.stringify(lastContentRef.current)
+    ) {
+      try {
+        editor.replaceBlocks(editor.document, initialContent);
+        lastContentRef.current = initialContent;
+      } catch (error) {
+        console.error("Failed to update editor content:", error);
+      }
+    }
+  }, [initialContent, editor]);
 
   const insertImageDataUrl = useCallback(
     (dataUrl: string) => {
@@ -38,10 +55,16 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
       if (pos && pos.block) {
         editor.insertBlocks(blocks, pos.block, "after");
       } else {
-        editor.insertBlocks(blocks, editor.document[editor.document.length - 1], "after");
+        editor.insertBlocks(
+          blocks,
+          editor.document[editor.document.length - 1],
+          "after"
+        );
       }
 
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+      );
       if (onChange) onChange(editor.document);
     },
     [editor, onChange]
@@ -52,26 +75,41 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
     if (!selection || selection.rangeCount === 0) return;
 
     const selectedText = selection.toString().trim();
-    if (!selectedText) return;
+    if (!selectedText || selectedText.length < 3) return;
+
+    if (selectedText === lastSelectionRef.current) return;
+    lastSelectionRef.current = selectedText;
 
     const range = selection.getRangeAt(0);
     const rect = range.getBoundingClientRect();
 
-    setSelectedText(selectedText);
-    setAIPanelPosition({
-      x: rect.left + rect.width / 2,
-      y: rect.top - 10
-    });
+    if (rect.width === 0 || rect.height === 0) return;
 
-    const editorElement = document.querySelector('.bn-editor');
+    setSelectedText(selectedText);
+
+    const editorElement = document.querySelector(".bn-editor");
     if (editorElement) {
       const editorRect = editorElement.getBoundingClientRect();
-      const relativeX = rect.left - editorRect.left;
-      const relativeY = rect.top - editorRect.top;
+      const relativeX = Math.max(
+        20,
+        Math.min(
+          rect.left - editorRect.left + rect.width / 2,
+          editorRect.width - 420
+        )
+      );
+      const relativeY = Math.max(20, rect.top - editorRect.top - 60);
 
       setAIPanelPosition({
-        x: relativeX + rect.width / 2,
-        y: relativeY - 10
+        x: relativeX,
+        y: relativeY,
+      });
+    } else {
+      setAIPanelPosition({
+        x: Math.max(
+          20,
+          Math.min(rect.left + rect.width / 2, window.innerWidth - 420)
+        ),
+        y: Math.max(20, rect.top - 60),
       });
     }
 
@@ -80,17 +118,26 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
     setShowAIPanel(true);
   }, []);
 
-  const handleAIAccept = useCallback((suggestion: string) => {
-    const pos = editor.getTextCursorPosition();
-    if (pos && pos.block) {
-      editor.insertBlocks([{
-        type: "paragraph",
-        content: [{ type: "text", text: suggestion, styles: {} }]
-      }], pos.block, "after");
-    }
-    setShowAIPanel(false);
-    if (onChange) onChange(editor.document);
-  }, [editor, onChange]);
+  const handleAIAccept = useCallback(
+    (suggestion: string) => {
+      const pos = editor.getTextCursorPosition();
+      if (pos && pos.block) {
+        editor.insertBlocks(
+          [
+            {
+              type: "paragraph",
+              content: [{ type: "text", text: suggestion, styles: {} }],
+            },
+          ],
+          pos.block,
+          "after"
+        );
+      }
+      setShowAIPanel(false);
+      if (onChange) onChange(editor.document);
+    },
+    [editor, onChange]
+  );
 
   const handleAIClose = useCallback(() => {
     setShowAIPanel(false);
@@ -148,7 +195,9 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
 
     const handlePaste = (e: ClipboardEvent) => {
       const items = Array.from(e.clipboardData?.items || []);
-      const imageItems = items.filter((it) => it.kind === "file" && it.type.startsWith("image/"));
+      const imageItems = items.filter(
+        (it) => it.kind === "file" && it.type.startsWith("image/")
+      );
       if (imageItems.length === 0) return;
       e.preventDefault();
       e.stopPropagation();
@@ -199,19 +248,26 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
     };
 
     const handleSelectionChange = () => {
-      const selection = window.getSelection();
-      if (selection && selection.toString().trim()) {
-        const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        if (rect.width > 0 && rect.height > 0) {
-          setTimeout(() => {
-            const currentSelection = window.getSelection();
-            if (currentSelection && currentSelection.toString().trim()) {
+      if (selectionTimeoutRef.current) {
+        clearTimeout(selectionTimeoutRef.current);
+      }
+
+      selectionTimeoutRef.current = setTimeout(() => {
+        const selection = window.getSelection();
+        if (selection && selection.toString().trim()) {
+          const selectedText = selection.toString().trim();
+          if (
+            selectedText.length >= 3 &&
+            selectedText !== lastSelectionRef.current
+          ) {
+            const range = selection.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
               handleTextSelection();
             }
-          }, 500);
+          }
         }
-      }
+      }, 1000);
     };
 
     document.addEventListener("paste", handlePaste, true);
@@ -224,6 +280,11 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
       document.removeEventListener("paste", handlePaste, true);
       document.removeEventListener("keydown", handleKeyDown);
       document.removeEventListener("selectionchange", handleSelectionChange);
+
+      if (selectionTimeoutRef.current) {
+        clearTimeout(selectionTimeoutRef.current);
+      }
+
       if (globalFileInputRef.current) {
         try {
           document.body.removeChild(globalFileInputRef.current);
@@ -241,12 +302,18 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
           <span>AI Writing Assistant</span>
         </div>
         <div className="text-xs">
-          Select text and press <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+K</kbd> for AI suggestions
+          Select text and press{" "}
+          <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+K</kbd>{" "}
+          for AI suggestions
         </div>
       </div>
 
       <div style={{ marginBottom: 12 }}>
-        <BlockNoteView editor={editor} onChange={() => onChange?.(editor.document)} theme="light" />
+        <BlockNoteView
+          editor={editor}
+          onChange={() => onChange?.(editor.document)}
+          theme="light"
+        />
       </div>
 
       {showAIPanel && (

@@ -93,7 +93,8 @@ async function callGoogle(
   temperature: number,
   maxTokens: number,
   apiKey: string,
-  stream: boolean = false
+  stream: boolean = false,
+  retryCount = 0
 ) {
   const contents = messages.map((msg) => ({
     role: msg.role === "assistant" ? "model" : "user",
@@ -114,70 +115,130 @@ async function callGoogle(
     ? `https://generativelanguage.googleapis.com/v1beta/models/${model.id}:streamGenerateContent?alt=sse&key=${apiKey}`
     : `https://generativelanguage.googleapis.com/v1beta/models/${model.id}:generateContent?key=${apiKey}`;
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      contents,
-      generationConfig: {
-        temperature,
-        maxOutputTokens: maxTokens,
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
-    }),
-  });
+      body: JSON.stringify({
+        contents,
+        generationConfig: {
+          temperature,
+          maxOutputTokens: maxTokens,
+        },
+      }),
+    });
 
-  if (!response.ok) {
-    throw new Error(`Google API error: ${response.statusText}`);
+    if (!response.ok) {
+      if (response.status === 429 && retryCount < 3) {
+        const delay = Math.pow(2, retryCount) * 1000 + Math.random() * 1000;
+        console.log(
+          `Google API rate limited, retrying in ${delay}ms (attempt ${
+            retryCount + 1
+          })`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return callGoogle(
+          model,
+          messages,
+          temperature,
+          maxTokens,
+          apiKey,
+          stream,
+          retryCount + 1
+        );
+      }
+
+      const errorBody = await response.text();
+      console.error(
+        `Google API error (status: ${response.status}):`,
+        errorBody
+      );
+
+      if (response.status === 429) {
+        throw new Error(
+          "API requests rate limit exceeded. Please wait a moment and try again."
+        );
+      } else if (response.status === 403) {
+        throw new Error(
+          "Google API access forbidden. Please check your API key and permissions."
+        );
+      } else if (response.status === 401) {
+        throw new Error(
+          "Invalid Google API key. Please check your API key configuration."
+        );
+      } else {
+        throw new Error(`Google API error: ${response.statusText}`);
+      }
+    }
+
+    if (stream) {
+      return response;
+    }
+
+    const data = await response.json();
+
+    if (
+      !data.candidates ||
+      !Array.isArray(data.candidates) ||
+      data.candidates.length === 0
+    ) {
+      console.error(
+        "Google API response missing candidates:",
+        JSON.stringify(data, null, 2)
+      );
+      throw new Error("Invalid response from Google API: no candidates found");
+    }
+
+    const candidate = data.candidates[0];
+    if (
+      !candidate.content ||
+      !candidate.content.parts ||
+      !Array.isArray(candidate.content.parts) ||
+      candidate.content.parts.length === 0
+    ) {
+      console.error(
+        "Google API response missing content parts:",
+        JSON.stringify(candidate, null, 2)
+      );
+      throw new Error(
+        "Invalid response from Google API: no content parts found"
+      );
+    }
+
+    const part = candidate.content.parts[0];
+    if (!part.text) {
+      console.error(
+        "Google API response missing text:",
+        JSON.stringify(part, null, 2)
+      );
+      throw new Error("Invalid response from Google API: no text found");
+    }
+
+    return part.text;
+  } catch (error) {
+    if (
+      retryCount < 3 &&
+      (error instanceof TypeError || (error instanceof Error && error.message.includes("fetch")))
+    ) {
+      const delay = Math.pow(2, retryCount) * 1000 + Math.random() * 1000;
+      console.log(
+        `Network error, retrying in ${delay}ms (attempt ${retryCount + 1})`
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return callGoogle(
+        model,
+        messages,
+        temperature,
+        maxTokens,
+        apiKey,
+        stream,
+        retryCount + 1
+      );
+    }
+    throw error;
   }
-
-  if (stream) {
-    return response;
-  }
-
-  const data = await response.json();
-
-  // Log full response for debugging
-  console.log("Google API full response:", JSON.stringify(data, null, 2));
-
-  // Validate response structure
-  if (
-    !data.candidates ||
-    !Array.isArray(data.candidates) ||
-    data.candidates.length === 0
-  ) {
-    console.error(
-      "Google API response missing candidates:",
-      JSON.stringify(data, null, 2)
-    );
-    throw new Error("Invalid response from Google API: no candidates found");
-  }
-
-  const candidate = data.candidates[0];
-  if (
-    !candidate.content ||
-    !candidate.content.parts ||
-    !Array.isArray(candidate.content.parts) ||
-    candidate.content.parts.length === 0
-  ) {
-    console.error(
-      "Google API response missing content parts:",
-      JSON.stringify(candidate, null, 2)
-    );
-    throw new Error("Invalid response from Google API: no content parts found");
-  }
-
-  const part = candidate.content.parts[0];
-  if (!part.text) {
-    console.error(
-      "Google API response missing text:",
-      JSON.stringify(part, null, 2)
-    );
-    throw new Error("Invalid response from Google API: no text found");
-  }
-
-  return part.text;
 }
 
 async function callKilo(
@@ -319,45 +380,22 @@ export async function POST(request: NextRequest) {
     }
 
     if (stream && provider.id === "google") {
-      const contents = messages.map((msg) => ({
-        role: msg.role === "assistant" ? "model" : "user",
-        parts: msg.image
-          ? [
-              { text: msg.content },
-              {
-                inline_data: {
-                  mime_type: "image/jpeg",
-                  data: msg.image.split(",")[1],
-                },
-              },
-            ]
-          : [{ text: msg.content }],
-      }));
-
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model.id}:streamGenerateContent?alt=sse&key=${apiKey}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            contents,
-            generationConfig: {
-              temperature,
-              maxOutputTokens: maxTokens,
-            },
-          }),
-        }
+      const streamResponse = await callGoogle(
+        model,
+        messages,
+        temperature,
+        maxTokens,
+        apiKey!,
+        true
       );
 
-      if (!response.ok) {
-        throw new Error(`Google API error: ${response.statusText}`);
+      if (!(streamResponse instanceof Response)) {
+        throw new Error("Expected Response object for streaming");
       }
 
-      const streamResponse = new ReadableStream({
+      const streamTransform = new ReadableStream({
         async start(controller) {
-          const reader = response.body?.getReader();
+          const reader = streamResponse.body?.getReader();
           if (!reader) {
             controller.close();
             return;
@@ -410,7 +448,7 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      return new Response(streamResponse, {
+      return new Response(streamTransform, {
         headers: {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",

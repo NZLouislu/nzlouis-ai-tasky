@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Plus, ChevronRight, ChevronDown } from "lucide-react";
+import { Plus, ChevronRight, ChevronDown, PanelLeftClose } from "lucide-react";
 import Link from "next/link";
 
 interface Page {
@@ -23,6 +23,7 @@ interface SidebarProps {
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   className?: string;
+  onCollapse?: () => void;
 }
 
 export default function Sidebar({
@@ -36,7 +37,8 @@ export default function Sidebar({
   onSelectPage,
   sidebarOpen,
   setSidebarOpen,
-  className = ""
+  className = "",
+  onCollapse,
 }: SidebarProps) {
   const [expandedPages, setExpandedPages] = useState<Set<string>>(new Set());
 
@@ -65,7 +67,7 @@ export default function Sidebar({
             onChange={(e) => onUpdatePageTitle(page.id, e.target.value)}
             onClick={(e) => e.stopPropagation()}
             className="flex-1 bg-transparent border-none focus:outline-none focus:ring-0 text-sm"
-            style={{ fontSize: 'inherit' }}
+            style={{ fontSize: "inherit" }}
           />
         ) : (
           <span className="truncate">{page.title}</span>
@@ -147,7 +149,7 @@ export default function Sidebar({
 
             {hasChildren && isExpanded && (
               <div className="ml-2">
-                {page.children!.map(child => renderPage(child, level + 1))}
+                {page.children!.map((child) => renderPage(child, level + 1))}
               </div>
             )}
           </div>
@@ -166,6 +168,15 @@ export default function Sidebar({
         <h2 className="text-lg font-semibold text-gray-800 flex items-center">
           <span className="mr-2">{icon}</span> {title}
         </h2>
+        {onCollapse && (
+          <button
+            onClick={onCollapse}
+            className="p-1 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
+            title="Hide sidebar"
+          >
+            <PanelLeftClose size={18} />
+          </button>
+        )}
       </div>
 
       {onAddPage && (
@@ -182,7 +193,7 @@ export default function Sidebar({
 
       <div className="flex-1 overflow-y-auto">
         <div className="p-2 space-y-1">
-          {pages.map(page => renderPage(page))}
+          {pages.map((page) => renderPage(page))}
         </div>
       </div>
     </div>

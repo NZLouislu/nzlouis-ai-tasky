@@ -1,15 +1,26 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { PartialBlock } from "@blocknote/core";
-import { Plus, Image, Trash2, Menu, MoreHorizontal, MessageCircle, X } from "lucide-react";
+import {
+  Plus,
+  Image,
+  Trash2,
+  Menu,
+  MoreHorizontal,
+  MessageCircle,
+  X,
+  GripVertical,
+  Book,
+} from "lucide-react";
 import Sidebar from "./Sidebar";
 import Breadcrumb from "./Breadcrumb";
 import UnifiedChatbot from "./UnifiedChatbot";
+import ChatbotInput from "./ChatbotInput";
 
 const Editor = dynamic(() => import("./Editor"), {
   ssr: false,
-  loading: () => <div className="p-4 text-gray-500">Loading editor...</div>
+  loading: () => <div className="p-4 text-gray-500">Loading editor...</div>,
 });
 
 interface Post {
@@ -45,8 +56,8 @@ export default function Blog() {
           id: "post-1-2",
           title: "Conclusion",
           content: [],
-        }
-      ]
+        },
+      ],
     },
   ]);
 
@@ -54,11 +65,25 @@ export default function Blog() {
   const [showIconSelector, setShowIconSelector] = useState(false);
   const [showCoverOptions, setShowCoverOptions] = useState(false);
   const [showCoverActions, setShowCoverActions] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [navbarVisible, setNavbarVisible] = useState(true);
   const [showChatbot, setShowChatbot] = useState(false);
+  const [chatbotWidth, setChatbotWidth] = useState(600);
+  const [isResizing, setIsResizing] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [chatbotInput, setChatbotInput] = useState("");
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const resizeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const checkIsMobile = () => {
+      setIsMobile(window.innerWidth <= 1024);
+    };
+
+    checkIsMobile();
+    window.addEventListener("resize", checkIsMobile);
+
     let lastScrollY = window.scrollY;
     const handleScroll = () => {
       if (window.scrollY > lastScrollY) {
@@ -69,8 +94,78 @@ export default function Blog() {
       lastScrollY = window.scrollY;
     };
     window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", checkIsMobile);
+    };
   }, []);
+
+  const handleToggleChatbot = () => {
+    setShowChatbot(!showChatbot);
+    if (isMobile) {
+      setSidebarOpen(false);
+    } else {
+      setSidebarCollapsed(true);
+    }
+  };
+
+  const handleToggleSidebar = () => {
+    if (sidebarCollapsed) {
+      setSidebarCollapsed(false);
+      setSidebarOpen(true);
+    } else {
+      setSidebarCollapsed(true);
+      setSidebarOpen(false);
+    }
+  };
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!isResizing) return;
+
+      const containerWidth = window.innerWidth;
+      const sidebarWidth = window.innerWidth >= 768 ? 256 : 0;
+      const maxWidth = containerWidth - sidebarWidth - 400;
+      const minWidth = 400;
+
+      const newWidth = Math.max(
+        minWidth,
+        Math.min(maxWidth, containerWidth - e.clientX)
+      );
+      setChatbotWidth(newWidth);
+    },
+    [isResizing]
+  );
+
+  const handleMouseUp = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    } else {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [isResizing, handleMouseMove, handleMouseUp]);
 
   const activePost = posts.find((post) => post.id === activePostId) || posts[0];
 
@@ -87,14 +182,18 @@ export default function Blog() {
   const addNewSubPost = (parentId: string) => {
     const newSubPost: Post = {
       id: `${parentId}-sub-${Date.now()}`,
-      title: `Sub post ${posts.find(p => p.id === parentId)?.children?.length || 0 + 1}`,
+      title: `Sub post ${
+        posts.find((p) => p.id === parentId)?.children?.length || 0 + 1
+      }`,
       content: [],
     };
-    setPosts(prev => prev.map(post =>
-      post.id === parentId
-        ? { ...post, children: [...(post.children || []), newSubPost] }
-        : post
-    ));
+    setPosts((prev) =>
+      prev.map((post) =>
+        post.id === parentId
+          ? { ...post, children: [...(post.children || []), newSubPost] }
+          : post
+      )
+    );
     setActivePostId(newSubPost.id);
   };
 
@@ -108,9 +207,12 @@ export default function Blog() {
 
   const updatePostContent = (newContent: PartialBlock[]) => {
     setPosts(
-      posts.map((post) =>
-        post.id === activePostId ? { ...post, content: newContent } : post
-      )
+      posts.map((post) => {
+        if (post.id === activePostId) {
+          return { ...post, content: newContent };
+        }
+        return post;
+      })
     );
   };
 
@@ -168,51 +270,67 @@ export default function Blog() {
     }
   };
 
-
-  const handlePageModification = async (modification: { type: string; target?: string; content?: string; title?: string }): Promise<string> => {
+  const handlePageModification = async (modification: {
+    type: string;
+    target?: string;
+    content?: string;
+    title?: string;
+  }): Promise<string> => {
     switch (modification.type) {
       case "add":
-        if (!modification.content) return "Content is required for add operation";
+        if (!modification.content)
+          return "Content is required for add operation";
         const newBlock: PartialBlock = {
           type: "paragraph",
-          content: [{ type: "text", text: modification.content, styles: {} }]
+          content: [{ type: "text", text: modification.content, styles: {} }],
         };
-        updatePostContent([...activePost.content, newBlock]);
+        const newContent = [...activePost.content, newBlock];
+        updatePostContent(newContent);
         return `Added content to the blog post`;
 
       case "edit":
-        if (!modification.content) return "Content is required for edit operation";
+        if (!modification.content)
+          return "Content is required for edit operation";
         const editBlock: PartialBlock = {
           type: "paragraph",
-          content: [{ type: "text", text: `Edited: ${modification.content}`, styles: {} }]
+          content: [
+            {
+              type: "text",
+              text: `Edited: ${modification.content}`,
+              styles: {},
+            },
+          ],
         };
         updatePostContent([...activePost.content, editBlock]);
         return `Edited content in the blog post`;
 
       case "create_page":
         addNewPost();
-        return `Created new blog post: "${modification.title || 'Untitled'}"`;
+        return `Created new blog post: "${modification.title || "Untitled"}"`;
 
       case "set_title":
-        if (!modification.title) return "Title is required for set title operation";
+        if (!modification.title)
+          return "Title is required for set title operation";
         updatePostTitle(activePostId, modification.title);
         return `Set blog post title to: "${modification.title}"`;
 
       case "add_heading":
-        if (!modification.content) return "Content is required for add heading operation";
+        if (!modification.content)
+          return "Content is required for add heading operation";
         const headingBlock: PartialBlock = {
           type: "heading",
           content: [{ type: "text", text: modification.content, styles: {} }],
-          props: { level: 1 }
+          props: { level: 1 },
         };
         updatePostContent([...activePost.content, headingBlock]);
         return `Added heading: "${modification.content}"`;
 
       case "add_paragraph":
-        if (!modification.content) return "Content is required for add paragraph operation";
+        if (!modification.content)
+          return "Content is required for add paragraph operation";
         const paraBlock: PartialBlock = {
           type: "paragraph",
-          content: [{ type: "text", text: modification.content, styles: {} }]
+          content: [{ type: "text", text: modification.content, styles: {} }],
         };
         updatePostContent([...activePost.content, paraBlock]);
         return `Added paragraph: "${modification.content}"`;
@@ -221,7 +339,6 @@ export default function Blog() {
         return "Unknown modification type";
     }
   };
-
 
   const iconOptions = ["📝", "📄", "📑", "📊", "📋", "📌", "⭐", "💡"];
 
@@ -238,27 +355,66 @@ export default function Blog() {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      <Sidebar
-        title="Blog"
-        icon="📖"
-        pages={posts.map(p => ({ id: p.id, title: p.title, icon: p.icon, children: p.children }))}
-        activePageId={activePostId}
-        onAddPage={addNewPost}
-        onAddSubPage={addNewSubPost}
-        onUpdatePageTitle={updatePostTitle}
-        onSelectPage={setActivePostId}
-        sidebarOpen={sidebarOpen}
-        setSidebarOpen={setSidebarOpen}
-        className={navbarVisible ? "top-16" : "top-0"}
-      />
+      {!sidebarCollapsed && (
+        <Sidebar
+          title="Blog"
+          icon="📖"
+          pages={posts.map((p) => ({
+            id: p.id,
+            title: p.title,
+            icon: p.icon,
+            children: p.children,
+          }))}
+          activePageId={activePostId}
+          onAddPage={addNewPost}
+          onAddSubPage={addNewSubPost}
+          onUpdatePageTitle={updatePostTitle}
+          onSelectPage={setActivePostId}
+          sidebarOpen={sidebarOpen && !(showChatbot && isMobile)}
+          setSidebarOpen={setSidebarOpen}
+          className={navbarVisible ? "top-16" : "top-0"}
+          onCollapse={handleToggleSidebar}
+        />
+      )}
 
-      <div className="flex-1 flex flex-col ml-0 md:ml-64">
-        <div className={`fixed ${navbarVisible ? "top-16" : "top-0"} left-0 right-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200 md:left-64 transition-all duration-300`}>
+      {sidebarCollapsed && (
+        <div
+          className={`fixed left-0 z-30 w-12 bg-white border-r border-gray-200 flex flex-col items-center py-4 transition-all duration-200 ${
+            navbarVisible ? "top-16" : "top-0"
+          } bottom-0`}
+        >
+          <button
+            onClick={handleToggleSidebar}
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Show sidebar"
+          >
+            <Book size={20} />
+          </button>
+        </div>
+      )}
+
+      <div
+        className={`flex-1 flex flex-col transition-all duration-200 ${
+          sidebarCollapsed ? "ml-0 md:ml-12" : "ml-0 md:ml-64"
+        }`}
+      >
+        <div
+          className={`fixed ${
+            navbarVisible ? "top-16" : "top-0"
+          } left-0 right-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200 transition-all duration-200 ${
+            sidebarCollapsed ? "md:left-12" : "md:left-64"
+          }`}
+        >
           <div className="px-4 md:px-6 py-3">
-            <Breadcrumb items={[
-              { label: "Blog", icon: "📖" },
-              { label: activePost.title || "Untitled", icon: activePost.icon }
-            ]} />
+            <Breadcrumb
+              items={[
+                { label: "Blog", icon: "📖" },
+                {
+                  label: activePost.title || "Untitled",
+                  icon: activePost.icon,
+                },
+              ]}
+            />
           </div>
         </div>
 
@@ -271,9 +427,18 @@ export default function Blog() {
           </button>
         </div>
 
-        <div className={`flex-1 flex overflow-hidden transition-all duration-300 ${navbarVisible ? "pt-20" : "pt-4"}`}>
-          <div className={`flex-1 overflow-auto ${showChatbot ? "lg:mr-0" : ""}`}>
-            <div className="py-8">
+        <div
+          className={`flex-1 flex overflow-hidden transition-all duration-300 ${
+            navbarVisible ? "pt-20" : "pt-4"
+          }`}
+        >
+          <div
+            className={`flex-1 overflow-auto transition-all duration-300`}
+            style={{
+              marginRight: showChatbot && !isMobile ? `${chatbotWidth}px` : "0",
+            }}
+          >
+            <div className="py-8 pb-24">
               <div className="max-w-[900px] mx-auto pl-5 md:px-6 lg:px-8">
                 <div className="flex justify-start">
                   <div className="w-full">
@@ -287,7 +452,9 @@ export default function Blog() {
                         }}
                       >
                         {activePost.cover.type === "color" ? (
-                          <div className={`h-full ${activePost.cover.value}`}></div>
+                          <div
+                            className={`h-full ${activePost.cover.value}`}
+                          ></div>
                         ) : (
                           <div
                             className="h-full bg-cover bg-center"
@@ -298,7 +465,8 @@ export default function Blog() {
                         )}
                         <div
                           className={`absolute bottom-4 right-4 flex space-x-2 transition-opacity duration-200 ${
-                            showCoverActions || (!activePost.icon && !activePost.cover)
+                            showCoverActions ||
+                            (!activePost.icon && !activePost.cover)
                               ? "opacity-100"
                               : "opacity-0"
                           }`}
@@ -324,7 +492,9 @@ export default function Blog() {
                         <div className="flex items-center space-x-4">
                           {!activePost.icon && !activePost.cover && (
                             <button
-                              onClick={() => setShowIconSelector(!showIconSelector)}
+                              onClick={() =>
+                                setShowIconSelector(!showIconSelector)
+                              }
                               className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors"
                             >
                               <Plus size={16} className="mr-2" />
@@ -334,10 +504,16 @@ export default function Blog() {
 
                           {!activePost.cover && (
                             <button
-                              onClick={() => setShowCoverOptions(!showCoverOptions)}
+                              onClick={() =>
+                                setShowCoverOptions(!showCoverOptions)
+                              }
                               className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors"
                             >
-                              <Image size={16} className="mr-2" aria-hidden="true" />
+                              <Image
+                                size={16}
+                                className="mr-2"
+                                aria-hidden="true"
+                              />
                               Add Cover
                             </button>
                           )}
@@ -402,7 +578,9 @@ export default function Blog() {
                               onChange={handleCoverFileSelect}
                               className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             />
-                            <p className="text-xs text-gray-500 mt-1">Or enter image URL below</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Or enter image URL below
+                            </p>
                             <input
                               type="text"
                               placeholder="Enter image URL"
@@ -459,78 +637,96 @@ export default function Blog() {
           </div>
 
           {showChatbot && (
-            <div className="hidden lg:flex w-[48rem] border-l border-gray-200 bg-white flex-col">
-              <div className="bg-blue-600 text-white p-4 border-b border-gray-200">
-                <h3 className="font-semibold">AI Blog Assistant</h3>
-                <p className="text-sm text-blue-100">Ask me to help with your blog content</p>
-              </div>
-
-              <div className="flex-1 p-4">
-                <div className="text-sm text-gray-600 space-y-2">
-                  <p><strong>Available commands:</strong></p>
-                  <ul className="list-disc list-inside space-y-1">
-                    <li><code>/add [content]</code> - Add new content</li>
-                    <li><code>/create page [title]</code> - Create new posts</li>
-                    <li><code>/set title [title]</code> - Change post title</li>
-                    <li><code>/add heading [text]</code> - Add headings</li>
-                    <li><code>/add paragraph [text]</code> - Add paragraphs</li>
-                  </ul>
-                  <p className="mt-4"><strong>@ mentions:</strong></p>
-                  <p>Type @ to see available page elements</p>
+            <>
+              <div
+                ref={resizeRef}
+                className="hidden lg:flex fixed top-0 bottom-0 z-40 w-1 bg-gray-300 hover:bg-gray-400 cursor-col-resize group"
+                style={{ right: `${chatbotWidth - 4}px` }}
+                onMouseDown={handleMouseDown}
+              >
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <GripVertical size={16} className="text-gray-600" />
                 </div>
               </div>
 
-              <div className="border-t border-gray-200 bg-white">
-                <div className="p-4">
-                  <UnifiedChatbot mode="workspace" onPageModification={handlePageModification} />
+              <div
+                className="hidden lg:flex fixed top-0 right-0 bottom-0 border-l border-gray-200 bg-white flex-col z-50"
+                style={{ width: `${chatbotWidth}px` }}
+              >
+                <div className="p-4 border-b border-gray-200">
+                  <div className="flex items-center justify-center">
+                    <h3 className="font-semibold">AI Blog Assistant</h3>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-hidden">
+                  <UnifiedChatbot
+                    mode="workspace"
+                    onPageModification={handlePageModification}
+                  />
+                </div>
+
+                <div className="p-4 border-t border-gray-200 bg-white">
+                  <ChatbotInput
+                    inputValue={chatbotInput}
+                    setInputValue={setChatbotInput}
+                    previewImage={previewImage}
+                    setPreviewImage={setPreviewImage}
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      // Handle submit logic here
+                      console.log("Submit:", chatbotInput);
+                      setChatbotInput("");
+                      setPreviewImage(null);
+                    }}
+                  />
                 </div>
               </div>
-            </div>
+            </>
           )}
         </div>
       </div>
 
       <button
-        onClick={() => setShowChatbot(!showChatbot)}
+        onClick={handleToggleChatbot}
         className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-lg transition-colors z-50"
         title="AI Assistant"
         aria-label="Toggle AI Assistant"
       >
-        {showChatbot ? <X size={24} aria-hidden="true" /> : <MessageCircle size={24} aria-hidden="true" />}
+        {showChatbot ? (
+          <X size={24} aria-hidden="true" />
+        ) : (
+          <MessageCircle size={24} aria-hidden="true" />
+        )}
       </button>
 
       {showChatbot && (
         <div className="lg:hidden fixed inset-0 bg-white z-50 flex flex-col">
-          <div className="bg-blue-600 text-white p-4 border-b border-gray-200 flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold">AI Blog Assistant</h3>
-              <p className="text-sm text-blue-100">Ask me to help with your blog content</p>
-            </div>
-            <button
-              onClick={() => setShowChatbot(false)}
-              className="p-2 text-white hover:bg-blue-700 rounded-lg transition-colors"
-            >
-              <X size={20} />
-            </button>
+          <div className="p-4 border-b border-gray-200 flex items-center justify-center">
+            <h3 className="font-semibold">AI Blog Assistant</h3>
           </div>
 
-          <div className="flex-1 p-4">
-            <div className="text-sm text-gray-600 space-y-2">
-              <p><strong>Available commands:</strong></p>
-              <ul className="list-disc list-inside space-y-1">
-                <li><code>/add [content]</code> - Add new content</li>
-                <li><code>/create page [title]</code> - Create new posts</li>
-                <li><code>/set title [title]</code> - Change post title</li>
-                <li><code>/add heading [text]</code> - Add headings</li>
-                <li><code>/add paragraph [text]</code> - Add paragraphs</li>
-              </ul>
-              <p className="mt-4"><strong>@ mentions:</strong></p>
-              <p>Type @ to see available page elements</p>
-            </div>
+          <div className="flex-1 overflow-hidden">
+            <UnifiedChatbot
+              mode="workspace"
+              onPageModification={handlePageModification}
+            />
           </div>
 
-          <div className="border-t border-gray-200 bg-white">
-            <UnifiedChatbot mode="workspace" onPageModification={handlePageModification} />
+          <div className="p-4 border-t border-gray-200 bg-white">
+            <ChatbotInput
+              inputValue={chatbotInput}
+              setInputValue={setChatbotInput}
+              previewImage={previewImage}
+              setPreviewImage={setPreviewImage}
+              onSubmit={(e) => {
+                e.preventDefault();
+                // Handle submit logic here
+                console.log("Submit:", chatbotInput);
+                setChatbotInput("");
+                setPreviewImage(null);
+              }}
+            />
           </div>
         </div>
       )}

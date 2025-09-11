@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/tasks/
+.qoder/
 
 # next.js
 /.next/
