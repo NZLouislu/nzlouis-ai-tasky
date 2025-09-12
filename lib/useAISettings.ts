@@ -14,11 +14,12 @@ export interface AISettings {
 }
 
 const DEFAULT_SETTINGS: AISettings = {
-  selectedModel: "gemini-2.5-pro",
+  selectedModel: "gemini-2.5-flash",
   apiKeys: {},
-  temperature: 0.7,
-  maxTokens: 2048,
-  systemPrompt: "You are a helpful AI assistant.",
+  temperature: 0.8,
+  maxTokens: 1024,
+  systemPrompt:
+    "You are a helpful AI assistant. Be concise and direct in your responses.",
 };
 
 const STORAGE_KEY = "ai-chat-settings";

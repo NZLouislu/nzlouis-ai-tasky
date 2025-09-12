@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { PartialBlock } from "@blocknote/core";
 import {
@@ -8,6 +8,7 @@ import {
   Trash2,
   Menu,
   MoreHorizontal,
+  GripVertical,
   MessageCircle,
   X,
 } from "lucide-react";
@@ -30,10 +31,25 @@ export default function Workspace() {
   const [showCoverActions, setShowCoverActions] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
-  const [showChatbot, setShowChatbot] = useState(false);
+  const [isChatbotVisible, setIsChatbotVisible] = useState(false);
+  const [chatbotWidth, setChatbotWidth] = useState(600);
+  const [isResizing, setIsResizing] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   const activePage = pages.find((page) => page.id === activePageId) || pages[0];
+
+  useEffect(() => {
+    const checkIsMobile = () => {
+      setIsMobile(window.innerWidth <= 1024);
+    };
+
+    checkIsMobile();
+    window.addEventListener("resize", checkIsMobile);
+
+    return () => {
+      window.removeEventListener("resize", checkIsMobile);
+    };
+  }, []);
 
   const handleToggleSidebar = () => {
     if (sidebarCollapsed) {
@@ -44,6 +60,45 @@ export default function Workspace() {
       setSidebarOpen(false);
     }
   };
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!isResizing) return;
+      const newWidth = window.innerWidth - e.clientX;
+      const minWidth = 360;
+      const maxWidth = window.innerWidth - 300;
+      setChatbotWidth(Math.max(minWidth, Math.min(maxWidth, newWidth)));
+    },
+    [isResizing]
+  );
+
+  const handleMouseUp = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    } else {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizing, handleMouseMove, handleMouseUp]);
 
   const addNewWorkspacePage = () => {
     const pageNumber = pages.length + 1;
@@ -249,7 +304,7 @@ export default function Workspace() {
   ];
 
   return (
-    <div className="flex h-screen bg-gray-50 pt-16">
+    <div className="flex h-screen bg-gray-50">
       {!sidebarCollapsed && (
         <Sidebar
           title="Workspace"
@@ -304,6 +359,7 @@ export default function Workspace() {
         className={`flex-1 flex flex-col transition-all duration-200 ${
           sidebarCollapsed ? "ml-0 md:ml-12" : "ml-0 md:ml-64"
         }`}
+        style={{ paddingTop: "64px" }}
       >
         <div className="md:hidden p-4 border-b border-gray-200">
           <button
@@ -314,9 +370,15 @@ export default function Workspace() {
           </button>
         </div>
 
-        <div className="flex-1 flex h-full">
-          <div className={`flex-1 h-full ${showChatbot ? "lg:mr-0" : ""}`}>
-            <div className="py-8">
+        <div className="flex-1 flex overflow-hidden relative">
+          <div
+            className={`flex-1 h-full transition-all duration-300`}
+            style={{
+              marginRight:
+                isChatbotVisible && !isMobile ? `${chatbotWidth}px` : "0",
+            }}
+          >
+            <div className="py-8 h-full overflow-y-auto">
               <div className="max-w-[900px] mx-auto pl-5 md:px-6 lg:px-8">
                 <div className="flex justify-start">
                   <div className="w-full">
@@ -428,7 +490,14 @@ export default function Workspace() {
                       )}
 
                       {showCoverOptions && (
-                        <div className="mb-4 p-4 bg-white border border-gray-200 rounded-lg shadow-lg">
+                        <div className="mb-4 p-4 bg-white border border-gray-200 rounded-lg shadow-lg relative">
+                          <button
+                            onClick={() => setShowCoverOptions(false)}
+                            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                            title="Close"
+                          >
+                            <X size={16} />
+                          </button>
                           <div className="mb-4">
                             <h3 className="text-sm font-medium text-gray-700 mb-3">
                               Colors
@@ -513,128 +582,100 @@ export default function Workspace() {
                       />
                     </div>
                   </div>
-
-                  {showChatbot && (
-                    <div className="hidden lg:flex w-[48rem] border-l border-gray-200 bg-white flex-col">
-                      <div className="bg-blue-600 text-white p-4 border-b border-gray-200">
-                        <h3 className="font-semibold">
-                          AI Workspace Assistant
-                        </h3>
-                        <p className="text-sm text-blue-100">
-                          Use commands to modify your workspace
-                        </p>
-                      </div>
-
-                      <div className="flex-1 p-4">
-                        <div className="text-sm text-gray-600 space-y-2">
-                          <p>
-                            <strong>Available commands:</strong>
-                          </p>
-                          <ul className="list-disc list-inside space-y-1">
-                            <li>
-                              <code>/add [content]</code> - Add new content
-                            </li>
-                            <li>
-                              <code>/create page [title]</code> - Create new
-                              page
-                            </li>
-                            <li>
-                              <code>/set title [title]</code> - Change page
-                              title
-                            </li>
-                            <li>
-                              <code>/add heading [text]</code> - Add heading
-                            </li>
-                            <li>
-                              <code>/add paragraph [text]</code> - Add paragraph
-                            </li>
-                          </ul>
-                          <p className="mt-4">
-                            <strong>@ mentions:</strong>
-                          </p>
-                          <p>Type @ to see available page elements</p>
-                        </div>
-                      </div>
-
-                      <div className="border-t border-gray-200">
-                        <UnifiedChatbot
-                          mode="workspace"
-                          onPageModification={handlePageModification}
-                        />
-                      </div>
-                    </div>
-                  )}
                 </div>
-
-                {showChatbot && (
-                  <div className="lg:hidden fixed inset-0 bg-white z-50 flex flex-col">
-                    <div className="bg-blue-600 text-white p-4 border-b border-gray-200 flex items-center justify-between">
-                      <div>
-                        <h3 className="font-semibold">
-                          AI Workspace Assistant
-                        </h3>
-                        <p className="text-sm text-blue-100">
-                          Use commands to modify your workspace
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => setShowChatbot(false)}
-                        className="p-2 text-white hover:bg-blue-700 rounded-lg transition-colors"
-                      >
-                        <X size={20} />
-                      </button>
-                    </div>
-
-                    <div className="flex-1 p-4">
-                      <div className="text-sm text-gray-600 space-y-2">
-                        <p>
-                          <strong>Available commands:</strong>
-                        </p>
-                        <ul className="list-disc list-inside space-y-1">
-                          <li>
-                            <code>/add [content]</code> - Add new content
-                          </li>
-                          <li>
-                            <code>/create page [title]</code> - Create new page
-                          </li>
-                          <li>
-                            <code>/set title [title]</code> - Change page title
-                          </li>
-                          <li>
-                            <code>/add heading [text]</code> - Add heading
-                          </li>
-                          <li>
-                            <code>/add paragraph [text]</code> - Add paragraph
-                          </li>
-                        </ul>
-                        <p className="mt-4">
-                          <strong>@ mentions:</strong>
-                        </p>
-                        <p>Type @ to see available page elements</p>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-gray-200">
-                      <UnifiedChatbot
-                        mode="workspace"
-                        onPageModification={handlePageModification}
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <button
-        onClick={() => setShowChatbot(!showChatbot)}
-        className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-lg transition-colors z-50"
-        title="AI Assistant"
-      >
-        {showChatbot ? <X size={24} /> : <MessageCircle size={24} />}
-      </button>
+      {isChatbotVisible && !isMobile && (
+        <>
+          <div
+            className="fixed right-0 w-1.5 bg-gray-200 hover:bg-gray-300 cursor-col-resize z-20 flex items-center justify-center transition-all duration-300 flex-shrink-0"
+            onMouseDown={handleMouseDown}
+            style={{
+              right: `${chatbotWidth}px`,
+              top: "64px",
+              bottom: "0",
+            }}
+          >
+            <GripVertical size={16} className="text-gray-600" />
+          </div>
+          <div
+            className="fixed right-0 bg-white shadow-xl flex flex-col z-10 transition-all duration-300 border-l border-gray-200"
+            style={{
+              width: chatbotWidth,
+              top: "64px",
+              bottom: "0",
+            }}
+          >
+            <div className="p-4 border-b border-gray-200 flex-shrink-0 relative">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-gray-900">
+                  AI Workspace Assistant
+                </h3>
+                <button
+                  onClick={() => setIsChatbotVisible(false)}
+                  className="p-1 text-gray-500 hover:text-gray-700 rounded hover:bg-gray-100 transition-colors z-20"
+                  title="Close Chatbot"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              <UnifiedChatbot
+                mode="workspace"
+                onPageModification={handlePageModification}
+              />
+            </div>
+          </div>
+        </>
+      )}
+
+      {!isChatbotVisible && !isMobile && (
+        <button
+          onClick={() => {
+            setIsChatbotVisible(true);
+            setSidebarOpen(false);
+            setSidebarCollapsed(true);
+          }}
+          className="fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-colors z-30"
+          title="Open Chatbot"
+          style={{ width: "56px", height: "56px" }}
+        >
+          <MessageCircle size={24} />
+        </button>
+      )}
+
+      {isChatbotVisible && isMobile && (
+        <div
+          className="lg:hidden fixed inset-0 bg-white z-50 flex flex-col"
+          style={{ top: "64px" }}
+        >
+          <div className="p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+            <h3 className="font-semibold text-gray-900">
+              AI Workspace Assistant
+            </h3>
+            <button
+              onClick={() => setIsChatbotVisible(false)}
+              className="p-1 text-gray-500 hover:text-gray-700 rounded hover:bg-gray-100 transition-colors"
+              title="Close Chatbot"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto pb-20">
+            <UnifiedChatbot
+              mode="workspace"
+              onPageModification={handlePageModification}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

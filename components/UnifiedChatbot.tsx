@@ -131,46 +131,183 @@ export default function UnifiedChatbot({
       setIsLoading(true);
 
       try {
-        const reply = await sendChatMessage(
-          text,
-          previewImage || undefined,
+        const currentModel = getCurrentModel();
+        if (!currentModel) {
+          throw new Error("Please select a model in settings");
+        }
+
+        const apiKey = getApiKey(currentModel.provider);
+        if (currentModel.provider !== "google" && !apiKey) {
+          throw new Error(
+            `Please set your ${currentModel.provider} API key in settings`
+          );
+        }
+
+        const chatMessages = [
+          { role: "system", content: settings.systemPrompt },
           {
-            systemPrompt: settings.systemPrompt,
-            selectedModel: settings.selectedModel,
+            role: "user",
+            content: text,
+            ...(previewImage && { image: previewImage }),
+          },
+        ];
+
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            modelId: settings.selectedModel,
+            messages: chatMessages,
             temperature: settings.temperature,
             maxTokens: settings.maxTokens,
-          },
-          getCurrentModel,
-          getApiKey,
-          onPageModification
-        );
-
-        appendMessage({
-          id: uuidv4(),
-          content: reply,
-          role: "assistant",
-          timestamp: new Date().toISOString(),
+            apiKey: apiKey,
+            stream: true,
+          }),
         });
+
+        if (!response.ok) {
+          throw new Error("Failed to get response from AI");
+        }
+
+        const contentType = response.headers.get("content-type");
+
+        if (contentType?.includes("text/event-stream")) {
+          const reader = response.body?.getReader();
+          if (!reader) {
+            throw new Error("No reader available");
+          }
+
+          const decoder = new TextDecoder();
+          let buffer = "";
+          let isFirstChunk = true;
+
+          const assistantMessageId = uuidv4();
+          let assistantMessage: Message = {
+            id: assistantMessageId,
+            content: "",
+            role: "assistant",
+            timestamp: new Date().toISOString(),
+          };
+
+          // 用于逐字符显示的队列
+          const displayQueue: string[] = [];
+          let isDisplaying = false;
+          let currentDisplayText = "";
+
+          // 逐字符显示函数
+          const displayNextChar = async () => {
+            if (isDisplaying) return;
+            isDisplaying = true;
+
+            while (displayQueue.length > 0) {
+              const char = displayQueue.shift()!;
+              currentDisplayText += char;
+
+              assistantMessage = {
+                ...assistantMessage,
+                content: currentDisplayText,
+              };
+              appendMessage(assistantMessage);
+
+              // 根据字符类型调整延迟
+              const delay =
+                char === " " || char === "\n"
+                  ? 5
+                  : /[\u4e00-\u9fa5]/.test(char)
+                  ? 8
+                  : 3; // 中文8ms，英文3ms，空格5ms
+              await new Promise((resolve) => setTimeout(resolve, delay));
+            }
+
+            isDisplaying = false;
+          };
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              setIsLoading(false);
+              // 确保所有字符都显示完
+              if (displayQueue.length > 0) {
+                await displayNextChar();
+              }
+              break;
+            }
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+
+            for (let i = 0; i < lines.length - 1; i++) {
+              const line = lines[i].trim();
+              if (line.startsWith("data: ")) {
+                const dataStr = line.slice(6);
+                if (dataStr === "[DONE]") {
+                  setIsLoading(false);
+                  break;
+                }
+
+                try {
+                  const data = JSON.parse(dataStr);
+                  if (data.text) {
+                    if (isFirstChunk) {
+                      setIsLoading(false);
+                      isFirstChunk = false;
+                      // 创建并显示消息容器
+                      appendMessage(assistantMessage);
+                    }
+
+                    // 将新文本拆分为字符并加入队列
+                    const newChars = data.text.split("");
+                    displayQueue.push(...newChars);
+
+                    // 开始显示（如果还没开始）
+                    if (!isDisplaying) {
+                      displayNextChar();
+                    }
+                  }
+                } catch (error) {
+                  console.log("Parsing error:", error);
+                }
+              }
+            }
+
+            buffer = lines[lines.length - 1];
+          }
+
+          if (!currentDisplayText && !isFirstChunk) {
+            assistantMessage = {
+              ...assistantMessage,
+              content: "No response received",
+            };
+            appendMessage(assistantMessage);
+            setIsLoading(false);
+          }
+        } else {
+          setIsLoading(false);
+          const data = await response.json();
+          const assistantMessage: Message = {
+            id: uuidv4(),
+            content: data.response || "No response received",
+            role: "assistant",
+            timestamp: new Date().toISOString(),
+          };
+          appendMessage(assistantMessage);
+        }
       } catch (error) {
         console.error("Error:", error);
-        appendMessage({
+        setIsLoading(false);
+
+        const assistantMessage: Message = {
           id: uuidv4(),
           content: "Sorry, something went wrong. Please try again.",
           role: "assistant",
           timestamp: new Date().toISOString(),
-        });
-      } finally {
-        setIsLoading(false);
+        };
+        appendMessage(assistantMessage);
       }
     },
-    [
-      appendMessage,
-      getCurrentModel,
-      onPageModification,
-      getApiKey,
-      settings,
-      previewImage,
-    ]
+    [appendMessage, getCurrentModel, getApiKey, settings, previewImage]
   );
 
   const handleKeyDown = useCallback(
@@ -227,16 +364,23 @@ export default function UnifiedChatbot({
   return (
     <div
       className={`unified-chatbot flex flex-col bg-white ${
-        mode === "standalone" ? "h-full" : "relative overflow-hidden h-full"
+        mode === "standalone" ? "h-full" : "h-full"
       }`}
     >
       <div
-        className={`flex-1 px-6 py-4 ${mode === "workspace" ? "pb-24" : ""}`}
+        className={`flex-1 overflow-y-auto chatbot-scrollbar ${
+          mode === "standalone" ? "px-4 py-4" : "px-6 py-4"
+        }`}
         style={{
-          paddingBottom: mode === "standalone" ? "140px" : undefined,
+          height: mode === "standalone" ? "calc(100vh - 208px)" : "auto",
+          paddingBottom: mode === "standalone" ? "160px" : "80px",
         }}
       >
-        <div className="w-full space-y-6">
+        <div
+          className={`w-full space-y-6 ${
+            mode === "standalone" ? "max-w-[900px] mx-auto" : ""
+          }`}
+        >
           {messages.length === 0 && (
             <div className="text-center py-12">
               <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -254,14 +398,18 @@ export default function UnifiedChatbot({
             <div
               key={message.id}
               className={`flex ${
-                message.role === "user" ? "justify-end" : "justify-start"
+                message.role === "user" ? "justify-end" : "justify-end"
               }`}
             >
               <div
-                className={`max-w-[80%] lg:max-w-[70%] px-4 py-3 rounded-2xl ${
+                className={`px-4 py-3 rounded-2xl ${
                   message.role === "user"
-                    ? "bg-blue-600 text-white ml-12"
-                    : "bg-gray-100 text-gray-900 mr-12"
+                    ? mode === "standalone"
+                      ? "bg-blue-600 text-white max-w-[85%]"
+                      : "bg-blue-600 text-white max-w-[80%] lg:max-w-[70%]"
+                    : mode === "standalone"
+                    ? "bg-gray-100 text-gray-900 w-full"
+                    : "bg-gray-100 text-gray-900 w-full"
                 }`}
               >
                 {renderMessageContent(message.content)}
@@ -296,8 +444,10 @@ export default function UnifiedChatbot({
             </div>
           ))}
           {isLoading && (
-            <div className="flex justify-start">
-              <div className="bg-gray-100 text-gray-900 mr-12 px-4 py-3 rounded-2xl">
+            <div className={`flex justify-end`}>
+              <div
+                className={`bg-gray-100 text-gray-900 px-4 py-3 rounded-2xl w-full`}
+              >
                 <div className="flex items-center space-x-2">
                   <div className="flex space-x-1">
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
@@ -325,7 +475,7 @@ export default function UnifiedChatbot({
           }`}
         >
           <div className="p-4">
-            <div className="w-full max-w-4xl mx-auto">
+            <div className="w-full max-w-[900px] mx-auto">
               {previewImage && (
                 <div className="mb-4 p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center justify-between mb-2">
@@ -401,7 +551,7 @@ export default function UnifiedChatbot({
           </div>
         </div>
       ) : (
-        <div className="absolute bottom-0 left-0 right-0 bg-white z-10 p-4">
+        <div className="flex-shrink-0 bg-white border-t border-gray-200 p-4">
           <div className="w-full">
             {previewImage && (
               <div className="mb-4 p-3 bg-gray-50 rounded-lg">

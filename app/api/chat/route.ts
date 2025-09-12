@@ -30,7 +30,8 @@ async function callOpenAI(
   messages: ChatMessage[],
   temperature: number,
   maxTokens: number,
-  apiKey: string
+  apiKey: string,
+  stream: boolean = false
 ) {
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -51,6 +52,7 @@ async function callOpenAI(
       })),
       temperature,
       max_tokens: maxTokens,
+      stream,
     }),
   });
 
@@ -58,9 +60,12 @@ async function callOpenAI(
     throw new Error(`OpenAI API error: ${response.statusText}`);
   }
 
+  if (stream) {
+    return response;
+  }
+
   const data = await response.json();
 
-  // Validate response structure
   if (
     !data.choices ||
     !Array.isArray(data.choices) ||
@@ -126,7 +131,29 @@ async function callGoogle(
         generationConfig: {
           temperature,
           maxOutputTokens: maxTokens,
+          candidateCount: 1,
+          stopSequences: [],
+          topK: 40,
+          topP: 0.95,
         },
+        safetySettings: [
+          {
+            category: "HARM_CATEGORY_HARASSMENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE",
+          },
+          {
+            category: "HARM_CATEGORY_HATE_SPEECH",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE",
+          },
+          {
+            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE",
+          },
+          {
+            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE",
+          },
+        ],
       }),
     });
 
@@ -220,7 +247,8 @@ async function callGoogle(
   } catch (error) {
     if (
       retryCount < 3 &&
-      (error instanceof TypeError || (error instanceof Error && error.message.includes("fetch")))
+      (error instanceof TypeError ||
+        (error instanceof Error && error.message.includes("fetch")))
     ) {
       const delay = Math.pow(2, retryCount) * 1000 + Math.random() * 1000;
       console.log(
@@ -379,15 +407,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "API key required" }, { status: 400 });
     }
 
-    if (stream && provider.id === "google") {
-      const streamResponse = await callGoogle(
-        model,
-        messages,
-        temperature,
-        maxTokens,
-        apiKey!,
-        true
-      );
+    if (stream && (provider.id === "google" || provider.id === "openai")) {
+      let streamResponse;
+
+      if (provider.id === "google") {
+        streamResponse = await callGoogle(
+          model,
+          messages,
+          temperature,
+          maxTokens,
+          apiKey!,
+          true
+        );
+      } else {
+        streamResponse = await callOpenAI(
+          model,
+          messages,
+          temperature,
+          maxTokens,
+          apiKey!,
+          true
+        );
+      }
 
       if (!(streamResponse instanceof Response)) {
         throw new Error("Expected Response object for streaming");
@@ -423,11 +464,23 @@ export async function POST(request: NextRequest) {
 
                   try {
                     const data = JSON.parse(dataStr);
-                    if (
-                      data.candidates &&
-                      data.candidates[0]?.content?.parts?.[0]?.text
-                    ) {
-                      const text = data.candidates[0].content.parts[0].text;
+                    let text = "";
+
+                    if (provider.id === "google") {
+                      if (
+                        data.candidates &&
+                        data.candidates[0]?.content?.parts?.[0]?.text
+                      ) {
+                        text = data.candidates[0].content.parts[0].text;
+                      }
+                    } else if (provider.id === "openai") {
+                      if (data.choices && data.choices[0]?.delta?.content) {
+                        text = data.choices[0].delta.content;
+                      }
+                    }
+
+                    if (text) {
+                      // 立即发送，不等待
                       controller.enqueue(
                         `data: ${JSON.stringify({ text })}\n\n`
                       );
@@ -466,7 +519,8 @@ export async function POST(request: NextRequest) {
           messages,
           temperature,
           maxTokens,
-          apiKey!
+          apiKey!,
+          false
         );
         break;
       case "google":
@@ -475,7 +529,8 @@ export async function POST(request: NextRequest) {
           messages,
           temperature,
           maxTokens,
-          apiKey!
+          apiKey!,
+          false
         );
         break;
       case "kilo":

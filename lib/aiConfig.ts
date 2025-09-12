@@ -43,7 +43,7 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0, output: 0 },
         capabilities: ["chat", "reasoning"],
         isFree: true,
-        description: "Free reasoning model"
+        description: "Free reasoning model",
       },
       {
         id: "deepseek-v3",
@@ -56,7 +56,7 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0, output: 0 },
         capabilities: ["chat"],
         isFree: true,
-        description: "General-purpose model"
+        description: "General-purpose model",
       },
       {
         id: "moonshot-kimi-k2",
@@ -69,7 +69,7 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0, output: 0 },
         capabilities: ["chat"],
         isFree: true,
-        description: "MoonshotAI Kimi model"
+        description: "MoonshotAI Kimi model",
       },
       {
         id: "qwen3-coder",
@@ -82,7 +82,7 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0, output: 0 },
         capabilities: ["chat", "code"],
         isFree: true,
-        description: "Code-focused model"
+        description: "Code-focused model",
       },
       {
         id: "kilo-claude",
@@ -95,7 +95,7 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0, output: 0 },
         capabilities: ["chat"],
         isFree: true,
-        description: "Based on anthropic/claude-sonnet-4"
+        description: "Based on anthropic/claude-sonnet-4",
       },
       {
         id: "xai-grok",
@@ -108,9 +108,9 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0, output: 0 },
         capabilities: ["chat", "code"],
         isFree: true,
-        description: "Based on x-ai/grok-code-fast-1"
-      }
-    ]
+        description: "Based on x-ai/grok-code-fast-1",
+      },
+    ],
   },
   {
     id: "google",
@@ -130,7 +130,7 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0.00125, output: 0.005 },
         capabilities: ["text", "vision", "code", "reasoning"],
         isFree: false,
-        description: "Advanced reasoning"
+        description: "Advanced reasoning",
       },
       {
         id: "gemini-2.5-flash",
@@ -143,7 +143,7 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0.000075, output: 0.0003 },
         capabilities: ["text", "vision", "code"],
         isFree: false,
-        description: "Fast and efficient"
+        description: "Fast and efficient - Optimized for speed",
       },
       {
         id: "gemini-2.5-flash-lite",
@@ -156,7 +156,7 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0.00005, output: 0.0002 },
         capabilities: ["text", "vision"],
         isFree: false,
-        description: "Lightweight fast model"
+        description: "Lightweight fast model",
       },
       {
         id: "imagen-4",
@@ -169,7 +169,7 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0.02, output: 0 },
         capabilities: ["image"],
         isFree: false,
-        description: "Image generation model"
+        description: "Image generation model",
       },
       {
         id: "gemini-embeddings",
@@ -182,9 +182,9 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0.0001, output: 0 },
         capabilities: ["embeddings"],
         isFree: false,
-        description: "Embeddings model"
-      }
-    ]
+        description: "Embeddings model",
+      },
+    ],
   },
   {
     id: "openai",
@@ -204,7 +204,7 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0.005, output: 0.015 },
         capabilities: ["text", "vision", "reasoning", "code"],
         isFree: false,
-        description: "Latest GPT-4.1 model"
+        description: "Latest GPT-4.1 model",
       },
       {
         id: "gpt-4o",
@@ -217,7 +217,7 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0.005, output: 0.015 },
         capabilities: ["text", "vision", "reasoning", "code"],
         isFree: false,
-        description: "Omni model with multimodal support"
+        description: "Omni model with multimodal support",
       },
       {
         id: "gpt-4o-mini",
@@ -230,7 +230,7 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0.00015, output: 0.0006 },
         capabilities: ["text", "vision", "code"],
         isFree: false,
-        description: "Smaller omni model"
+        description: "Smaller omni model",
       },
       {
         id: "o3-mini",
@@ -243,7 +243,7 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0.0005, output: 0.0015 },
         capabilities: ["text", "code"],
         isFree: false,
-        description: "Optimized o3 mini model"
+        description: "Optimized o3 mini model",
       },
       {
         id: "o1-mini",
@@ -256,9 +256,9 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0.0005, output: 0.0015 },
         capabilities: ["text", "code"],
         isFree: false,
-        description: "Optimized o1 mini model"
-      }
-    ]
+        description: "Optimized o1 mini model",
+      },
+    ],
   },
   {
     id: "anthropic",
@@ -278,7 +278,7 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0.005, output: 0.015 },
         capabilities: ["text", "vision", "reasoning"],
         isFree: false,
-        description: "Most powerful Claude"
+        description: "Most powerful Claude",
       },
       {
         id: "claude-4-sonnet",
@@ -291,7 +291,7 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0.003, output: 0.015 },
         capabilities: ["text", "vision"],
         isFree: false,
-        description: "Balanced Claude model"
+        description: "Balanced Claude model",
       },
       {
         id: "claude-4-haiku",
@@ -304,7 +304,7 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0.001, output: 0.005 },
         capabilities: ["text"],
         isFree: false,
-        description: "Fast Claude model"
+        description: "Fast Claude model",
       },
       {
         id: "claude-3.5",
@@ -317,9 +317,9 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0.002, output: 0.01 },
         capabilities: ["text"],
         isFree: false,
-        description: "Previous Claude generation"
-      }
-    ]
+        description: "Previous Claude generation",
+      },
+    ],
   },
   {
     id: "others",
@@ -339,7 +339,7 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0.0002, output: 0.0008 },
         capabilities: ["chat"],
         isFree: false,
-        description: "High-speed reasoning"
+        description: "High-speed reasoning",
       },
       {
         id: "glm-4.5-air",
@@ -352,7 +352,7 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0.0002, output: 0.0008 },
         capabilities: ["chat"],
         isFree: false,
-        description: "Chinese-friendly GLM model"
+        description: "Chinese-friendly GLM model",
       },
       {
         id: "qwen3",
@@ -365,7 +365,7 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0.0002, output: 0.0008 },
         capabilities: ["chat"],
         isFree: false,
-        description: "General-purpose Qwen3 models"
+        description: "General-purpose Qwen3 models",
       },
       {
         id: "gemma-3",
@@ -378,7 +378,7 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0.0002, output: 0.0008 },
         capabilities: ["chat"],
         isFree: false,
-        description: "Google open source model"
+        description: "Google open source model",
       },
       {
         id: "hunyuan-a13b",
@@ -391,9 +391,9 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0, output: 0 },
         capabilities: ["chat"],
         isFree: true,
-        description: "Tencent Hunyuan instruct model"
-      }
-    ]
+        description: "Tencent Hunyuan instruct model",
+      },
+    ],
   },
   {
     id: "kilo",
@@ -413,7 +413,7 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0.0002, output: 0.0008 },
         capabilities: ["chat", "code"],
         isFree: false,
-        description: "Code-focused Grok model"
+        description: "Code-focused Grok model",
       },
       {
         id: "anthropic-claude-sonnet-4",
@@ -426,32 +426,32 @@ export const AI_PROVIDERS: AIProvider[] = [
         pricing: { input: 0.003, output: 0.015 },
         capabilities: ["chat"],
         isFree: false,
-        description: "Claude Sonnet 4"
-      }
-    ]
-  }
+        description: "Claude Sonnet 4",
+      },
+    ],
+  },
 ];
 
 export const getModelById = (modelId: string): AIModel | undefined => {
   for (const provider of AI_PROVIDERS) {
-    const model = provider.models.find(m => m.id === modelId);
+    const model = provider.models.find((m) => m.id === modelId);
     if (model) return model;
   }
   return undefined;
 };
 
 export const getProviderById = (providerId: string): AIProvider | undefined => {
-  return AI_PROVIDERS.find(p => p.id === providerId);
+  return AI_PROVIDERS.find((p) => p.id === providerId);
 };
 
 export const getAllModels = (): AIModel[] => {
-  return AI_PROVIDERS.flatMap(provider => provider.models);
+  return AI_PROVIDERS.flatMap((provider) => provider.models);
 };
 
 export const getFreeModels = (): AIModel[] => {
-  return getAllModels().filter(model => model.isFree);
+  return getAllModels().filter((model) => model.isFree);
 };
 
 export const getVisionModels = (): AIModel[] => {
-  return getAllModels().filter(model => model.supportsVision);
+  return getAllModels().filter((model) => model.supportsVision);
 };

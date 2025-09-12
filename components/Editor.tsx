@@ -187,6 +187,10 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
       const parent = embedInput.parentElement;
       if (!parent) return;
       if (parent.querySelector(".bn-local-image-btn")) return;
+
+      // Don't add button if it's in a cover options dialog
+      if (parent.closest('[class*="shadow-lg"]')) return;
+
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "bn-local-image-btn";
