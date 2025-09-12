@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import dynamic from "next/dynamic";
 import { PartialBlock } from "@blocknote/core";
 import {
@@ -12,7 +12,7 @@ import {
   X,
 } from "lucide-react";
 import Sidebar from "./Sidebar";
-import Breadcrumb from "./Breadcrumb";
+
 import UnifiedChatbot from "./UnifiedChatbot";
 import { mockPages, Page } from "@/lib/mockData";
 
@@ -29,24 +29,21 @@ export default function Workspace() {
   const [showCoverOptions, setShowCoverOptions] = useState(false);
   const [showCoverActions, setShowCoverActions] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [navbarVisible, setNavbarVisible] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
   const [showChatbot, setShowChatbot] = useState(false);
 
-  useEffect(() => {
-    let lastScrollY = window.scrollY;
-    const handleScroll = () => {
-      if (window.scrollY > lastScrollY) {
-        setNavbarVisible(false);
-      } else {
-        setNavbarVisible(true);
-      }
-      lastScrollY = window.scrollY;
-    };
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
   const activePage = pages.find((page) => page.id === activePageId) || pages[0];
+
+  const handleToggleSidebar = () => {
+    if (sidebarCollapsed) {
+      setSidebarCollapsed(false);
+      setSidebarOpen(true);
+    } else {
+      setSidebarCollapsed(true);
+      setSidebarOpen(false);
+    }
+  };
 
   const addNewWorkspacePage = () => {
     const pageNumber = pages.length + 1;
@@ -252,56 +249,62 @@ export default function Workspace() {
   ];
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar
-        title="Workspace"
-        icon="📁"
-        pages={pages.map((p) => ({
-          id: p.id,
-          title: p.title,
-          icon: p.icon,
-          children: p.children?.map((c) => ({
-            id: c.id,
-            title: c.title,
-            icon: c.icon,
-          })),
-        }))}
-        activePageId={activePageId}
-        onAddPage={addNewWorkspacePage}
-        onAddSubPage={(parentPageId) => addNewSubPage(parentPageId)}
-        onUpdatePageTitle={updatePageTitle}
-        onSelectPage={setActivePageId}
-        sidebarOpen={sidebarOpen}
-        setSidebarOpen={setSidebarOpen}
-        className={navbarVisible ? "top-16" : "top-0"}
-      />
+    <div className="flex h-screen bg-gray-50 pt-16">
+      {!sidebarCollapsed && (
+        <Sidebar
+          title="Workspace"
+          icon="📁"
+          pages={pages.map((p) => ({
+            id: p.id,
+            title: p.title,
+            icon: p.icon,
+            children: p.children?.map((c) => ({
+              id: c.id,
+              title: c.title,
+              icon: c.icon,
+            })),
+          }))}
+          activePageId={activePageId}
+          onAddPage={addNewWorkspacePage}
+          onAddSubPage={(parentPageId) => addNewSubPage(parentPageId)}
+          onUpdatePageTitle={updatePageTitle}
+          onSelectPage={setActivePageId}
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
+          className="top-16"
+          onCollapse={handleToggleSidebar}
+        />
+      )}
 
-      <div className="flex-1 flex flex-col ml-0 md:ml-64">
-        <div
-          className={`fixed ${
-            navbarVisible ? "top-16" : "top-0"
-          } left-0 right-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200 md:left-64 transition-all duration-300`}
-        >
-          <div className="px-4 md:px-6 py-3 flex items-center justify-between">
-            <Breadcrumb
-              items={[
-                { label: "Workspace", icon: "📁" },
-                {
-                  label: activePage.title || "Untitled",
-                  icon: activePage.icon,
-                },
-              ]}
-            />
-            <button
-              onClick={addNewWorkspacePage}
-              className="bg-blue-600 text-white rounded-full p-2 hover:bg-blue-700 transition-colors"
-              title="Create new workspace page"
+      {sidebarCollapsed && (
+        <div className="fixed left-0 z-30 w-12 bg-white border-r border-gray-200 flex flex-col items-center py-4 transition-all duration-200 top-16 bottom-0">
+          <button
+            onClick={handleToggleSidebar}
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Show sidebar"
+          >
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
             >
-              <Plus size={16} />
-            </button>
-          </div>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"
+              />
+            </svg>
+          </button>
         </div>
+      )}
 
+      <div
+        className={`flex-1 flex flex-col transition-all duration-200 ${
+          sidebarCollapsed ? "ml-0 md:ml-12" : "ml-0 md:ml-64"
+        }`}
+      >
         <div className="md:hidden p-4 border-b border-gray-200">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -311,14 +314,8 @@ export default function Workspace() {
           </button>
         </div>
 
-        <div
-          className={`flex-1 flex overflow-hidden transition-all duration-300 ${
-            navbarVisible ? "pt-20" : "pt-4"
-          }`}
-        >
-          <div
-            className={`flex-1 overflow-auto ${showChatbot ? "lg:mr-0" : ""}`}
-          >
+        <div className="flex-1 flex h-full">
+          <div className={`flex-1 h-full ${showChatbot ? "lg:mr-0" : ""}`}>
             <div className="py-8">
               <div className="max-w-[900px] mx-auto pl-5 md:px-6 lg:px-8">
                 <div className="flex justify-start">

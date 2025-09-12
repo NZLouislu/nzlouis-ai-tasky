@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { PartialBlock } from "@blocknote/core";
 import {
@@ -14,7 +14,6 @@ import {
   MessageCircle,
 } from "lucide-react";
 import Sidebar from "./Sidebar";
-import Breadcrumb from "./Breadcrumb";
 import UnifiedChatbot from "./UnifiedChatbot";
 
 const Editor = dynamic(() => import("./Editor"), {
@@ -66,12 +65,11 @@ export default function Blog() {
   const [showCoverActions, setShowCoverActions] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [navbarVisible, setNavbarVisible] = useState(true);
   const [isChatbotVisible, setIsChatbotVisible] = useState(false);
   const [chatbotWidth, setChatbotWidth] = useState(600);
   const [isResizing, setIsResizing] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  // const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const checkIsMobile = () => {
@@ -81,18 +79,7 @@ export default function Blog() {
     checkIsMobile();
     window.addEventListener("resize", checkIsMobile);
 
-    let lastScrollY = window.scrollY;
-    const handleScroll = () => {
-      if (window.scrollY > lastScrollY) {
-        setNavbarVisible(false);
-      } else {
-        setNavbarVisible(true);
-      }
-      lastScrollY = window.scrollY;
-    };
-    window.addEventListener("scroll", handleScroll);
     return () => {
-      window.removeEventListener("scroll", handleScroll);
       window.removeEventListener("resize", checkIsMobile);
     };
   }, []);
@@ -115,11 +102,9 @@ export default function Blog() {
   const handleMouseMove = useCallback(
     (e: MouseEvent) => {
       if (!isResizing) return;
-
       const newWidth = window.innerWidth - e.clientX;
-      const minWidth = 400;
-      const maxWidth = window.innerWidth - 400;
-
+      const minWidth = 360;
+      const maxWidth = window.innerWidth - 300;
       setChatbotWidth(Math.max(minWidth, Math.min(maxWidth, newWidth)));
     },
     [isResizing]
@@ -350,17 +335,13 @@ export default function Blog() {
           onSelectPage={setActivePostId}
           sidebarOpen={sidebarOpen && !(isChatbotVisible && isMobile)}
           setSidebarOpen={setSidebarOpen}
-          className={navbarVisible ? "top-16" : "top-0"}
+          className="top-16"
           onCollapse={handleToggleSidebar}
         />
       )}
 
       {sidebarCollapsed && (
-        <div
-          className={`fixed left-0 z-30 w-12 bg-white border-r border-gray-200 flex flex-col items-center py-4 transition-all duration-200 ${
-            navbarVisible ? "top-16" : "top-0"
-          } bottom-0`}
-        >
+        <div className="fixed left-0 z-30 w-12 bg-white border-r border-gray-200 flex flex-col items-center py-4 transition-all duration-200 top-16 bottom-0">
           <button
             onClick={handleToggleSidebar}
             className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
@@ -376,26 +357,6 @@ export default function Blog() {
           sidebarCollapsed ? "ml-0 md:ml-12" : "ml-0 md:ml-64"
         }`}
       >
-        <div
-          className={`fixed ${
-            navbarVisible ? "top-16" : "top-0"
-          } left-0 right-0 z-20 bg-white/80 backdrop-blur-md border-b border-gray-200 transition-all duration-200 ${
-            sidebarCollapsed ? "md:left-12" : "md:left-64"
-          }`}
-        >
-          <div className="px-4 md:px-6 py-3">
-            <Breadcrumb
-              items={[
-                { label: "Blog", icon: "📖" },
-                {
-                  label: activePost.title || "Untitled",
-                  icon: activePost.icon,
-                },
-              ]}
-            />
-          </div>
-        </div>
-
         <div className="md:hidden p-4 border-b border-gray-200">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -406,200 +367,201 @@ export default function Blog() {
         </div>
 
         <div
-          ref={containerRef}
-          className={`flex-1 flex overflow-hidden transition-all duration-300 ${
-            navbarVisible ? "pt-14" : "pt-0"
+          className={`flex-1 flex overflow-hidden ${
+            isChatbotVisible && !isMobile ? `pr-0` : ""
           }`}
+          style={{
+            paddingTop: "80px",
+            paddingRight:
+              isChatbotVisible && !isMobile ? `${chatbotWidth}px` : "0",
+          }}
         >
           <div className="flex-1 overflow-y-auto">
-            <div className="pt-8">
-              <div className="max-w-[900px] mx-auto pl-5 md:px-6 lg:px-8">
-                <div className="flex justify-start">
-                  <div className="w-full">
-                    {activePost.cover && (
-                      <div
-                        className="relative mb-8 rounded-lg overflow-hidden"
-                        onMouseEnter={() => setShowCoverActions(true)}
-                        onMouseLeave={() => setShowCoverActions(false)}
-                        style={{
-                          height: "12rem",
-                        }}
-                      >
-                        {activePost.cover.type === "color" ? (
-                          <div
-                            className={`h-full ${activePost.cover.value}`}
-                          ></div>
-                        ) : (
-                          <div
-                            className="h-full bg-cover bg-center"
-                            style={{
-                              backgroundImage: `url(${activePost.cover.value})`,
-                            }}
-                          ></div>
-                        )}
+            <div className="px-6 pb-8">
+              <div className="max-w-[900px] mx-auto">
+                <div className="w-full">
+                  {activePost.cover && (
+                    <div
+                      className="relative mb-8 rounded-lg overflow-hidden"
+                      onMouseEnter={() => setShowCoverActions(true)}
+                      onMouseLeave={() => setShowCoverActions(false)}
+                      style={{
+                        height: "12rem",
+                      }}
+                    >
+                      {activePost.cover.type === "color" ? (
                         <div
-                          className={`absolute bottom-4 right-4 flex space-x-2 transition-opacity duration-200 ${
-                            showCoverActions ||
-                            (!activePost.icon && !activePost.cover)
-                              ? "opacity-100"
-                              : "opacity-0"
-                          }`}
+                          className={`h-full ${activePost.cover.value}`}
+                        ></div>
+                      ) : (
+                        <div
+                          className="h-full bg-cover bg-center"
+                          style={{
+                            backgroundImage: `url(${activePost.cover.value})`,
+                          }}
+                        ></div>
+                      )}
+                      <div
+                        className={`absolute bottom-4 right-4 flex space-x-2 transition-opacity duration-200 ${
+                          showCoverActions ||
+                          (!activePost.icon && !activePost.cover)
+                            ? "opacity-100"
+                            : "opacity-0"
+                        }`}
+                      >
+                        <button
+                          onClick={() => setShowCoverOptions(true)}
+                          className="px-3 py-1 bg-white bg-opacity-80 text-sm rounded hover:bg-opacity-100"
                         >
+                          Change Cover
+                        </button>
+                        <button
+                          onClick={() => removePostCover(activePostId)}
+                          className="p-1 bg-white bg-opacity-80 rounded hover:bg-opacity-100"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-4">
+                        {!activePost.icon && !activePost.cover && (
                           <button
-                            onClick={() => setShowCoverOptions(true)}
-                            className="px-3 py-1 bg-white bg-opacity-80 text-sm rounded hover:bg-opacity-100"
+                            onClick={() =>
+                              setShowIconSelector(!showIconSelector)
+                            }
+                            className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors"
                           >
-                            Change Cover
+                            <Plus size={16} className="mr-2" />
+                            Add Icon
                           </button>
+                        )}
+
+                        {!activePost.cover && (
                           <button
-                            onClick={() => removePostCover(activePostId)}
-                            className="p-1 bg-white bg-opacity-80 rounded hover:bg-opacity-100"
+                            onClick={() =>
+                              setShowCoverOptions(!showCoverOptions)
+                            }
+                            className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors"
                           >
-                            <Trash2 size={16} />
+                            <ImageIcon size={16} className="mr-2" />
+                            Add Cover
+                          </button>
+                        )}
+                      </div>
+
+                      <button className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
+                        <MoreHorizontal size={16} />
+                      </button>
+                    </div>
+
+                    {showIconSelector && (
+                      <div className="mb-4 p-4 bg-white border border-gray-200 rounded-lg shadow-lg">
+                        <div className="grid grid-cols-8 gap-3">
+                          {iconOptions.map((icon) => (
+                            <button
+                              key={icon}
+                              onClick={() => setPostIcon(activePostId, icon)}
+                              className="text-2xl p-3 hover:bg-gray-100 rounded-lg transition-colors"
+                            >
+                              {icon}
+                            </button>
+                          ))}
+                          <button
+                            onClick={() => removePostIcon(activePostId)}
+                            className="text-sm p-3 hover:bg-gray-100 rounded-lg flex items-center justify-center text-gray-500"
+                          >
+                            Remove
                           </button>
                         </div>
                       </div>
                     )}
 
-                    <div className="mb-6 pl-[23px] md:pl-0">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center space-x-4">
-                          {!activePost.icon && !activePost.cover && (
-                            <button
-                              onClick={() =>
-                                setShowIconSelector(!showIconSelector)
-                              }
-                              className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors"
-                            >
-                              <Plus size={16} className="mr-2" />
-                              Add Icon
-                            </button>
-                          )}
-
-                          {!activePost.cover && (
-                            <button
-                              onClick={() =>
-                                setShowCoverOptions(!showCoverOptions)
-                              }
-                              className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors"
-                            >
-                              <ImageIcon size={16} className="mr-2" />
-                              Add Cover
-                            </button>
-                          )}
-                        </div>
-
-                        <button className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
-                          <MoreHorizontal size={16} />
-                        </button>
-                      </div>
-
-                      {showIconSelector && (
-                        <div className="mb-4 p-4 bg-white border border-gray-200 rounded-lg shadow-lg">
-                          <div className="grid grid-cols-8 gap-3">
-                            {iconOptions.map((icon) => (
+                    {showCoverOptions && (
+                      <div className="mb-4 p-4 bg-white border border-gray-200 rounded-lg shadow-lg">
+                        <div className="mb-4">
+                          <h3 className="text-sm font-medium text-gray-700 mb-3">
+                            Colors
+                          </h3>
+                          <div className="flex flex-wrap gap-3">
+                            {colorOptions.map((color) => (
                               <button
-                                key={icon}
-                                onClick={() => setPostIcon(activePostId, icon)}
-                                className="text-2xl p-3 hover:bg-gray-100 rounded-lg transition-colors"
-                              >
-                                {icon}
-                              </button>
-                            ))}
-                            <button
-                              onClick={() => removePostIcon(activePostId)}
-                              className="text-sm p-3 hover:bg-gray-100 rounded-lg flex items-center justify-center text-gray-500"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {showCoverOptions && (
-                        <div className="mb-4 p-4 bg-white border border-gray-200 rounded-lg shadow-lg">
-                          <div className="mb-4">
-                            <h3 className="text-sm font-medium text-gray-700 mb-3">
-                              Colors
-                            </h3>
-                            <div className="flex flex-wrap gap-3">
-                              {colorOptions.map((color) => (
-                                <button
-                                  key={color}
-                                  onClick={() =>
-                                    setPostCover(activePostId, {
-                                      type: "color",
-                                      value: color,
-                                    })
-                                  }
-                                  className={`w-10 h-10 rounded-lg ${color} hover:opacity-80 transition-opacity`}
-                                ></button>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div>
-                            <h3 className="text-sm font-medium text-gray-700 mb-3">
-                              Upload Image
-                            </h3>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleCoverFileSelect}
-                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">
-                              Or enter image URL below
-                            </p>
-                            <input
-                              type="text"
-                              placeholder="Enter image URL"
-                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent mt-2"
-                              onBlur={(e) => {
-                                if (e.target.value) {
+                                key={color}
+                                onClick={() =>
                                   setPostCover(activePostId, {
-                                    type: "image",
-                                    value: e.target.value,
-                                  });
+                                    type: "color",
+                                    value: color,
+                                  })
                                 }
-                              }}
-                            />
+                                className={`w-10 h-10 rounded-lg ${color} hover:opacity-80 transition-opacity`}
+                              ></button>
+                            ))}
                           </div>
                         </div>
-                      )}
 
-                      <div className="flex items-center">
-                        {activePost.icon && (
-                          <div className="relative mr-4">
-                            <span
-                              className="text-3xl cursor-pointer hover:bg-gray-100 p-2 rounded-lg transition-colors"
-                              onClick={() => setShowIconSelector(true)}
-                            >
-                              {activePost.icon}
-                            </span>
-                          </div>
-                        )}
-                        <div className="flex-1">
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-700 mb-3">
+                            Upload Image
+                          </h3>
                           <input
-                            id={`title-input-${activePostId}`}
+                            type="file"
+                            accept="image/*"
+                            onChange={handleCoverFileSelect}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Or enter image URL below
+                          </p>
+                          <input
                             type="text"
-                            value={activePost.title}
-                            onChange={(e) =>
-                              updatePostTitle(activePostId, e.target.value)
-                            }
-                            placeholder="Untitled"
-                            className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-4xl font-bold text-gray-800 placeholder-gray-400"
+                            placeholder="Enter image URL"
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent mt-2"
+                            onBlur={(e) => {
+                              if (e.target.value)
+                                setPostCover(activePostId, {
+                                  type: "image",
+                                  value: e.target.value,
+                                });
+                            }}
                           />
                         </div>
                       </div>
-                    </div>
+                    )}
 
-                    <div className="min-h-[400px] -ml-8 pl-[23px] md:pl-0 pr-2">
-                      <Editor
-                        initialContent={activePost.content}
-                        onChange={updatePostContent}
-                      />
+                    <div className="flex items-center">
+                      {activePost.icon && (
+                        <div className="relative mr-4">
+                          <span
+                            className="text-3xl cursor-pointer hover:bg-gray-100 p-2 rounded-lg transition-colors"
+                            onClick={() => setShowIconSelector(true)}
+                          >
+                            {activePost.icon}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <input
+                          id={`title-input-${activePostId}`}
+                          type="text"
+                          value={activePost.title}
+                          onChange={(e) =>
+                            updatePostTitle(activePostId, e.target.value)
+                          }
+                          placeholder="Untitled"
+                          className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-4xl font-bold text-gray-800 placeholder-gray-400"
+                        />
+                      </div>
                     </div>
+                  </div>
+
+                  <div className="min-h-[400px]">
+                    <Editor
+                      initialContent={activePost.content}
+                      onChange={updatePostContent}
+                    />
                   </div>
                 </div>
               </div>
@@ -611,15 +573,23 @@ export default function Blog() {
       {isChatbotVisible && !isMobile && (
         <>
           <div
-            className="fixed right-0 top-0 bottom-0 w-1.5 bg-gray-200 hover:bg-gray-300 cursor-col-resize z-20 flex items-center justify-center transition-all duration-300 flex-shrink-0"
+            className="fixed right-0 w-1.5 bg-gray-200 hover:bg-gray-300 cursor-col-resize z-20 flex items-center justify-center transition-all duration-300 flex-shrink-0"
             onMouseDown={handleMouseDown}
-            style={{ right: `${chatbotWidth}px` }}
+            style={{
+              right: `${chatbotWidth}px`,
+              top: "64px",
+              bottom: "0",
+            }}
           >
             <GripVertical size={16} className="text-gray-600" />
           </div>
           <div
-            className="fixed right-0 top-0 bottom-0 bg-white shadow-xl flex flex-col z-10 transition-all duration-300"
-            style={{ width: chatbotWidth }}
+            className="fixed right-0 bg-white shadow-xl flex flex-col z-10 transition-all duration-300"
+            style={{
+              width: chatbotWidth,
+              top: "64px",
+              bottom: "0",
+            }}
           >
             <div className="p-4 border-b border-gray-200 flex-shrink-0 relative">
               <div className="flex items-center justify-between">
@@ -644,10 +614,13 @@ export default function Blog() {
         </>
       )}
 
-      {/* Right bottom Chatbot icon */}
       {!isChatbotVisible && !isMobile && (
         <button
-          onClick={() => setIsChatbotVisible(true)}
+          onClick={() => {
+            setIsChatbotVisible(true);
+            setSidebarOpen(false);
+            setSidebarCollapsed(true);
+          }}
           className="fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-colors z-30"
           title="Open Chatbot"
           style={{ width: "56px", height: "56px" }}
@@ -656,9 +629,11 @@ export default function Blog() {
         </button>
       )}
 
-      {/* This is the mobile chatbot view */}
       {isChatbotVisible && isMobile && (
-        <div className="lg:hidden fixed inset-0 bg-white z-50 flex flex-col">
+        <div
+          className="lg:hidden fixed inset-0 bg-white z-50 flex flex-col"
+          style={{ top: "64px" }}
+        >
           <div className="p-4 border-b border-gray-200 flex items-center justify-center flex-shrink-0">
             <h3 className="font-semibold">AI Blog Assistant</h3>
           </div>

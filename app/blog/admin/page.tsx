@@ -10,7 +10,7 @@ import {
   Heart,
 } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
-import Breadcrumb from "@/components/Breadcrumb";
+
 import BlogAnalytics from "@/components/blog/analytics/BlogAnalytics";
 import CommentsPanel from "@/components/blog/comments/CommentsPanel";
 import { useBlogStore } from "@/lib/stores/blog-store";
@@ -25,7 +25,8 @@ interface SidebarPage {
 
 export default function BlogAdminPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [navbarVisible, setNavbarVisible] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState("overview");
@@ -53,20 +54,6 @@ export default function BlogAdminPage() {
   useEffect(() => {
     checkAuthentication();
   }, [checkAuthentication]);
-
-  useEffect(() => {
-    let lastScrollY = window.scrollY;
-    const handleScroll = () => {
-      if (window.scrollY > lastScrollY) {
-        setNavbarVisible(false);
-      } else {
-        setNavbarVisible(true);
-      }
-      lastScrollY = window.scrollY;
-    };
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
 
   const loadPosts = useCallback(async () => {
     if (posts.length > 0) return;
@@ -125,29 +112,17 @@ export default function BlogAdminPage() {
     },
   ];
 
-  const breadcrumbItems = [
-    { label: "Blog Admin", href: "/blog/admin", icon: "⚙️" },
-  ];
+  // const breadcrumbItems: never[] = [];
 
-  if (activeView === "analytics") {
-    breadcrumbItems.push({
-      label: "Analytics",
-      href: "/blog/admin/analytics",
-      icon: "📈",
-    });
-  } else if (activeView === "comments") {
-    breadcrumbItems.push({
-      label: "Comments",
-      href: "/blog/admin/comments",
-      icon: "💬",
-    });
-  } else if (activeView === "features") {
-    breadcrumbItems.push({
-      label: "Features",
-      href: "/blog/admin/features",
-      icon: "⚙️",
-    });
-  }
+  const handleToggleSidebar = () => {
+    if (sidebarCollapsed) {
+      setSidebarCollapsed(false);
+      setSidebarOpen(true);
+    } else {
+      setSidebarCollapsed(true);
+      setSidebarOpen(false);
+    }
+  };
 
   const handleSelectPage = (pageId: string) => {
     setActiveView(pageId);
@@ -401,29 +376,38 @@ export default function BlogAdminPage() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar
-        title="Blog Admin"
-        icon="⚙️"
-        pages={pages}
-        activePageId={activePageId}
-        onSelectPage={handleSelectPage}
-        sidebarOpen={sidebarOpen}
-        setSidebarOpen={setSidebarOpen}
-        className={navbarVisible ? "top-16" : "top-0"}
-      />
+    <div className="flex h-screen bg-gray-50 pt-16">
+      {!sidebarCollapsed && (
+        <Sidebar
+          title="Blog Admin"
+          icon="⚙️"
+          pages={pages}
+          activePageId={activePageId}
+          onSelectPage={handleSelectPage}
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
+          className="top-16"
+          onCollapse={handleToggleSidebar}
+        />
+      )}
 
-      <div className="flex-1 flex flex-col ml-0 md:ml-64">
-        <div
-          className={`fixed ${
-            navbarVisible ? "top-16" : "top-0"
-          } left-0 right-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200 md:left-64 transition-all duration-300`}
-        >
-          <div className="px-4 md:px-6 py-3">
-            <Breadcrumb items={breadcrumbItems} />
-          </div>
+      {sidebarCollapsed && (
+        <div className="fixed left-0 z-30 w-12 bg-white border-r border-gray-200 flex flex-col items-center py-4 transition-all duration-200 top-16 bottom-0">
+          <button
+            onClick={handleToggleSidebar}
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Show sidebar"
+          >
+            <Settings size={20} />
+          </button>
         </div>
+      )}
 
+      <div
+        className={`flex-1 flex flex-col transition-all duration-200 ${
+          sidebarCollapsed ? "ml-0 md:ml-12" : "ml-0 md:ml-64"
+        }`}
+      >
         <div className="md:hidden p-4 border-b border-gray-200">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -433,11 +417,7 @@ export default function BlogAdminPage() {
           </button>
         </div>
 
-        <div
-          className={`flex-1 overflow-auto ${
-            navbarVisible ? "pt-20" : "pt-4"
-          } transition-all duration-300`}
-        >
+        <div className="flex-1 overflow-auto pt-4">
           <div className="max-w-7xl mx-auto p-6">{renderContent()}</div>
         </div>
       </div>

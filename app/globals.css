@@ -5,7 +5,7 @@
   --foreground: #171717;
 }
 
-@theme inline {
+:root {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
@@ -19,8 +19,61 @@
   }
 }
 
+html, body {
+  overflow: hidden;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
+/* 隐藏所有滚动条 */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
+.chatbot-scroll {
+  overflow: hidden;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.chatbot-scroll::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+.no-wrap-editor .bn-editor .ProseMirror p,
+.no-wrap-editor .bn-editor .ProseMirror h1,
+.no-wrap-editor .bn-editor .ProseMirror h2,
+.no-wrap-editor .bn-editor .ProseMirror h3,
+.no-wrap-editor .bn-editor .ProseMirror h4,
+.no-wrap-editor .bn-editor .ProseMirror h5,
+.no-wrap-editor .bn-editor .ProseMirror h6 {
+  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+  white-space: pre-wrap !important;
+}
+
+.no-wrap-editor .bn-editor .ProseMirror {
+  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+}
+
+.no-wrap-editor .bn-block-content {
+  word-break: break-word !important;
+  overflow-wrap: break-word !important;
 }

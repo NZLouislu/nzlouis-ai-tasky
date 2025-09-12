@@ -9,13 +9,14 @@ export default function LayoutWrapper({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const isChatbotPage = pathname?.startsWith("/chatbot");
+  // const isBlogPage = pathname?.startsWith("/blog");
+  const isHomePage = pathname === "/";
 
   return (
     <>
       <Navbar />
-      <main className="flex-1 pt-16 pb-4">{children}</main>
-      {!isChatbotPage && <Footer className="shrink-0" />}
+      <main className="flex-1 pt-12 pb-4">{children}</main>
+      {isHomePage && <Footer />}
     </>
   );
 }

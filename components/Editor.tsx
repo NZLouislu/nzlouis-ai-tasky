@@ -14,7 +14,11 @@ interface EditorProps {
 }
 
 export default function Editor({ initialContent, onChange }: EditorProps) {
-  const editor = useCreateBlockNote({ initialContent });
+  const editor = useCreateBlockNote({
+    initialContent,
+    defaultStyles: true,
+    trailingBlock: false,
+  });
   const globalFileInputRef = useRef<HTMLInputElement | null>(null);
   const [showAIPanel, setShowAIPanel] = useState(false);
   const [aiPanelPosition, setAIPanelPosition] = useState({ x: 0, y: 0 });
@@ -126,7 +130,13 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
           [
             {
               type: "paragraph",
-              content: [{ type: "text", text: suggestion, styles: {} }],
+              content: [
+                {
+                  type: "text",
+                  text: suggestion,
+                  styles: {},
+                },
+              ],
             },
           ],
           pos.block,
@@ -194,7 +204,7 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
     };
 
     const handlePaste = (e: ClipboardEvent) => {
-      if (e.target && (e.target as Element).closest('.unified-chatbot')) {
+      if (e.target && (e.target as Element).closest(".unified-chatbot")) {
         return;
       }
       const items = Array.from(e.clipboardData?.items || []);
@@ -234,7 +244,10 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
       }
     });
 
-    observer.observe(document.body, { childList: true, subtree: true });
+    const editorContainer = document.querySelector(".bn-editor");
+    if (editorContainer) {
+      observer.observe(editorContainer, { childList: true, subtree: true });
+    }
 
     const existing = document.querySelectorAll<HTMLInputElement>(
       'input[placeholder="Enter URL"], input[placeholder="Enter image URL"], input[placeholder="Enter URL here"]'
@@ -311,11 +324,12 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
         </div>
       </div>
 
-      <div style={{ marginBottom: 12 }}>
+      <div style={{ marginBottom: 12 }} className="no-wrap-editor">
         <BlockNoteView
           editor={editor}
           onChange={() => onChange?.(editor.document)}
           theme="light"
+          className="max-w-full"
         />
       </div>
 

@@ -1,66 +1,68 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
-  const [visible, setVisible] = useState(true);
-
-  useEffect(() => {
-    let lastScrollY = window.scrollY;
-    const handleScroll = () => {
-      if (window.scrollY > lastScrollY) {
-        setVisible(false);
-      } else {
-        setVisible(true);
-      }
-      lastScrollY = window.scrollY;
-    };
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  const pathname = usePathname();
 
   const items = [
-    { label: "🏠 Home", href: "/" },
-    { label: "📁 Workspace", href: "/workspace" },
-    { label: "📝 Tasks", href: "/tasklist" },
-    { label: "📖 Blog", href: "/blog" },
-    { label: "⚙️ Blog Admin", href: "/blog/admin" },
-    { label: "💬 Chatbot", href: "/chatbot" },
+    { label: "Home", href: "/" },
+    { label: "Workspace", href: "/workspace" },
+    { label: "Tasks", href: "/tasklist" },
+    { label: "Blog", href: "/blog" },
+    { label: "Blog Admin", href: "/blog/admin" },
+    { label: "Chatbot", href: "/chatbot" },
   ];
 
+  const linkCls = (isActive: boolean) =>
+    `relative text-sm md:text-base font-medium transition-colors hover:text-indigo-600 ${
+      isActive
+        ? "text-indigo-600 font-bold after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-0.5 after:w-full after:bg-indigo-600"
+        : "text-gray-700"
+    }`;
+
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 bg-white/30 backdrop-blur-md transition-transform duration-300 ${visible ? "translate-y-0" : "-translate-y-full"}`}>
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 md:px-6">
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur border-b border-slate-200">
+      <div className="mx-auto flex max-w-[1200px] items-center px-6 py-4">
         <Link
           href="https://www.nzlouis.com"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center"
+          className="flex items-center flex-shrink-0"
         >
-          <Image
-            src="/images/nzlouis-logo.png"
-            alt="Nzlouis logo — Lu Louis"
-            width={100}
-            height={30}
-            priority
-            className="w-[100px] h-[30px] object-contain"
-          />
+          <div className="flex items-center w-[100px] h-[30px]">
+            <Image
+              src="/images/nzlouis-logo.png"
+              alt="Nzlouis logo — Lu Louis"
+              width={100}
+              height={30}
+              priority
+              className="w-[100px] h-[30px] object-contain"
+            />
+          </div>
         </Link>
 
-        <div className="hidden md:flex gap-6">
-          {items.map((i) => (
-            <Link
-              key={i.href}
-              href={i.href}
-              className="text-sm font-medium hover:text-blue-600 transition-colors"
-              prefetch
-            >
-              {i.label}
-            </Link>
-          ))}
+        <div className="flex-1"></div>
+
+        <div className="flex items-center gap-4 flex-shrink-0">
+          <div className="hidden md:flex">
+            <div className="flex gap-6">
+              {items.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={linkCls(pathname === item.href)}
+                  prefetch
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          </div>
         </div>
 
         <button
@@ -72,17 +74,17 @@ export default function Navbar() {
       </div>
 
       {open && (
-        <div className="md:hidden bg-white/30 backdrop-blur-md shadow-md">
-          <div className="flex flex-col gap-4 p-4">
-            {items.map((i) => (
+        <div className="md:hidden border-t border-slate-200 bg-white/95">
+          <div className="flex flex-col gap-1 p-2">
+            {items.map((item) => (
               <Link
-                key={i.href}
-                href={i.href}
-                className="block text-sm font-medium hover:text-blue-600"
+                key={item.href}
+                href={item.href}
+                className={linkCls(pathname === item.href)}
                 onClick={() => setOpen(false)}
                 prefetch
               >
-                {i.label}
+                {item.label}
               </Link>
             ))}
           </div>

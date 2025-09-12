@@ -7,40 +7,40 @@ export default function Home() {
       title: "Home",
       description: "Welcome to your AI-powered workspace",
       href: "/",
-      color: "from-blue-500 to-blue-600"
+      color: "from-blue-500 to-blue-600",
     },
     {
       icon: "📁",
       title: "Workspace",
       description: "Organize and manage your projects",
       href: "/workspace",
-      color: "from-green-500 to-green-600"
+      color: "from-green-500 to-green-600",
     },
     {
       icon: "📝",
       title: "Tasks",
       description: "Track and manage your tasks efficiently",
       href: "/tasklist",
-      color: "from-purple-500 to-purple-600"
+      color: "from-purple-500 to-purple-600",
     },
     {
       icon: "📖",
       title: "Blog",
       description: "Read and write articles",
       href: "/blog",
-      color: "from-orange-500 to-orange-600"
+      color: "from-orange-500 to-orange-600",
     },
     {
       icon: "💬",
       title: "AI Chatbot",
       description: "Chat with advanced AI assistants",
       href: "/chatbot",
-      color: "from-indigo-500 to-indigo-600"
-    }
+      color: "from-indigo-500 to-indigo-600",
+    },
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
+    <div className="bg-gradient-to-br from-slate-50 via-white to-slate-100">
       {/* Hero Section */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-indigo-600/10"></div>
@@ -58,8 +58,18 @@ export default function Home() {
                 className="inline-flex items-center justify-center px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all transform hover:-translate-y-1 shadow-lg hover:shadow-xl"
               >
                 Get Started
-                <svg className="ml-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                <svg
+                  className="ml-2 h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 7l5 5m0 0l-5 5m5-5H6"
+                  />
                 </svg>
               </Link>
               <Link
@@ -80,7 +90,8 @@ export default function Home() {
             Powerful Features
           </h2>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Everything you need to manage tasks, collaborate, and stay productive
+            Everything you need to manage tasks, collaborate, and stay
+            productive
           </p>
         </div>
 
@@ -91,10 +102,14 @@ export default function Home() {
               href={feature.href}
               className="group relative bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 border border-gray-100 overflow-hidden"
             >
-              <div className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-5 transition-opacity duration-300`}></div>
+              <div
+                className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-5 transition-opacity duration-300`}
+              ></div>
               <div className="relative p-8">
                 <div className="flex items-center mb-4">
-                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${feature.color} flex items-center justify-center text-2xl mr-4`}>
+                  <div
+                    className={`w-12 h-12 rounded-xl bg-gradient-to-br ${feature.color} flex items-center justify-center text-2xl mr-4`}
+                  >
                     {feature.icon}
                   </div>
                   <h3 className="text-xl font-semibold text-gray-900">
@@ -106,8 +121,18 @@ export default function Home() {
                 </p>
                 <div className="mt-6 flex items-center text-sm font-medium text-gray-500 group-hover:text-gray-700">
                   Learn more
-                  <svg className="ml-2 h-4 w-4 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  <svg
+                    className="ml-2 h-4 w-4 transform group-hover:translate-x-1 transition-transform"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
                   </svg>
                 </div>
               </div>
@@ -124,15 +149,26 @@ export default function Home() {
               Ready to boost your productivity?
             </h2>
             <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-              Join thousands of users who trust AI Tasky for their daily task management
+              Join thousands of users who trust AI Tasky for their daily task
+              management
             </p>
             <Link
               href="/workspace"
               className="inline-flex items-center justify-center px-8 py-4 bg-white text-gray-900 font-semibold rounded-xl hover:bg-gray-100 transition-all transform hover:-translate-y-1 shadow-lg"
             >
               Start Using AI Tasky
-              <svg className="ml-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              <svg
+                className="ml-2 h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 7l5 5m0 0l-5 5m5-5H6"
+                />
               </svg>
             </Link>
           </div>
