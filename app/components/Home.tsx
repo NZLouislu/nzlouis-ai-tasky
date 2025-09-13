@@ -40,7 +40,7 @@ export default function Home() {
   ];
 
   return (
-    <div className="bg-gradient-to-br from-slate-50 via-white to-slate-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
       {/* Hero Section */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-indigo-600/10"></div>
@@ -142,19 +142,20 @@ export default function Home() {
       </div>
 
       {/* CTA Section */}
-      <div className="bg-gradient-to-r from-gray-900 to-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+      <div className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-indigo-600/10"></div>
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <div className="text-center">
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
               Ready to boost your productivity?
             </h2>
-            <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
+            <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
               Join thousands of users who trust AI Tasky for their daily task
               management
             </p>
             <Link
               href="/workspace"
-              className="inline-flex items-center justify-center px-8 py-4 bg-white text-gray-900 font-semibold rounded-xl hover:bg-gray-100 transition-all transform hover:-translate-y-1 shadow-lg"
+              className="inline-flex items-center justify-center px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all transform hover:-translate-y-1 shadow-lg hover:shadow-xl"
             >
               Start Using AI Tasky
               <svg

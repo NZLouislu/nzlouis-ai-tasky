@@ -40,14 +40,13 @@ export default function BlogAdminPage() {
       const isAuth = await verifyAuth();
       if (isAuth) {
         setIsAuthenticated(true);
+        setLoading(false);
       } else {
-        router.push("/blog/admin/login");
+        router.replace("/blog/admin/login");
       }
     } catch (error) {
       console.error("Authentication check failed:", error);
-      router.push("/blog/admin/login");
-    } finally {
-      setLoading(false);
+      router.replace("/blog/admin/login");
     }
   }, [router]);
 
@@ -362,6 +361,10 @@ export default function BlogAdminPage() {
       </div>
     );
   };
+
+  if (loading && !isAuthenticated) {
+    return null;
+  }
 
   if (loading) {
     return (

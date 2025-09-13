@@ -2,7 +2,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useChat } from "@/lib/hooks/use-chat";
 import { v4 as uuidv4 } from "uuid";
-import { sendChatMessage } from "@/lib/AssistantRuntime";
 import { useAISettings } from "@/lib/useAISettings";
 import Image from "next/image";
 import { X, ArrowUp, Paperclip } from "lucide-react";
@@ -196,29 +195,55 @@ export default function UnifiedChatbot({
           let isDisplaying = false;
           let currentDisplayText = "";
 
-          // 逐字符显示函数
+          // 优化的流式显示算法 - 模拟ChatGPT体验
           const displayNextChar = async () => {
             if (isDisplaying) return;
             isDisplaying = true;
 
             while (displayQueue.length > 0) {
-              const char = displayQueue.shift()!;
-              currentDisplayText += char;
+              // 智能批量处理 - 根据内容类型动态调整
+              let batchSize = 1;
+              const remainingLength = displayQueue.length;
 
+              // 根据剩余内容动态调整批量大小
+              if (remainingLength > 200) {
+                batchSize = 12; // 超长文本快速显示
+              } else if (remainingLength > 100) {
+                batchSize = 8; // 长文本中等速度
+              } else if (remainingLength > 50) {
+                batchSize = 4; // 中等文本
+              } else if (remainingLength > 20) {
+                batchSize = 2; // 短文本
+              } else {
+                batchSize = 1; // 最后几个字符逐个显示
+              }
+
+              let batchText = "";
+              for (let i = 0; i < batchSize && displayQueue.length > 0; i++) {
+                const char = displayQueue.shift()!;
+                batchText += char;
+              }
+
+              currentDisplayText += batchText;
               assistantMessage = {
                 ...assistantMessage,
                 content: currentDisplayText,
               };
               appendMessage(assistantMessage);
 
-              // 根据字符类型调整延迟
+              // 根据批量大小动态调整延迟
               const delay =
-                char === " " || char === "\n"
-                  ? 5
-                  : /[\u4e00-\u9fa5]/.test(char)
+                remainingLength > 100
+                  ? 3
+                  : remainingLength > 50
                   ? 8
-                  : 3; // 中文8ms，英文3ms，空格5ms
-              await new Promise((resolve) => setTimeout(resolve, delay));
+                  : remainingLength > 20
+                  ? 12
+                  : 18; // 最后几个字符稍慢一些
+
+              if (delay > 0) {
+                await new Promise((resolve) => setTimeout(resolve, delay));
+              }
             }
 
             isDisplaying = false;
@@ -251,9 +276,10 @@ export default function UnifiedChatbot({
                   const data = JSON.parse(dataStr);
                   if (data.text) {
                     if (isFirstChunk) {
+                      // 超快速响应 - 立即隐藏thinking状态
                       setIsLoading(false);
                       isFirstChunk = false;
-                      // 创建并显示消息容器
+                      // 立即创建并显示消息容器
                       appendMessage(assistantMessage);
                     }
 
@@ -261,7 +287,7 @@ export default function UnifiedChatbot({
                     const newChars = data.text.split("");
                     displayQueue.push(...newChars);
 
-                    // 开始显示（如果还没开始）
+                    // 立即开始显示（如果还没开始）
                     if (!isDisplaying) {
                       displayNextChar();
                     }
@@ -368,11 +394,12 @@ export default function UnifiedChatbot({
       }`}
     >
       <div
-        className={`flex-1 overflow-y-auto chatbot-scrollbar ${
-          mode === "standalone" ? "px-4 py-4" : "px-6 py-4"
+        className={`flex-1 chatbot-scrollbar ${
+          mode === "standalone"
+            ? "px-4 py-4 overflow-y-auto"
+            : "px-6 py-4 overflow-y-auto"
         }`}
         style={{
-          height: mode === "standalone" ? "calc(100vh - 208px)" : "auto",
           paddingBottom: mode === "standalone" ? "160px" : "80px",
         }}
       >
@@ -382,7 +409,7 @@ export default function UnifiedChatbot({
           }`}
         >
           {messages.length === 0 && (
-            <div className="text-center py-12">
+            <div className="text-center py-12 pt-16">
               <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <span className="text-2xl">🤖</span>
               </div>
@@ -436,7 +463,7 @@ export default function UnifiedChatbot({
                       }}
                       className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
                     >
-                      Add to Blog
+                      Add to Page
                     </button>
                   </div>
                 )}
@@ -450,17 +477,19 @@ export default function UnifiedChatbot({
               >
                 <div className="flex items-center space-x-2">
                   <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
                     <div
-                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"
                       style={{ animationDelay: "0.1s" }}
                     ></div>
                     <div
-                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"
                       style={{ animationDelay: "0.2s" }}
                     ></div>
                   </div>
-                  <span className="text-sm text-gray-500">Thinking...</span>
+                  <span className="text-sm text-blue-600">
+                    AI is thinking...
+                  </span>
                 </div>
               </div>
             </div>

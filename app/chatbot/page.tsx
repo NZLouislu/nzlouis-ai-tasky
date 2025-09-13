@@ -93,9 +93,9 @@ export default function Page() {
         className={`flex-1 flex flex-col bg-white transition-all duration-200 overflow-hidden ${
           sidebarCollapsed ? "ml-0 md:ml-12" : "ml-0 md:ml-64"
         }`}
-        style={{ height: "calc(100vh - 68px)", marginTop: "68px" }}
+        style={{ marginTop: "68px" }}
       >
-        <div className="flex-1 max-w-[900px] mx-auto w-full h-full overflow-hidden">
+        <div className="flex-1 max-w-[900px] mx-auto w-full h-full">
           <UnifiedChatbot
             mode="standalone"
             sidebarCollapsed={sidebarCollapsed}

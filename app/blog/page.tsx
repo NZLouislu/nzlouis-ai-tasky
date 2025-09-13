@@ -4,7 +4,7 @@ import Blog from "@/components/Blog";
 
 export default function BlogPage() {
   return (
-    <div className="h-screen">
+    <div className="h-screen overflow-hidden">
       <Blog />
     </div>
   );

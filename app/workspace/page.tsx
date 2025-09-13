@@ -4,7 +4,7 @@ import Workspace from "@/components/Workspace";
 
 export default function WorkspacePage() {
   return (
-    <div className="h-screen">
+    <div className="h-screen overflow-hidden">
       <Workspace />
     </div>
   );

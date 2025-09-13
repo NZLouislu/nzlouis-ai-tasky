@@ -39,7 +39,7 @@ export default function Page() {
     switch (activePage) {
       case "task-board":
         return (
-          <div className="flex-1 bg-gray-50">
+          <div className="flex-1 h-full overflow-y-auto chatbot-scrollbar">
             <TaskList initialBoard={boardData} />
           </div>
         );
@@ -107,7 +107,7 @@ export default function Page() {
         );
       default:
         return (
-          <div className="flex-1 bg-gray-50">
+          <div className="flex-1 h-full overflow-y-auto chatbot-scrollbar">
             <TaskList initialBoard={boardData} />
           </div>
         );
@@ -115,7 +115,7 @@ export default function Page() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 pt-16">
+    <div className="flex h-screen bg-gray-50 overflow-hidden">
       {!sidebarCollapsed && (
         <Sidebar
           title="Task Management"
@@ -158,6 +158,7 @@ export default function Page() {
         className={`flex-1 flex flex-col transition-all duration-200 ${
           sidebarCollapsed ? "ml-0 md:ml-12" : "ml-0 md:ml-64"
         }`}
+        style={{ paddingTop: "64px" }}
       >
         <div className="md:hidden p-4 border-b border-gray-200">
           <button
@@ -180,7 +181,9 @@ export default function Page() {
           </button>
         </div>
 
-        <div className="flex-1 flex flex-col h-full">{renderContent()}</div>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {renderContent()}
+        </div>
       </div>
     </div>
   );

@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { PartialBlock } from "@blocknote/core";
 import {
   Plus,
-  Image,
+  Image as ImageIcon,
   Trash2,
   Menu,
   MoreHorizontal,
@@ -370,219 +370,192 @@ export default function Workspace() {
           </button>
         </div>
 
-        <div className="flex-1 flex overflow-hidden relative">
-          <div
-            className={`flex-1 h-full transition-all duration-300`}
-            style={{
-              marginRight:
-                isChatbotVisible && !isMobile ? `${chatbotWidth}px` : "0",
-            }}
-          >
-            <div className="py-8 h-full overflow-y-auto">
-              <div className="max-w-[900px] mx-auto pl-5 md:px-6 lg:px-8">
-                <div className="flex justify-start">
-                  <div className="w-full">
-                    {/* Cover */}
-                    {activePage.cover && (
-                      <div
-                        className="relative mb-8 rounded-lg overflow-hidden"
-                        onMouseEnter={() => setShowCoverActions(true)}
-                        onMouseLeave={() => setShowCoverActions(false)}
-                        style={{
-                          height: "12rem",
-                        }}
+        <div className="h-full overflow-y-auto chatbot-scrollbar">
+          <div className="max-w-[900px] mx-auto px-6 py-8">
+            <div className="w-full">
+              {activePage.cover && (
+                <div
+                  className="relative mb-8 rounded-lg overflow-hidden"
+                  onMouseEnter={() => setShowCoverActions(true)}
+                  onMouseLeave={() => setShowCoverActions(false)}
+                  style={{
+                    height: "12rem",
+                  }}
+                >
+                  {activePage.cover.type === "color" ? (
+                    <div className={`h-full ${activePage.cover.value}`}></div>
+                  ) : (
+                    <div
+                      className="h-full bg-cover bg-center"
+                      style={{
+                        backgroundImage: `url(${activePage.cover.value})`,
+                      }}
+                    ></div>
+                  )}
+                  <div
+                    className={`absolute bottom-4 right-4 flex space-x-2 transition-opacity duration-200 ${
+                      showCoverActions ||
+                      (!activePage.icon && !activePage.cover)
+                        ? "opacity-100"
+                        : "opacity-0"
+                    }`}
+                  >
+                    <button
+                      onClick={() => setShowCoverOptions(true)}
+                      className="px-3 py-1 bg-white bg-opacity-80 text-sm rounded hover:bg-opacity-100"
+                    >
+                      Change Cover
+                    </button>
+                    <button
+                      onClick={() => removePageCover(activePageId)}
+                      className="p-1 bg-white bg-opacity-80 rounded hover:bg-opacity-100"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-4">
+                    {!activePage.icon && !activePage.cover && (
+                      <button
+                        onClick={() => setShowIconSelector(!showIconSelector)}
+                        className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors"
                       >
-                        {activePage.cover.type === "color" ? (
-                          <div
-                            className={`h-full ${activePage.cover.value}`}
-                          ></div>
-                        ) : (
-                          <div
-                            className="h-full bg-cover bg-center"
-                            style={{
-                              backgroundImage: `url(${activePage.cover.value})`,
-                            }}
-                          ></div>
-                        )}
-                        <div
-                          className={`absolute bottom-4 right-4 flex space-x-2 transition-opacity duration-200 ${
-                            showCoverActions ||
-                            (!activePage.icon && !activePage.cover)
-                              ? "opacity-100"
-                              : "opacity-0"
-                          }`}
-                        >
-                          <button
-                            onClick={() => setShowCoverOptions(true)}
-                            className="px-3 py-1 bg-white bg-opacity-80 text-sm rounded hover:bg-opacity-100"
-                          >
-                            Change Cover
-                          </button>
-                          <button
-                            onClick={() => removePageCover(activePageId)}
-                            className="p-1 bg-white bg-opacity-80 rounded hover:bg-opacity-100"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </div>
+                        <Plus size={16} className="mr-2" />
+                        Add Icon
+                      </button>
                     )}
 
-                    {/* Title + Actions */}
-                    <div className="mb-6 pl-[23px] md:pl-0">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center space-x-4">
-                          {!activePage.icon && !activePage.cover && (
-                            <button
-                              onClick={() =>
-                                setShowIconSelector(!showIconSelector)
-                              }
-                              className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors"
-                            >
-                              <Plus size={16} className="mr-2" />
-                              Add Icon
-                            </button>
-                          )}
+                    {!activePage.cover && (
+                      <button
+                        onClick={() => setShowCoverOptions(!showCoverOptions)}
+                        className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors"
+                      >
+                        <ImageIcon size={16} className="mr-2" />
+                        Add Cover
+                      </button>
+                    )}
+                  </div>
 
-                          {!activePage.cover && (
-                            <button
-                              onClick={() =>
-                                setShowCoverOptions(!showCoverOptions)
-                              }
-                              className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors"
-                            >
-                              {/* eslint-disable-next-line jsx-a11y/alt-text */}
-                              <Image
-                                size={16}
-                                className="mr-2"
-                                aria-hidden="true"
-                              />
-                              Add Cover
-                            </button>
-                          )}
-                        </div>
+                  <button className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
+                    <MoreHorizontal size={16} />
+                  </button>
+                </div>
 
-                        <button className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
-                          <MoreHorizontal size={16} />
+                {showIconSelector && (
+                  <div className="mb-4 p-4 bg-white border border-gray-200 rounded-lg shadow-lg">
+                    <div className="grid grid-cols-8 gap-3">
+                      {iconOptions.map((icon) => (
+                        <button
+                          key={icon}
+                          onClick={() => setPageIcon(activePageId, icon)}
+                          className="text-2xl p-3 hover:bg-gray-100 rounded-lg transition-colors"
+                        >
+                          {icon}
                         </button>
-                      </div>
+                      ))}
+                      <button
+                        onClick={() => removePageIcon(activePageId)}
+                        className="text-sm p-3 hover:bg-gray-100 rounded-lg flex items-center justify-center text-gray-500"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-                      {showIconSelector && (
-                        <div className="mb-4 p-4 bg-white border border-gray-200 rounded-lg shadow-lg">
-                          <div className="grid grid-cols-8 gap-3">
-                            {iconOptions.map((icon) => (
-                              <button
-                                key={icon}
-                                onClick={() => setPageIcon(activePageId, icon)}
-                                className="text-2xl p-3 hover:bg-gray-100 rounded-lg transition-colors"
-                              >
-                                {icon}
-                              </button>
-                            ))}
-                            <button
-                              onClick={() => removePageIcon(activePageId)}
-                              className="text-sm p-3 hover:bg-gray-100 rounded-lg flex items-center justify-center text-gray-500"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {showCoverOptions && (
-                        <div className="mb-4 p-4 bg-white border border-gray-200 rounded-lg shadow-lg relative">
+                {showCoverOptions && (
+                  <div className="mb-4 p-4 bg-white border border-gray-200 rounded-lg shadow-lg relative">
+                    <button
+                      onClick={() => setShowCoverOptions(false)}
+                      className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                      title="Close"
+                    >
+                      <X size={16} />
+                    </button>
+                    <div className="mb-4">
+                      <h3 className="text-sm font-medium text-gray-700 mb-3">
+                        Colors
+                      </h3>
+                      <div className="flex flex-wrap gap-3">
+                        {colorOptions.map((color) => (
                           <button
-                            onClick={() => setShowCoverOptions(false)}
-                            className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                            title="Close"
-                          >
-                            <X size={16} />
-                          </button>
-                          <div className="mb-4">
-                            <h3 className="text-sm font-medium text-gray-700 mb-3">
-                              Colors
-                            </h3>
-                            <div className="flex flex-wrap gap-3">
-                              {colorOptions.map((color) => (
-                                <button
-                                  key={color}
-                                  onClick={() =>
-                                    setPageCover(activePageId, {
-                                      type: "color",
-                                      value: color,
-                                    })
-                                  }
-                                  className={`w-10 h-10 rounded-lg ${color} hover:opacity-80 transition-opacity`}
-                                ></button>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div>
-                            <h3 className="text-sm font-medium text-gray-700 mb-3">
-                              Upload Image
-                            </h3>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleCoverFileSelect}
-                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">
-                              Or enter image URL below
-                            </p>
-                            <input
-                              type="text"
-                              placeholder="Enter image URL"
-                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent mt-2"
-                              onBlur={(e) => {
-                                if (e.target.value) {
-                                  setPageCover(activePageId, {
-                                    type: "image",
-                                    value: e.target.value,
-                                  });
-                                }
-                              }}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="flex items-center">
-                        {activePage.icon && (
-                          <div className="relative mr-4">
-                            <span
-                              className="text-3xl cursor-pointer hover:bg-gray-100 p-2 rounded-lg transition-colors"
-                              onClick={() => setShowIconSelector(true)}
-                            >
-                              {activePage.icon}
-                            </span>
-                          </div>
-                        )}
-                        <div className="flex-1">
-                          <input
-                            id={`title-input-${activePageId}`}
-                            type="text"
-                            value={activePage.title}
-                            onChange={(e) =>
-                              updatePageTitle(activePageId, e.target.value)
+                            key={color}
+                            onClick={() =>
+                              setPageCover(activePageId, {
+                                type: "color",
+                                value: color,
+                              })
                             }
-                            placeholder="Untitled"
-                            className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-4xl font-bold text-gray-800 placeholder-gray-400"
-                          />
-                        </div>
+                            className={`w-10 h-10 rounded-lg ${color} hover:opacity-80 transition-opacity`}
+                          ></button>
+                        ))}
                       </div>
                     </div>
 
-                    {/* Editor */}
-                    <div className="min-h-[400px] -ml-8 pl-[23px] md:pl-0 pr-2">
-                      <Editor
-                        initialContent={activePage.content}
-                        onChange={updatePageContent}
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 mb-3">
+                        Upload Image
+                      </h3>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleCoverFileSelect}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Or enter image URL below
+                      </p>
+                      <input
+                        type="text"
+                        placeholder="Enter image URL"
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent mt-2"
+                        onBlur={(e) => {
+                          if (e.target.value)
+                            setPageCover(activePageId, {
+                              type: "image",
+                              value: e.target.value,
+                            });
+                        }}
                       />
                     </div>
                   </div>
+                )}
+
+                <div className="flex items-center">
+                  {activePage.icon && (
+                    <div className="relative mr-4">
+                      <span
+                        className="text-3xl cursor-pointer hover:bg-gray-100 p-2 rounded-lg transition-colors"
+                        onClick={() => setShowIconSelector(true)}
+                      >
+                        {activePage.icon}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <input
+                      id={`title-input-${activePageId}`}
+                      type="text"
+                      value={activePage.title}
+                      onChange={(e) =>
+                        updatePageTitle(activePageId, e.target.value)
+                      }
+                      placeholder="Untitled"
+                      className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-4xl font-bold text-gray-800 placeholder-gray-400"
+                    />
+                  </div>
                 </div>
+              </div>
+
+              <div className="min-h-[400px]">
+                <Editor
+                  initialContent={activePage.content}
+                  onChange={updatePageContent}
+                />
               </div>
             </div>
           </div>

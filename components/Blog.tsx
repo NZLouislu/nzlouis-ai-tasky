@@ -356,6 +356,7 @@ export default function Blog() {
         className={`flex-1 flex flex-col transition-all duration-200 ${
           sidebarCollapsed ? "ml-0 md:ml-12" : "ml-0 md:ml-64"
         }`}
+        style={{ paddingTop: "64px" }}
       >
         <div className="md:hidden p-4 border-b border-gray-200">
           <button
@@ -366,19 +367,16 @@ export default function Blog() {
           </button>
         </div>
 
-        <div
-          className={`flex-1 flex overflow-hidden ${
-            isChatbotVisible && !isMobile ? `pr-0` : ""
-          }`}
-          style={{
-            paddingTop: "80px",
-            paddingRight:
-              isChatbotVisible && !isMobile ? `${chatbotWidth}px` : "0",
-          }}
-        >
-          <div className="flex-1 overflow-y-auto">
-            <div className="px-6 pb-8">
-              <div className="max-w-[900px] mx-auto">
+        <div className="flex-1 flex overflow-hidden relative">
+          <div
+            className={`flex-1 transition-all duration-300`}
+            style={{
+              marginRight:
+                isChatbotVisible && !isMobile ? `${chatbotWidth}px` : "0",
+            }}
+          >
+            <div className="h-full overflow-y-auto chatbot-scrollbar">
+              <div className="max-w-[900px] mx-auto px-6 py-8">
                 <div className="w-full">
                   {activePost.cover && (
                     <div
@@ -538,7 +536,7 @@ export default function Blog() {
                       </div>
                     )}
 
-                    <div className="flex items-center">
+                    <div className="flex items-center justify-center">
                       {activePost.icon && (
                         <div className="relative mr-4">
                           <span
@@ -549,7 +547,7 @@ export default function Blog() {
                           </span>
                         </div>
                       )}
-                      <div className="flex-1">
+                      <div className="flex-1 text-center">
                         <input
                           id={`title-input-${activePostId}`}
                           type="text"
@@ -558,7 +556,7 @@ export default function Blog() {
                             updatePostTitle(activePostId, e.target.value)
                           }
                           placeholder="Untitled"
-                          className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-4xl font-bold text-gray-800 placeholder-gray-400"
+                          className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-4xl font-bold text-gray-800 placeholder-gray-400 text-center"
                         />
                       </div>
                     </div>
