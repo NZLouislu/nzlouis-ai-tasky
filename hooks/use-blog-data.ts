@@ -2,20 +2,24 @@ import { useState, useEffect, useCallback } from "react";
 import { useBlogStore } from "@/lib/stores/blog-store";
 import type { PartialBlock } from "@blocknote/core";
 
-interface BlogPost {
+interface PostCover {
+  type: "color" | "image";
+  value: string;
+}
+
+export interface BlogPost {
   id: string;
   user_id: string;
   title: string;
   content: PartialBlock[];
   icon?: string;
-  cover?: {
-    type: "color" | "image";
-    value: string;
-  };
+  cover?: PostCover;
   published?: boolean;
   created_at?: string;
   updated_at?: string;
+  parent_id?: string | null;
   children?: BlogPost[];
+  [key: string]: unknown;
 }
 
 export const useBlogData = () => {
@@ -78,23 +82,42 @@ export const useBlogData = () => {
   useEffect(() => {
     let isMounted = true;
 
-    if (isInitialized && blogPosts.length > 0) {
-      const convertedPosts = blogPosts.map((post) => ({
+    const convertPost = (post: any): BlogPost => {
+      let content: PartialBlock[] = [];
+      if (
+        post.content &&
+        typeof post.content === "object" &&
+        Array.isArray(post.content)
+      ) {
+        content = post.content as PartialBlock[];
+      } else if (post.content && typeof post.content === "string") {
+        try {
+          const parsed = JSON.parse(post.content);
+          if (Array.isArray(parsed)) {
+            content = parsed as PartialBlock[];
+          }
+        } catch (e) {
+          content = [];
+        }
+      }
+
+      return {
         id: post.id,
         user_id: post.user_id,
         title: post.title,
-        content: (post.content as unknown as PartialBlock[]) || [],
+        content,
         icon: post.icon || undefined,
-        cover:
-          (post.cover as unknown as {
-            type: "color" | "image";
-            value: string;
-          }) || undefined,
+        cover: (post.cover as unknown as PostCover) || undefined,
         published: post.published,
         created_at: post.created_at,
         updated_at: post.updated_at,
-        children: [],
-      }));
+        parent_id: post.parent_id,
+        children: post.children ? post.children.map(convertPost) : [],
+      };
+    };
+
+    if (isInitialized && blogPosts.length > 0) {
+      const convertedPosts = blogPosts.map(convertPost);
 
       if (isMounted) {
         setLocalPosts(convertedPosts);
@@ -145,10 +168,20 @@ export const useBlogData = () => {
     return () => {
       isMounted = false;
     };
-  }, [blogPosts, isLoading, localPosts.length, isInitialized]);
+  }, [blogPosts, isLoading, isInitialized]);
 
   const addNewPost = useCallback(async () => {
-    const newPostId = generateUUID();
+    const newPostId = await createPost({
+      user_id: "00000000-0000-0000-0000-000000000000",
+      title: `Post ${localPosts.length + 1}`,
+      content: null,
+      published: false,
+      parent_id: null,
+      position: null,
+      icon: null,
+      cover: null,
+    });
+
     const newPostData = {
       id: newPostId,
       user_id: "00000000-0000-0000-0000-000000000000",
@@ -157,36 +190,32 @@ export const useBlogData = () => {
       published: false,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      children: [],
     };
 
-    try {
-      await createPost({
+    setLocalPosts((prev) => [...prev, newPostData]);
+    return newPostId;
+  }, [localPosts.length, createPost]);
+
+  const addNewSubPost = useCallback(
+    async (parentId: string) => {
+      const parentPost = localPosts.find((p) => p.id === parentId);
+      if (!parentPost) return;
+
+      const subPostCount = parentPost?.children?.length || 0;
+
+      const newSubPostId = await createPost({
         user_id: "00000000-0000-0000-0000-000000000000",
-        title: newPostData.title,
+        title: `Sub post ${subPostCount + 1}`,
         content: null,
         published: false,
-        parent_id: null,
+        parent_id: parentId,
         position: null,
         icon: null,
         cover: null,
       });
 
-      setLocalPosts((prev) => [...prev, { ...newPostData, children: [] }]);
-      return newPostId;
-    } catch (error) {
-      console.error("Failed to create post:", error);
-      setLocalPosts((prev) => [...prev, { ...newPostData, children: [] }]);
-      return newPostId;
-    }
-  }, [localPosts.length, createPost]);
-
-  const addNewSubPost = useCallback(
-    (parentId: string) => {
-      const parentPost = localPosts.find((p) => p.id === parentId);
-      const subPostCount = parentPost?.children?.length || 0;
-      const newSubPostId = generateUUID();
-
-      const newSubPost: BlogPost = {
+      const newSubPostData: BlogPost = {
         id: newSubPostId,
         user_id: "00000000-0000-0000-0000-000000000000",
         title: `Sub post ${subPostCount + 1}`,
@@ -194,6 +223,8 @@ export const useBlogData = () => {
         published: false,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        parent_id: parentId,
+        children: [],
       };
 
       setLocalPosts((prev) =>
@@ -201,16 +232,14 @@ export const useBlogData = () => {
           if (post.id === parentId) {
             return {
               ...post,
-              children: [...(post.children || []), newSubPost],
+              children: [...(post.children || []), newSubPostData],
             };
           }
           return post;
         })
       );
-
-      return newSubPostId;
     },
-    [localPosts]
+    [localPosts, createPost]
   );
 
   const updatePostTitle = useCallback(
@@ -393,12 +422,9 @@ export const useBlogData = () => {
   }, []);
 
   const setPostCover = useCallback(
-    async (
-      postId: string,
-      cover: { type: "color" | "image"; value: string }
-    ) => {
+    async (postId: string, cover: PostCover) => {
       try {
-        await updatePostContent(postId, { cover: cover as unknown as JSON });
+        await updatePostContent(postId, { cover });
 
         setLocalPosts((prev) =>
           prev.map((post) => {

@@ -44,20 +44,6 @@ export interface EnvironmentConfig {
  * @returns EnvironmentConfig environment configuration object
  */
 export function getEnvironmentConfig(): EnvironmentConfig {
-  console.log("Reading environment variables...");
-  console.log(
-    "NEXT_PUBLIC_SUPABASE_URL:",
-    process.env.NEXT_PUBLIC_SUPABASE_URL
-  );
-  console.log(
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY:",
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "Present" : "Missing"
-  );
-  console.log(
-    "TASKY_SUPABASE_SERVICE_ROLE_KEY:",
-    process.env.TASKY_SUPABASE_SERVICE_ROLE_KEY ? "Present" : "Missing"
-  );
-
   const config = {
     // Admin authentication config
     adminUsername: process.env.ADMIN_USERNAME,

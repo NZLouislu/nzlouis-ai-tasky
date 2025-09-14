@@ -25,16 +25,20 @@ const Editor = dynamic(() => import("./Editor"), {
 
 const DEFAULT_POST_ID = "11111111-1111-1111-1111-111111111111";
 
+interface PostCover {
+  type: "color" | "image";
+  value: string;
+}
+
 interface Post {
   id: string;
   title: string;
   content: PartialBlock[];
   icon?: string;
-  cover?: {
-    type: "color" | "image";
-    value: string;
-  };
+  cover?: PostCover;
+  parent_id?: string | null;
   children?: Post[];
+  [key: string]: unknown;
 }
 
 export default function Blog() {
@@ -97,7 +101,7 @@ export default function Blog() {
       title: p.title,
       content: (p.content as PartialBlock[]) || [],
       icon: p.icon as string | undefined,
-      cover: p.cover as { type: "color" | "image"; value: string } | undefined,
+      cover: p.cover as PostCover | undefined,
       children: (p as unknown as Post).children || [],
     }));
     setLocalPosts(mapped);

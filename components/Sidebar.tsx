@@ -22,15 +22,18 @@ interface SidebarProps {
   pages: Page[];
   activePageId: string;
   onAddPage?: () => void;
-  onAddSubPage?: (parentPageId: string) => void;
-  onUpdatePageTitle?: (pageId: string, newTitle: string) => void;
+  onAddSubPage?: (parentPageId: string) => void | Promise<void>;
+  onUpdatePageTitle?: (
+    pageId: string,
+    newTitle: string
+  ) => void | Promise<void>;
   onSelectPage: (pageId: string, href?: string) => void;
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   className?: string;
   onCollapse?: () => void;
   expandedPages?: Set<string>;
-  onToggleExpand?: (pageId: string) => void; // Add this line
+  onToggleExpand?: (pageId: string) => void;
 }
 
 export default function Sidebar({
@@ -47,7 +50,7 @@ export default function Sidebar({
   className = "",
   onCollapse,
   expandedPages,
-  onToggleExpand, // Add this line
+  onToggleExpand,
 }: SidebarProps) {
   const [localExpandedPages, setLocalExpandedPages] = useState<Set<string>>(
     new Set()
@@ -151,7 +154,10 @@ export default function Sidebar({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onAddSubPage(page.id);
+                    const result = onAddSubPage(page.id);
+                    if (result instanceof Promise) {
+                      result.catch(console.error);
+                    }
                   }}
                   className="opacity-100 group-hover:opacity-100 p-1 text-green-600 hover:text-green-800 rounded transition-opacity"
                   title="Add sub-page"

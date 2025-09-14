@@ -4,7 +4,19 @@ import type { Database as TaskyDatabase } from "@/lib/supabase/supabase-client";
 import { blogDb } from "@/lib/supabase/blog-client";
 import type { Database as BlogDatabase } from "@/lib/supabase/blog-client";
 
-type BlogPost = TaskyDatabase["public"]["Tables"]["blog_posts"]["Row"];
+interface PostCover {
+  type: "color" | "image";
+  value: string;
+}
+
+type BlogPost = Omit<
+  TaskyDatabase["public"]["Tables"]["blog_posts"]["Row"],
+  "cover"
+> & {
+  cover?: PostCover | null;
+  children?: BlogPost[];
+  [key: string]: unknown;
+};
 type Comment = BlogDatabase["public"]["Tables"]["comments"]["Row"];
 type FeatureToggles =
   BlogDatabase["public"]["Tables"]["feature_toggles"]["Row"];
@@ -66,9 +78,14 @@ interface BlogState {
   // Blog posts
   fetchPosts: (userId: string) => Promise<void>;
   createPost: (
-    post: Omit<BlogPost, "id" | "created_at" | "updated_at">
+    postData: Omit<BlogPost, "id" | "created_at" | "updated_at"> & {
+      parent_id?: string | null;
+    }
+  ) => Promise<string>;
+  updatePostContent: (
+    id: string,
+    updates: Partial<BlogPost> & { parent_id?: string | null }
   ) => Promise<void>;
-  updatePostContent: (id: string, updates: Partial<BlogPost>) => Promise<void>;
   deletePostContent: (id: string) => Promise<void>;
 
   // Comments
@@ -145,15 +162,49 @@ export const useBlogStore = create<BlogState>((set) => ({
         return;
       }
 
-      const { data, error } = await supabase
+      const { data: rootPosts, error } = await supabase
         .from("blog_posts")
         .select("*")
         .eq("user_id", userId)
+        .is("parent_id", null)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
 
-      set({ posts: data || [] });
+      const postsWithChildren = await Promise.all(
+        (rootPosts || []).map(async (post) => {
+          if (!supabase) return post as BlogPost;
+          const { data: children } = await supabase
+            .from("blog_posts")
+            .select("*")
+            .eq("user_id", userId)
+            .eq("parent_id", post.id)
+            .order("created_at", { ascending: false });
+
+          const postWithChildren = {
+            ...post,
+            children: children || [],
+          } as BlogPost;
+
+          // Recursively load grandchildren if needed
+          postWithChildren.children = await Promise.all(
+            (postWithChildren.children || []).map(async (child) => {
+              if (!supabase) return child as BlogPost;
+              const { data: grandchildren } = await supabase
+                .from("blog_posts")
+                .select("*")
+                .eq("user_id", userId)
+                .eq("parent_id", child.id)
+                .order("created_at", { ascending: false });
+              return { ...child, children: grandchildren || [] } as BlogPost;
+            })
+          );
+
+          return postWithChildren;
+        })
+      );
+
+      set({ posts: postsWithChildren });
     } catch (error) {
       console.error("Error fetching posts:", error);
       set({
@@ -164,12 +215,21 @@ export const useBlogStore = create<BlogState>((set) => ({
     }
   },
 
-  createPost: async (postData) => {
+  createPost: async (
+    postData: Omit<BlogPost, "id" | "created_at" | "updated_at"> & {
+      parent_id?: string | null;
+    }
+  ): Promise<string> => {
     set({ isLoading: true, error: null });
 
     // Generate a new ID if not provided
-    const postId = "id" in postData ? postData.id : generateUUID();
-    const postWithId = { ...postData, id: postId };
+    const postId: string =
+      "id" in postData ? (postData.id as string) : generateUUID();
+    const postWithId = {
+      ...postData,
+      id: postId,
+      parent_id: postData.parent_id ?? null,
+    };
 
     try {
       if (!supabase) {
@@ -178,11 +238,38 @@ export const useBlogStore = create<BlogState>((set) => ({
         );
         const tempPost = {
           ...postWithId,
+          user_id: "offline-user",
+          title: "title" in postWithId ? postWithId.title : "Untitled",
+          content: null,
+          published: false,
+          position: null,
+          icon: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
+          children: [],
         } as BlogPost;
-        set((state) => ({ posts: [tempPost, ...state.posts] }));
-        return;
+        const updatePosts = (posts: BlogPost[]): BlogPost[] => {
+          return posts.map((post) => {
+            if (post.id === postWithId.parent_id) {
+              return {
+                ...post,
+                children: [
+                  ...(post.children || []),
+                  { ...tempPost, children: [] },
+                ],
+              };
+            }
+            if (post.children) {
+              return {
+                ...post,
+                children: updatePosts(post.children),
+              };
+            }
+            return post;
+          });
+        };
+        set((state) => ({ posts: updatePosts(state.posts) }));
+        return postId;
       }
 
       const { data, error } = await supabase
@@ -200,20 +287,90 @@ export const useBlogStore = create<BlogState>((set) => ({
       }
 
       // Use the first item since we're inserting one post
-      const createdPost = data[0];
+      const createdPost = data[0] as BlogPost;
 
-      set((state) => ({ posts: [...state.posts, createdPost as BlogPost] }));
+      const updatePosts = (posts: BlogPost[]): BlogPost[] => {
+        return posts.map((post) => {
+          if (post.id === postWithId.parent_id) {
+            return {
+              ...post,
+              children: [
+                ...(post.children || []),
+                { ...createdPost, children: [] },
+              ],
+            };
+          }
+          if (post.children) {
+            return {
+              ...post,
+              children: updatePosts(post.children),
+            };
+          }
+          return post;
+        });
+      };
+
+      if (postWithId.parent_id) {
+        set((state) => ({ posts: updatePosts(state.posts) }));
+      } else {
+        set((state) => ({
+          posts: [...state.posts, { ...createdPost, children: [] }],
+        }));
+      }
+      return postId;
     } catch (error) {
       console.error("Error creating post:", error);
       set({
         error: error instanceof Error ? error.message : "Failed to create post",
       });
+      // Fallback to local addition in case of error
+      const tempPost = {
+        ...postWithId,
+        user_id: "offline-user",
+        title: "title" in postWithId ? postWithId.title : "Untitled",
+        content: null,
+        published: false,
+        position: null,
+        icon: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        children: [],
+      } as BlogPost;
+      const updatePosts = (posts: BlogPost[]): BlogPost[] => {
+        return posts.map((post) => {
+          if (post.id === postWithId.parent_id) {
+            return {
+              ...post,
+              children: [
+                ...(post.children || []),
+                { ...tempPost, children: [] },
+              ],
+            };
+          }
+          if (post.children) {
+            return {
+              ...post,
+              children: updatePosts(post.children),
+            };
+          }
+          return post;
+        });
+      };
+      if (postWithId.parent_id) {
+        set((state) => ({ posts: updatePosts(state.posts) }));
+      } else {
+        set((state) => ({ posts: [...state.posts, tempPost] }));
+      }
+      return postId;
     } finally {
       set({ isLoading: false });
     }
   },
 
-  updatePostContent: async (id, updates) => {
+  updatePostContent: async (
+    id,
+    updates: Partial<BlogPost> & { parent_id?: string | null }
+  ) => {
     set({ isLoading: true, error: null });
     try {
       if (!supabase) {
@@ -223,17 +380,28 @@ export const useBlogStore = create<BlogState>((set) => ({
         set((state) => ({
           posts: state.posts.map((post) =>
             post.id === id
-              ? { ...post, ...updates, updated_at: new Date().toISOString() }
+              ? {
+                  ...post,
+                  ...updates,
+                  updated_at: new Date().toISOString(),
+                  children: post.children,
+                }
               : post
           ),
         }));
         return;
       }
 
+      const updateData = {
+        ...updates,
+        updated_at: new Date().toISOString(),
+        parent_id: updates.parent_id ?? null,
+      };
+
       const { data, error } = await supabase
         .from("blog_posts")
         .update(
-          updates as TaskyDatabase["public"]["Tables"]["blog_posts"]["Update"]
+          updateData as TaskyDatabase["public"]["Tables"]["blog_posts"]["Update"]
         )
         .eq("id", id)
         .select();
@@ -246,11 +414,13 @@ export const useBlogStore = create<BlogState>((set) => ({
       }
 
       // Use the first item since we're updating by ID which should be unique
-      const updatedPost = data[0];
+      const updatedPost = data[0] as BlogPost;
 
       set((state) => ({
         posts: state.posts.map((post) =>
-          post.id === id ? (updatedPost as BlogPost) : post
+          post.id === id
+            ? { ...updatedPost, children: post.children || [] }
+            : post
         ),
       }));
     } catch (error) {
@@ -258,7 +428,12 @@ export const useBlogStore = create<BlogState>((set) => ({
       set((state) => ({
         posts: state.posts.map((post) =>
           post.id === id
-            ? { ...post, ...updates, updated_at: new Date().toISOString() }
+            ? {
+                ...post,
+                ...updates,
+                updated_at: new Date().toISOString(),
+                children: post.children || [],
+              }
             : post
         ),
       }));
