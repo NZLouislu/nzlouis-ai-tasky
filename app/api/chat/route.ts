@@ -480,7 +480,7 @@ export async function POST(request: NextRequest) {
                     }
 
                     if (text) {
-                      // 立即发送，不等待
+                      // Send immediately without waiting
                       controller.enqueue(
                         `data: ${JSON.stringify({ text })}\n\n`
                       );

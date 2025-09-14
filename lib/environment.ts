@@ -12,6 +12,7 @@ export interface EnvironmentConfig {
   // Task database (Supabase)
   taskySupabaseUrl?: string;
   taskySupabaseAnonKey?: string;
+  taskySupabaseServiceRoleKey?: string;
 
   // Blog database (Supabase)
   blogSupabaseUrl?: string;
@@ -43,14 +44,32 @@ export interface EnvironmentConfig {
  * @returns EnvironmentConfig environment configuration object
  */
 export function getEnvironmentConfig(): EnvironmentConfig {
-  return {
+  console.log("Reading environment variables...");
+  console.log(
+    "NEXT_PUBLIC_SUPABASE_URL:",
+    process.env.NEXT_PUBLIC_SUPABASE_URL
+  );
+  console.log(
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY:",
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "Present" : "Missing"
+  );
+  console.log(
+    "TASKY_SUPABASE_SERVICE_ROLE_KEY:",
+    process.env.TASKY_SUPABASE_SERVICE_ROLE_KEY ? "Present" : "Missing"
+  );
+
+  const config = {
     // Admin authentication config
     adminUsername: process.env.ADMIN_USERNAME,
     adminPassword: process.env.ADMIN_PASSWORD,
 
-    // Task database config
-    taskySupabaseUrl: process.env.TASKY_SUPABASE_URL,
-    taskySupabaseAnonKey: process.env.TASKY_SUPABASE_ANON_KEY,
+    // Task database config - Using new NEXT_PUBLIC environment variables
+    taskySupabaseUrl:
+      process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.TASKY_SUPABASE_URL,
+    taskySupabaseAnonKey:
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      process.env.TASKY_SUPABASE_ANON_KEY,
+    taskySupabaseServiceRoleKey: process.env.TASKY_SUPABASE_SERVICE_ROLE_KEY,
 
     // Blog database config
     blogSupabaseUrl: process.env.BLOG_SUPABASE_URL,
@@ -68,6 +87,16 @@ export function getEnvironmentConfig(): EnvironmentConfig {
     // System config
     nodeEnv: process.env.NODE_ENV,
   };
+
+  console.log("Final config:", {
+    taskySupabaseUrl: config.taskySupabaseUrl ? "Present" : "Missing",
+    taskySupabaseAnonKey: config.taskySupabaseAnonKey ? "Present" : "Missing",
+    taskySupabaseServiceRoleKey: config.taskySupabaseServiceRoleKey
+      ? "Present"
+      : "Missing",
+  });
+
+  return config;
 }
 
 /**
@@ -119,6 +148,18 @@ export function getTaskySupabaseConfig() {
   return {
     url: config.taskySupabaseUrl,
     anonKey: config.taskySupabaseAnonKey,
+  };
+}
+
+/**
+ * Get task database service role config
+ * @returns task database URL and service role key
+ */
+export function getTaskySupabaseServiceConfig() {
+  const config = getEnvironmentConfig();
+  return {
+    url: config.taskySupabaseUrl,
+    serviceRoleKey: config.taskySupabaseServiceRoleKey,
   };
 }
 

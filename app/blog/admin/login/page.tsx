@@ -20,7 +20,6 @@ export default function AdminLoginPage() {
       const result = await login(username, password);
 
       if (result.success) {
-        // Small delay to ensure token is set, especially important for embedded browsers
         setTimeout(
           () => {
             router.push("/blog/admin");

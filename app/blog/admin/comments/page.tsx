@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Menu } from "lucide-react";
+import { FaBars as Menu } from "react-icons/fa";
 import Sidebar from "@/components/Sidebar";
 import CommentsPanel from "@/components/blog/comments/CommentsPanel";
 

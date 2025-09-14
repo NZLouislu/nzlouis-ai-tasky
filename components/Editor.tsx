@@ -6,14 +6,21 @@ import { BlockNoteView } from "@blocknote/mantine";
 import { PartialBlock } from "@blocknote/core";
 import { useEffect, useRef, useCallback, useState } from "react";
 import AIContinuationPanel from "./AIContinuationPanel";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Save } from "lucide-react";
 
 interface EditorProps {
   initialContent?: PartialBlock[];
   onChange?: (content: PartialBlock[]) => void;
+  onSave?: () => void;
+  isSaving?: boolean;
 }
 
-export default function Editor({ initialContent, onChange }: EditorProps) {
+export default function Editor({
+  initialContent,
+  onChange,
+  onSave,
+  isSaving,
+}: EditorProps) {
   const editor = useCreateBlockNote({
     initialContent,
     defaultStyles: true,
@@ -28,6 +35,7 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
   const lastContentRef = useRef<PartialBlock[]>(initialContent || []);
   const selectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSelectionRef = useRef<string>("");
+  const contentChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (
@@ -42,6 +50,25 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
       }
     }
   }, [initialContent, editor]);
+
+  const handleContentChange = useCallback(() => {
+    if (contentChangeTimeoutRef.current) {
+      clearTimeout(contentChangeTimeoutRef.current);
+    }
+
+    contentChangeTimeoutRef.current = setTimeout(() => {
+      onChange?.(editor.document);
+    }, 5000);
+  }, [editor, onChange]);
+
+  const handleImmediateSave = useCallback(() => {
+    if (contentChangeTimeoutRef.current) {
+      clearTimeout(contentChangeTimeoutRef.current);
+      contentChangeTimeoutRef.current = null;
+    }
+    onChange?.(editor.document);
+    onSave?.();
+  }, [editor, onChange, onSave]);
 
   const insertImageDataUrl = useCallback(
     (dataUrl: string) => {
@@ -69,9 +96,9 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
       document.dispatchEvent(
         new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
       );
-      if (onChange) onChange(editor.document);
+      handleContentChange();
     },
-    [editor, onChange]
+    [editor, handleContentChange]
   );
 
   const handleTextSelection = useCallback(() => {
@@ -144,9 +171,9 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
         );
       }
       setShowAIPanel(false);
-      if (onChange) onChange(editor.document);
+      handleContentChange();
     },
-    [editor, onChange]
+    [editor, handleContentChange]
   );
 
   const handleAIClose = useCallback(() => {
@@ -305,6 +332,11 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
         clearTimeout(selectionTimeoutRef.current);
       }
 
+      // Clear the content change timer
+      if (contentChangeTimeoutRef.current) {
+        clearTimeout(contentChangeTimeoutRef.current);
+      }
+
       if (globalFileInputRef.current) {
         try {
           document.body.removeChild(globalFileInputRef.current);
@@ -312,7 +344,7 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
         globalFileInputRef.current = null;
       }
     };
-  }, [editor, insertImageDataUrl, onChange, handleTextSelection]);
+  }, [editor, insertImageDataUrl, handleContentChange, handleTextSelection]);
 
   return (
     <div className="w-full relative">
@@ -321,17 +353,27 @@ export default function Editor({ initialContent, onChange }: EditorProps) {
           <Sparkles className="h-4 w-4" />
           <span>AI Writing Assistant</span>
         </div>
-        <div className="text-xs">
-          Select text and press{" "}
-          <kbd className="px-1 py-0.5 bg-gray-100 rounded text-xs">Ctrl+K</kbd>{" "}
-          for AI suggestions
+        <div className="flex items-center space-x-2">
+          {/* 保存按钮 */}
+          <button
+            onClick={handleImmediateSave}
+            disabled={isSaving}
+            className={`flex items-center px-3 py-1 rounded text-sm ${
+              isSaving
+                ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                : "bg-blue-100 text-blue-700 hover:bg-blue-200"
+            }`}
+          >
+            <Save className="h-4 w-4 mr-1" />
+            {isSaving ? "Saving..." : "Save"}
+          </button>
         </div>
       </div>
 
       <div style={{ marginBottom: 12 }} className="no-wrap-editor">
         <BlockNoteView
           editor={editor}
-          onChange={() => onChange?.(editor.document)}
+          onChange={handleContentChange}
           theme="light"
           className="max-w-full"
         />

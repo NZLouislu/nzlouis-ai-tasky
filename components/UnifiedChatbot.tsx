@@ -190,32 +190,28 @@ export default function UnifiedChatbot({
             timestamp: new Date().toISOString(),
           };
 
-          // 用于逐字符显示的队列
           const displayQueue: string[] = [];
           let isDisplaying = false;
           let currentDisplayText = "";
 
-          // 优化的流式显示算法 - 模拟ChatGPT体验
           const displayNextChar = async () => {
             if (isDisplaying) return;
             isDisplaying = true;
 
             while (displayQueue.length > 0) {
-              // 智能批量处理 - 根据内容类型动态调整
               let batchSize = 1;
               const remainingLength = displayQueue.length;
 
-              // 根据剩余内容动态调整批量大小
               if (remainingLength > 200) {
-                batchSize = 12; // 超长文本快速显示
+                batchSize = 12; // Quick display for very long text
               } else if (remainingLength > 100) {
-                batchSize = 8; // 长文本中等速度
+                batchSize = 8; // Medium speed for long text
               } else if (remainingLength > 50) {
-                batchSize = 4; // 中等文本
+                batchSize = 4; // Medium text
               } else if (remainingLength > 20) {
-                batchSize = 2; // 短文本
+                batchSize = 2; // Short text
               } else {
-                batchSize = 1; // 最后几个字符逐个显示
+                batchSize = 1; // Display the last few characters one by one
               }
 
               let batchText = "";
@@ -231,7 +227,7 @@ export default function UnifiedChatbot({
               };
               appendMessage(assistantMessage);
 
-              // 根据批量大小动态调整延迟
+              // Dynamically adjust delay based on batch size
               const delay =
                 remainingLength > 100
                   ? 3
@@ -239,7 +235,7 @@ export default function UnifiedChatbot({
                   ? 8
                   : remainingLength > 20
                   ? 12
-                  : 18; // 最后几个字符稍慢一些
+                  : 18;
 
               if (delay > 0) {
                 await new Promise((resolve) => setTimeout(resolve, delay));
@@ -253,7 +249,6 @@ export default function UnifiedChatbot({
             const { done, value } = await reader.read();
             if (done) {
               setIsLoading(false);
-              // 确保所有字符都显示完
               if (displayQueue.length > 0) {
                 await displayNextChar();
               }
@@ -276,18 +271,14 @@ export default function UnifiedChatbot({
                   const data = JSON.parse(dataStr);
                   if (data.text) {
                     if (isFirstChunk) {
-                      // 超快速响应 - 立即隐藏thinking状态
                       setIsLoading(false);
                       isFirstChunk = false;
-                      // 立即创建并显示消息容器
                       appendMessage(assistantMessage);
                     }
 
-                    // 将新文本拆分为字符并加入队列
                     const newChars = data.text.split("");
                     displayQueue.push(...newChars);
 
-                    // 立即开始显示（如果还没开始）
                     if (!isDisplaying) {
                       displayNextChar();
                     }

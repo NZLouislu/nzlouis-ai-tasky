@@ -27,6 +27,30 @@ export const blogDb = (() => {
   }
 })();
 
+// Add a function to test the connection
+export const testBlogDbConnection = async () => {
+  if (!blogDb) {
+    console.error("Blog database client is not initialized");
+    return false;
+  }
+
+  try {
+    const { data, error } = await blogDb
+      .from("feature_toggles")
+      .select("*")
+      .limit(1);
+    if (error) {
+      console.error("Blog database connection test failed:", error);
+      return false;
+    }
+    console.log("Blog database connection test successful", data);
+    return true;
+  } catch (error) {
+    console.error("Blog database connection test failed:", error);
+    return false;
+  }
+};
+
 export type Database = {
   public: {
     Tables: {

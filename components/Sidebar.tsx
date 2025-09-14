@@ -1,6 +1,11 @@
 "use client";
 import { useState } from "react";
-import { Plus, ChevronRight, ChevronDown, PanelLeftClose } from "lucide-react";
+import {
+  FaPlus as Plus,
+  FaChevronRight as ChevronRight,
+  FaChevronDown as ChevronDown,
+  FaBars as PanelLeftClose,
+} from "react-icons/fa";
 import Link from "next/link";
 
 interface Page {
@@ -24,6 +29,8 @@ interface SidebarProps {
   setSidebarOpen: (open: boolean) => void;
   className?: string;
   onCollapse?: () => void;
+  expandedPages?: Set<string>;
+  onToggleExpand?: (pageId: string) => void; // Add this line
 }
 
 export default function Sidebar({
@@ -39,21 +46,34 @@ export default function Sidebar({
   setSidebarOpen,
   className = "",
   onCollapse,
+  expandedPages,
+  onToggleExpand, // Add this line
 }: SidebarProps) {
-  const [expandedPages, setExpandedPages] = useState<Set<string>>(new Set());
+  const [localExpandedPages, setLocalExpandedPages] = useState<Set<string>>(
+    new Set()
+  );
+
+  const currentExpandedPages = expandedPages || localExpandedPages;
 
   const toggleExpanded = (pageId: string) => {
-    const newExpanded = new Set(expandedPages);
+    if (onToggleExpand) {
+      onToggleExpand(pageId);
+      return;
+    }
+
+    const newExpanded = new Set(currentExpandedPages);
     if (newExpanded.has(pageId)) {
       newExpanded.delete(pageId);
     } else {
       newExpanded.add(pageId);
     }
-    setExpandedPages(newExpanded);
+    if (!expandedPages) {
+      setLocalExpandedPages(newExpanded);
+    }
   };
 
   const renderPage = (page: Page, level = 0) => {
-    const isExpanded = expandedPages.has(page.id);
+    const isExpanded = currentExpandedPages.has(page.id);
     const hasChildren = page.children && page.children.length > 0;
     const isActive = activePageId === page.id;
 
@@ -99,13 +119,9 @@ export default function Sidebar({
           <div className="group">
             <div
               onClick={() => {
-                if (hasChildren) {
-                  toggleExpanded(page.id);
-                } else {
-                  onSelectPage(page.id);
-                  if (window.innerWidth < 768) {
-                    setSidebarOpen(false);
-                  }
+                onSelectPage(page.id);
+                if (window.innerWidth < 768) {
+                  setSidebarOpen(false);
                 }
               }}
               className={`flex items-center px-3 py-2 text-sm rounded-lg cursor-pointer transition-colors ${
@@ -131,15 +147,13 @@ export default function Sidebar({
                 </button>
               )}
               <div className="flex-1">{content}</div>
-              {level === 0 && (
+              {onAddSubPage && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (onAddSubPage) {
-                      onAddSubPage(page.id);
-                    }
+                    onAddSubPage(page.id);
                   }}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-green-600 hover:text-green-800 rounded transition-opacity"
+                  className="opacity-100 group-hover:opacity-100 p-1 text-green-600 hover:text-green-800 rounded transition-opacity"
                   title="Add sub-page"
                 >
                   <Plus size={12} />

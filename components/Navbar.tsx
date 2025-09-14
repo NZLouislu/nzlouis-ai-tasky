@@ -1,13 +1,30 @@
 "use client";
 import { useState } from "react";
-import { Menu, X } from "lucide-react";
+import { FaBars as Menu, FaTimes as X } from "react-icons/fa";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleNavigation = (href: string) => {
+    if (pathname === "/blog" && href !== "/blog") {
+      window.dispatchEvent(
+        new CustomEvent("routeChange", {
+          detail: { pathname: href },
+        })
+      );
+
+      setTimeout(() => {
+        router.push(href);
+      }, 100);
+    } else {
+      router.push(href);
+    }
+  };
 
   const items = [
     { label: "Home", href: "/" },
@@ -51,14 +68,13 @@ export default function Navbar() {
           <div className="hidden md:flex">
             <div className="flex gap-6">
               {items.map((item) => (
-                <Link
+                <button
                   key={item.href}
-                  href={item.href}
+                  onClick={() => handleNavigation(item.href)}
                   className={linkCls(pathname === item.href)}
-                  prefetch
                 >
                   {item.label}
-                </Link>
+                </button>
               ))}
             </div>
           </div>
@@ -76,15 +92,16 @@ export default function Navbar() {
         <div className="md:hidden border-t border-slate-200 bg-white/95">
           <div className="flex flex-col gap-1 p-2">
             {items.map((item) => (
-              <Link
+              <button
                 key={item.href}
-                href={item.href}
+                onClick={() => {
+                  setOpen(false);
+                  handleNavigation(item.href);
+                }}
                 className={linkCls(pathname === item.href)}
-                onClick={() => setOpen(false)}
-                prefetch
               >
                 {item.label}
-              </Link>
+              </button>
             ))}
           </div>
         </div>

@@ -1,71 +1,81 @@
 import { NextRequest, NextResponse } from "next/server";
-import { blogDb } from "@/lib/supabase/blog-client";
+import { supabase } from "@/lib/supabase/supabase-client";
 
 export async function GET() {
   try {
-    if (!blogDb) {
+    if (!supabase) {
       return NextResponse.json(
-        { error: "Blog service is not configured" },
+        { error: "Database not configured" },
         { status: 503 }
       );
     }
 
-    const { data: posts, error } = await blogDb
-      .from("post_stats")
+    const userId = "user-1";
+
+    const { data, error } = await supabase
+      .from("blog_posts")
       .select("*")
-      .order("views", { ascending: false });
-
-    if (error) throw error;
-
-    return NextResponse.json(posts);
-  } catch (error) {
-    console.error("Error fetching posts:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch posts" },
-      { status: 500 }
-    );
-  }
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    if (!blogDb) {
-      return NextResponse.json(
-        { error: "Blog service is not configured" },
-        { status: 503 }
-      );
-    }
-
-    const body = await request.json();
-    const { post_id, title } = body;
-
-    if (!post_id || !title) {
-      return NextResponse.json(
-        { error: "post_id and title are required" },
-        { status: 400 }
-      );
-    }
-
-    const { data, error } = await blogDb
-      .from("post_stats")
-      .insert({
-        post_id,
-        title,
-        views: 0,
-        likes: 0,
-        ai_questions: 0,
-        ai_summaries: 0,
-      })
-      .select()
-      .single();
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
 
     if (error) throw error;
 
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Error creating post:", error);
+    console.error("Error fetching blog posts:", error);
     return NextResponse.json(
-      { error: "Failed to create post" },
+      { error: "Failed to fetch blog posts" },
+      { status: 500 }
+    );
+  }
+}
+
+// Create a new blog post
+export async function POST(request: NextRequest) {
+  try {
+    if (!supabase) {
+      return NextResponse.json(
+        { error: "Database not configured" },
+        { status: 503 }
+      );
+    }
+
+    const body = await request.json();
+
+    const userId = "user-1";
+
+    const { data, error } = await supabase
+      .from("blog_posts")
+      .insert({
+        user_id: userId,
+        parent_id: body.parent_id || null,
+        title: body.title || "Untitled",
+        content: body.content || null,
+        icon: body.icon || null,
+        cover: body.cover || null,
+        published: body.published || false,
+        position: body.position || null,
+      })
+      .select();
+
+    if (error) throw error;
+
+    // Check if any rows were inserted
+    if (!data || data.length === 0) {
+      return NextResponse.json(
+        { error: "Failed to create blog post" },
+        { status: 500 }
+      );
+    }
+
+    // Return the first (and should be only) created post
+    const createdPost = data[0];
+
+    return NextResponse.json(createdPost);
+  } catch (error) {
+    console.error("Error creating blog post:", error);
+    return NextResponse.json(
+      { error: "Failed to create blog post" },
       { status: 500 }
     );
   }

@@ -153,12 +153,7 @@ export default function AIContinuationPanel({
     ]
   );
 
-  useEffect(() => {
-    // 只在用户主动点击按钮时才生成建议，不再自动调用
-    // if (isLoaded) {
-    //   generateSuggestions(activeAction);
-    // }
-  }, [activeAction, generateSuggestions, isLoaded]);
+  useEffect(() => {}, [activeAction, generateSuggestions, isLoaded]);
 
   const handleAccept = (suggestion: string) => {
     onAccept(suggestion);

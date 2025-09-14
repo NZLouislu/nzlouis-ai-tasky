@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { blogDb } from "@/lib/supabase/blog-client";
+import { supabase } from "@/lib/supabase/supabase-client";
 
+// Get a specific blog post
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    if (!blogDb) {
+    if (!supabase) {
       return NextResponse.json(
         { error: "Database not configured" },
         { status: 503 }
@@ -14,27 +15,36 @@ export async function GET(
     }
 
     const { id } = await params;
-    const { data, error } = await blogDb
-      .from("post_stats")
+
+    const { data, error } = await supabase
+      .from("blog_posts")
       .select("*")
-      .eq("post_id", id)
-      .single();
+      .eq("id", id);
 
     if (error) throw error;
 
-    return NextResponse.json(data);
+    // Check if post exists
+    if (!data || data.length === 0) {
+      return NextResponse.json({ error: "Post not found" }, { status: 404 });
+    }
+
+    // Return the first (and should be only) post
+    const post = data[0];
+
+    return NextResponse.json(post);
   } catch (error) {
-    console.error("Error fetching post:", error);
+    console.error("Error fetching blog post:", error);
     return NextResponse.json({ error: "Post not found" }, { status: 404 });
   }
 }
 
+// Update a blog post
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    if (!blogDb) {
+    if (!supabase) {
       return NextResponse.json(
         { error: "Database not configured" },
         { status: 503 }
@@ -43,39 +53,49 @@ export async function PUT(
 
     const { id } = await params;
     const body = await request.json();
-    const { title, views, likes, ai_questions, ai_summaries } = body;
 
-    const { data, error } = await blogDb
-      .from("post_stats")
+    const { data, error } = await supabase
+      .from("blog_posts")
       .update({
-        title,
-        views,
-        likes,
-        ai_questions,
-        ai_summaries,
+        title: body.title,
+        content: body.content,
+        icon: body.icon,
+        cover: body.cover,
+        published: body.published,
+        position: body.position,
       })
-      .eq("post_id", id)
-      .select()
-      .single();
+      .eq("id", id)
+      .select();
 
     if (error) throw error;
 
-    return NextResponse.json(data);
+    // Check if any rows were updated
+    if (!data || data.length === 0) {
+      return NextResponse.json(
+        { error: "Post not found or not updated" },
+        { status: 404 }
+      );
+    }
+
+    // Return the first (and should be only) updated post
+    const updatedPost = data[0];
+    return NextResponse.json(updatedPost);
   } catch (error) {
-    console.error("Error updating post:", error);
+    console.error("Error updating blog post:", error);
     return NextResponse.json(
-      { error: "Failed to update post" },
+      { error: "Failed to update blog post" },
       { status: 500 }
     );
   }
 }
 
+// Delete a blog post
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    if (!blogDb) {
+    if (!supabase) {
       return NextResponse.json(
         { error: "Database not configured" },
         { status: 503 }
@@ -83,18 +103,16 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    const { error } = await blogDb
-      .from("post_stats")
-      .delete()
-      .eq("post_id", id);
+
+    const { error } = await supabase.from("blog_posts").delete().eq("id", id);
 
     if (error) throw error;
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error deleting post:", error);
+    console.error("Error deleting blog post:", error);
     return NextResponse.json(
-      { error: "Failed to delete post" },
+      { error: "Failed to delete blog post" },
       { status: 500 }
     );
   }

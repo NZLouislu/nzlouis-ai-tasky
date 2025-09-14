@@ -3,15 +3,15 @@ import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { PartialBlock } from "@blocknote/core";
 import {
-  Plus,
-  Image as ImageIcon,
-  Trash2,
-  Menu,
-  MoreHorizontal,
-  GripVertical,
-  MessageCircle,
-  X,
-} from "lucide-react";
+  FaPlus as Plus,
+  FaImage as ImageIcon,
+  FaTrashAlt as Trash2,
+  FaBars as Menu,
+  FaEllipsisH as MoreHorizontal,
+  FaGripLines as GripVertical,
+  FaComments as MessageCircle,
+  FaTimes as X,
+} from "react-icons/fa";
 import Sidebar from "./Sidebar";
 
 import UnifiedChatbot from "./UnifiedChatbot";
@@ -451,14 +451,20 @@ export default function Workspace() {
                       {iconOptions.map((icon) => (
                         <button
                           key={icon}
-                          onClick={() => setPageIcon(activePageId, icon)}
+                          onClick={() => {
+                            setPageIcon(activePageId, icon);
+                            setShowIconSelector(false);
+                          }}
                           className="text-2xl p-3 hover:bg-gray-100 rounded-lg transition-colors"
                         >
                           {icon}
                         </button>
                       ))}
                       <button
-                        onClick={() => removePageIcon(activePageId)}
+                        onClick={() => {
+                          removePageIcon(activePageId);
+                          setShowIconSelector(false);
+                        }}
                         className="text-sm p-3 hover:bg-gray-100 rounded-lg flex items-center justify-center text-gray-500"
                       >
                         Remove

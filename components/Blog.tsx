@@ -1,25 +1,29 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import { PartialBlock } from "@blocknote/core";
 import {
-  Plus,
-  Image as ImageIcon,
-  Trash2,
-  Menu,
-  MoreHorizontal,
-  GripVertical,
-  Book,
-  X,
-  MessageCircle,
-} from "lucide-react";
+  FaPlus as Plus,
+  FaImage as ImageIcon,
+  FaTrashAlt as Trash2,
+  FaBars as Menu,
+  FaEllipsisH as MoreHorizontal,
+  FaBook as Book,
+  FaTimes as X,
+  FaComments as MessageCircle,
+} from "react-icons/fa";
 import Sidebar from "./Sidebar";
 import UnifiedChatbot from "./UnifiedChatbot";
+import { useBlogData } from "@/hooks/use-blog-data";
+import { supabase } from "@/lib/supabase/supabase-client";
+import { getTaskySupabaseConfig } from "@/lib/environment";
 
 const Editor = dynamic(() => import("./Editor"), {
   ssr: false,
   loading: () => <div className="p-4 text-gray-500">Loading editor...</div>,
 });
+
+const DEFAULT_POST_ID = "11111111-1111-1111-1111-111111111111";
 
 interface Post {
   id: string;
@@ -34,32 +38,23 @@ interface Post {
 }
 
 export default function Blog() {
-  const [posts, setPosts] = useState<Post[]>([
-    {
-      id: "post-1",
-      title: "My first blog post",
-      content: [
-        {
-          type: "paragraph",
-          content: "Welcome to your new blog post!",
-        },
-      ],
-      children: [
-        {
-          id: "post-1-1",
-          title: "Introduction",
-          content: [],
-        },
-        {
-          id: "post-1-2",
-          title: "Conclusion",
-          content: [],
-        },
-      ],
-    },
-  ]);
+  const {
+    posts,
+    isLoading,
+    error,
+    addNewPost,
+    addNewSubPost,
+    updatePostTitle,
+    updatePostContent: updatePostContentHook,
+    setPostIcon,
+    removePostIcon,
+    setPostCover,
+    removePostCover,
+    deletePost,
+  } = useBlogData();
 
-  const [activePostId, setActivePostId] = useState<string>("post-1");
+  const [localPosts, setLocalPosts] = useState<Post[]>([]);
+  const [activePostId, setActivePostId] = useState<string>(DEFAULT_POST_ID);
   const [showIconSelector, setShowIconSelector] = useState(false);
   const [showCoverOptions, setShowCoverOptions] = useState(false);
   const [showCoverActions, setShowCoverActions] = useState(false);
@@ -69,7 +64,285 @@ export default function Blog() {
   const [chatbotWidth, setChatbotWidth] = useState(600);
   const [isResizing, setIsResizing] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  // const containerRef = useRef<HTMLDivElement>(null);
+  const [sidebarWidth] = useState<number>(256);
+  const [userId] = useState<string>("00000000-0000-0000-0000-000000000000");
+  const [showDeleteDropdown, setShowDeleteDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const unsavedChanges = useRef<Map<string, Post>>(new Map());
+
+  function debounce<T extends (...args: [Post]) => void>(
+    func: T,
+    wait: number
+  ): (...args: [Post]) => void {
+    let timeout: NodeJS.Timeout | null = null;
+    return function executedFunction(...args: [Post]) {
+      const later = () => {
+        timeout = null;
+        func(...args);
+      };
+      if (timeout !== null) {
+        clearTimeout(timeout);
+      }
+      timeout = setTimeout(later, wait);
+    };
+  }
+
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Sync local UI state with data fetched by useBlogData
+  useEffect(() => {
+    const mapped = (posts || []).map((p) => ({
+      id: p.id,
+      title: p.title,
+      content: (p.content as PartialBlock[]) || [],
+      icon: p.icon as string | undefined,
+      cover: p.cover as { type: "color" | "image"; value: string } | undefined,
+      children: (p as unknown as Post).children || [],
+    }));
+    setLocalPosts(mapped);
+    if (mapped.length > 0 && !mapped.some((x) => x.id === activePostId)) {
+      setActivePostId(mapped[0].id);
+    }
+  }, [posts, activePostId]);
+
+  const savePostToDatabase = useCallback(
+    async (post: Post) => {
+      if (!supabase) {
+        console.warn(
+          "Supabase client not configured. Skipping save operation."
+        );
+        console.warn("Current Supabase config:", getTaskySupabaseConfig());
+        unsavedChanges.current.delete(post.id);
+        return;
+      }
+
+      try {
+        setIsSaving(true);
+        const { error } = await supabase.from("blog_posts").upsert({
+          id: post.id,
+          user_id: userId,
+          title: post.title,
+          content: post.content,
+          icon: post.icon,
+          cover: post.cover,
+          updated_at: new Date().toISOString(),
+        });
+
+        if (error) {
+          console.error("Failed to save post to database:", error);
+          throw error;
+        }
+
+        console.log(`Successfully saved post ${post.id} to database`);
+        unsavedChanges.current.delete(post.id);
+      } catch (error) {
+        console.error("Error saving post to database:", error);
+        unsavedChanges.current.delete(post.id);
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [userId]
+  );
+
+  const saveAllUnsavedChanges = useCallback(async () => {
+    const promises = Array.from(unsavedChanges.current.values()).map((post) =>
+      savePostToDatabase(post)
+    );
+
+    if (promises.length > 0) {
+      try {
+        await Promise.all(promises);
+        console.log(`Saved ${promises.length} posts to database`);
+      } catch (error) {
+        console.error("Error saving all unsaved changes:", error);
+      }
+    }
+  }, [savePostToDatabase]);
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _unused_saveAllUnsavedChanges = saveAllUnsavedChanges;
+
+  useEffect(() => {
+    const config = getTaskySupabaseConfig();
+    if (!config.url || !config.anonKey) {
+      console.warn("Supabase configuration missing or incomplete");
+      console.warn("URL present:", !!config.url);
+      console.warn("Anon key present:", !!config.anonKey);
+    }
+
+    console.warn("Supabase client initialized:", !!supabase);
+  }, []);
+
+  const saveCurrentPostBeforeNavigation = useCallback(async () => {
+    const currentPost = unsavedChanges.current.get(activePostId);
+    if (currentPost) {
+      await savePostToDatabase(currentPost);
+    }
+  }, [activePostId, savePostToDatabase]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const unsavedChangesCount = unsavedChanges.current.size;
+      if (unsavedChangesCount > 0) {
+        navigator.sendBeacon(
+          "/api/blog/save",
+          JSON.stringify({
+            posts: Array.from(unsavedChanges.current.values()),
+          })
+        );
+        e.preventDefault();
+        e.returnValue = "";
+        return "You have unsaved changes. Are you sure you want to leave?";
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+
+      // Capture the current value of unsavedChanges to avoid stale closure issues
+      // We're creating a snapshot of the current Map to avoid issues with
+      // the ref value changing by the time this cleanup function runs
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      const unsavedChangesSnapshot = new Map(unsavedChanges.current);
+      if (unsavedChangesSnapshot.size > 0) {
+        Promise.resolve().then(() => {
+          Array.from(unsavedChangesSnapshot.values()).forEach((post) =>
+            savePostToDatabase(post)
+          );
+        });
+      }
+    };
+  }, [savePostToDatabase]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        saveCurrentPostBeforeNavigation();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [saveCurrentPostBeforeNavigation]);
+
+  useEffect(() => {
+    const handleBlur = () => {
+      saveCurrentPostBeforeNavigation();
+    };
+
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("blur", handleBlur);
+    };
+  }, [saveCurrentPostBeforeNavigation]);
+
+  useEffect(() => {
+    const handleRouteChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (
+        customEvent.detail &&
+        customEvent.detail.pathname &&
+        customEvent.detail.pathname !== "/blog"
+      ) {
+        saveCurrentPostBeforeNavigation();
+      }
+    };
+
+    window.addEventListener("routeChange", handleRouteChange);
+    return () => {
+      window.removeEventListener("routeChange", handleRouteChange);
+    };
+  }, [saveCurrentPostBeforeNavigation]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setShowDeleteDropdown(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const handleDeletePost = async () => {
+    if (!activePostId) return;
+
+    try {
+      await deletePost(activePostId);
+      const remainingPosts = localPosts.filter(
+        (post) => post.id !== activePostId
+      );
+      setLocalPosts(remainingPosts);
+
+      if (remainingPosts.length > 0) {
+        setActivePostId(remainingPosts[0].id);
+      } else {
+        // If no posts left, create a new one
+        const newPostId = await addNewPost();
+        setActivePostId(newPostId);
+      }
+    } catch (error) {
+      console.error("Error deleting post:", error);
+    } finally {
+      setShowDeleteDropdown(false);
+    }
+  };
+
+  const [expandedPages, setExpandedPages] = useState<Set<string>>(
+    new Set([DEFAULT_POST_ID])
+  );
+
+  const togglePageExpansion = (pageId: string) => {
+    setExpandedPages((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(pageId)) {
+        newSet.delete(pageId);
+      } else {
+        newSet.add(pageId);
+      }
+      return newSet;
+    });
+  };
+
+  useEffect(() => {
+    const newExpanded = new Set<string>(expandedPages);
+
+    const expandParents = (pages: Post[]): boolean => {
+      for (const post of pages) {
+        if (post.id === activePostId) {
+          return true;
+        }
+
+        if (post.children) {
+          if (expandParents(post.children)) {
+            newExpanded.add(post.id);
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+
+    expandParents(localPosts);
+    if (
+      newExpanded.size !== expandedPages.size ||
+      [...newExpanded].some((id) => !expandedPages.has(id)) ||
+      [...expandedPages].some((id) => !newExpanded.has(id))
+    ) {
+      setExpandedPages(newExpanded);
+    }
+  }, [activePostId, localPosts, expandedPages]);
 
   useEffect(() => {
     const checkIsMobile = () => {
@@ -133,84 +406,174 @@ export default function Blog() {
     };
   }, [isResizing, handleMouseMove, handleMouseUp]);
 
-  const activePost = posts.find((post) => post.id === activePostId) || posts[0];
+  const activePost = (() => {
+    for (const post of localPosts) {
+      if (post.id === activePostId) {
+        return post;
+      }
 
-  const addNewPost = () => {
-    const newPost: Post = {
-      id: `post-${Date.now()}`,
-      title: `Post ${posts.length + 1}`,
-      content: [],
-    };
-    setPosts([...posts, newPost]);
-    setActivePostId(newPost.id);
-  };
+      if (post.children) {
+        const findPost = (children: Post[]): Post | undefined => {
+          for (const child of children) {
+            if (child.id === activePostId) {
+              return child;
+            }
+            if (child.children) {
+              const found = findPost(child.children);
+              if (found) return found;
+            }
+          }
+        };
+        const found = findPost(post.children);
+        if (found) return found;
+      }
+    }
 
-  const addNewSubPost = (parentId: string) => {
-    const newSubPost: Post = {
-      id: `${parentId}-sub-${Date.now()}`,
-      title: `Sub post ${
-        posts.find((p) => p.id === parentId)?.children?.length || 0 + 1
-      }`,
-      content: [],
-    };
-    setPosts((prev) =>
-      prev.map((post) =>
-        post.id === parentId
-          ? { ...post, children: [...(post.children || []), newSubPost] }
-          : post
-      )
+    return (
+      localPosts[0] || {
+        id: DEFAULT_POST_ID,
+        title: "Untitled",
+        content: [],
+        icon: undefined,
+        cover: undefined,
+        children: [],
+      }
     );
-    setActivePostId(newSubPost.id);
-  };
-
-  const updatePostTitle = (postId: string, newTitle: string) => {
-    setPosts(
-      posts.map((post) =>
-        post.id === postId ? { ...post, title: newTitle } : post
-      )
-    );
-  };
+  })();
 
   const updatePostContent = (newContent: PartialBlock[]) => {
-    setPosts(
-      posts.map((post) =>
-        post.id === activePostId ? { ...post, content: newContent } : post
-      )
+    const contentCopy = JSON.parse(JSON.stringify(newContent));
+
+    setLocalPosts((prev) =>
+      prev.map((post) => {
+        if (post.id === activePostId) {
+          const updatedPost = { ...post, content: contentCopy };
+          unsavedChanges.current.set(post.id, updatedPost);
+          debouncedSavePostToDatabase(updatedPost);
+          return updatedPost;
+        }
+        if (post.children) {
+          const updatedChildren = post.children.map((child) => {
+            if (child.id === activePostId) {
+              const updatedChild = { ...child, content: contentCopy };
+              unsavedChanges.current.set(child.id, updatedChild);
+              debouncedSavePostToDatabase(updatedChild);
+              return updatedChild;
+            }
+            return child;
+          });
+          return { ...post, children: updatedChildren };
+        }
+        return post;
+      })
     );
+
+    updatePostContentHook(activePostId, newContent);
   };
 
-  const setPostIcon = (postId: string, icon: string) => {
-    setPosts(
-      posts.map((post) => (post.id === postId ? { ...post, icon } : post))
-    );
-    setShowIconSelector(false);
+  const handleManualSave = useCallback(async () => {
+    const postToSave = unsavedChanges.current.get(activePostId);
+    if (postToSave) {
+      await savePostToDatabase(postToSave);
+    }
+  }, [activePostId, savePostToDatabase]);
+
+  const debouncedSavePostToDatabase = useCallback(
+    (post: Post) => {
+      const debouncedFunction = debounce((p: Post) => {
+        savePostToDatabase(p);
+      }, 3000);
+      return debouncedFunction(post);
+    },
+    [savePostToDatabase]
+  );
+
+  const handlePageModification = async (modification: {
+    type: string;
+    target?: string;
+    content?: string;
+    title?: string;
+  }): Promise<string> => {
+    switch (modification.type) {
+      case "add":
+        if (!modification.content)
+          return "Content is required for add operation";
+        const newBlock: PartialBlock = {
+          type: "paragraph",
+          content: [{ type: "text", text: modification.content, styles: {} }],
+        };
+        const newContent = activePost
+          ? [...activePost.content, newBlock]
+          : [newBlock];
+        await updatePostContent(newContent);
+        return `Added content to the blog post`;
+
+      case "edit":
+        if (!modification.content)
+          return "Content is required for edit operation";
+        const editBlock: PartialBlock = {
+          type: "paragraph",
+          content: [
+            {
+              type: "text",
+              text: `Edited: ${modification.content}`,
+              styles: {},
+            },
+          ],
+        };
+        const editContent = activePost
+          ? [...activePost.content, editBlock]
+          : [editBlock];
+        await updatePostContent(editContent);
+        return `Edited content in the blog post`;
+
+      case "create_page":
+        await addNewPost();
+        return `Created new blog post: "${modification.title || "Untitled"}"`;
+
+      case "set_title":
+        if (!modification.title)
+          return "Title is required for set title operation";
+        await updatePostTitle(activePostId, modification.title);
+        return `Set blog post title to: "${modification.title}"`;
+
+      case "add_heading":
+        if (!modification.content)
+          return "Content is required for add heading operation";
+        const headingBlock: PartialBlock = {
+          type: "heading",
+          content: [{ type: "text", text: modification.content, styles: {} }],
+          props: { level: 1 },
+        };
+        const headingContent = activePost
+          ? [...activePost.content, headingBlock]
+          : [headingBlock];
+        await updatePostContent(headingContent);
+        return `Added heading: "${modification.content}"`;
+
+      case "add_paragraph":
+        if (!modification.content)
+          return "Content is required for add paragraph operation";
+        const paraBlock: PartialBlock = {
+          type: "paragraph",
+          content: [{ type: "text", text: modification.content, styles: {} }],
+        };
+        const paraContent = activePost
+          ? [...activePost.content, paraBlock]
+          : [paraBlock];
+        await updatePostContent(paraContent);
+        return `Added paragraph: "${modification.content}"`;
+
+      default:
+        return "Unknown modification type";
+    }
   };
 
-  const removePostIcon = (postId: string) => {
-    setPosts(
-      posts.map((post) =>
-        post.id === postId ? { ...post, icon: undefined } : post
-      )
-    );
-    setShowIconSelector(false);
-  };
-
-  const setPostCover = (
-    postId: string,
-    cover: { type: "color" | "image"; value: string }
-  ) => {
-    setPosts(
-      posts.map((post) => (post.id === postId ? { ...post, cover } : post))
-    );
-    setShowCoverOptions(false);
-  };
-
-  const removePostCover = (postId: string) => {
-    setPosts(
-      posts.map((post) =>
-        post.id === postId ? { ...post, cover: undefined } : post
-      )
-    );
+  const handleSetActivePostId = async (postId: string) => {
+    if (postId !== activePostId) {
+      await saveCurrentPostBeforeNavigation();
+    }
+    setActivePostId(postId);
   };
 
   const handleCoverFileUpload = (file: File) => {
@@ -233,76 +596,6 @@ export default function Blog() {
     }
   };
 
-  const handlePageModification = async (modification: {
-    type: string;
-    target?: string;
-    content?: string;
-    title?: string;
-  }): Promise<string> => {
-    switch (modification.type) {
-      case "add":
-        if (!modification.content)
-          return "Content is required for add operation";
-        const newBlock: PartialBlock = {
-          type: "paragraph",
-          content: [{ type: "text", text: modification.content, styles: {} }],
-        };
-        const newContent = [...activePost.content, newBlock];
-        updatePostContent(newContent);
-        return `Added content to the blog post`;
-
-      case "edit":
-        if (!modification.content)
-          return "Content is required for edit operation";
-        const editBlock: PartialBlock = {
-          type: "paragraph",
-          content: [
-            {
-              type: "text",
-              text: `Edited: ${modification.content}`,
-              styles: {},
-            },
-          ],
-        };
-        updatePostContent([...activePost.content, editBlock]);
-        return `Edited content in the blog post`;
-
-      case "create_page":
-        addNewPost();
-        return `Created new blog post: "${modification.title || "Untitled"}"`;
-
-      case "set_title":
-        if (!modification.title)
-          return "Title is required for set title operation";
-        updatePostTitle(activePostId, modification.title);
-        return `Set blog post title to: "${modification.title}"`;
-
-      case "add_heading":
-        if (!modification.content)
-          return "Content is required for add heading operation";
-        const headingBlock: PartialBlock = {
-          type: "heading",
-          content: [{ type: "text", text: modification.content, styles: {} }],
-          props: { level: 1 },
-        };
-        updatePostContent([...activePost.content, headingBlock]);
-        return `Added heading: "${modification.content}"`;
-
-      case "add_paragraph":
-        if (!modification.content)
-          return "Content is required for add paragraph operation";
-        const paraBlock: PartialBlock = {
-          type: "paragraph",
-          content: [{ type: "text", text: modification.content, styles: {} }],
-        };
-        updatePostContent([...activePost.content, paraBlock]);
-        return `Added paragraph: "${modification.content}"`;
-
-      default:
-        return "Unknown modification type";
-    }
-  };
-
   const iconOptions = ["📝", "📄", "📑", "📊", "📋", "📌", "⭐", "💡"];
 
   const colorOptions = [
@@ -316,28 +609,55 @@ export default function Blog() {
     "bg-red-500",
   ];
 
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-gray-500">Loading blog...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-red-500">Error: {error}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-gray-50">
       {!sidebarCollapsed && (
-        <Sidebar
-          title="Blog"
-          icon="📖"
-          pages={posts.map((p) => ({
-            id: p.id,
-            title: p.title,
-            icon: p.icon,
-            children: p.children,
-          }))}
-          activePageId={activePostId}
-          onAddPage={addNewPost}
-          onAddSubPage={addNewSubPost}
-          onUpdatePageTitle={updatePostTitle}
-          onSelectPage={setActivePostId}
-          sidebarOpen={sidebarOpen && !(isChatbotVisible && isMobile)}
-          setSidebarOpen={setSidebarOpen}
-          className="top-16"
-          onCollapse={handleToggleSidebar}
-        />
+        <>
+          <Sidebar
+            title="Blog"
+            icon="📖"
+            pages={localPosts.map((p) => ({
+              id: p.id,
+              title: p.title,
+              icon: p.icon,
+              children: p.children,
+            }))}
+            activePageId={activePostId}
+            onAddPage={addNewPost}
+            onAddSubPage={addNewSubPost}
+            onUpdatePageTitle={updatePostTitle}
+            onSelectPage={handleSetActivePostId}
+            sidebarOpen={sidebarOpen && !(isChatbotVisible && isMobile)}
+            setSidebarOpen={setSidebarOpen}
+            className="top-16"
+            onCollapse={handleToggleSidebar}
+            expandedPages={expandedPages}
+            onToggleExpand={togglePageExpansion}
+          />
+          <div
+            className="fixed h-full w-1 bg-gray-200 z-30"
+            style={{
+              left: `${sidebarWidth}px`,
+              top: "64px",
+            }}
+          ></div>
+        </>
       )}
 
       {sidebarCollapsed && (
@@ -354,9 +674,12 @@ export default function Blog() {
 
       <div
         className={`flex-1 flex flex-col transition-all duration-200 ${
-          sidebarCollapsed ? "ml-0 md:ml-12" : "ml-0 md:ml-64"
+          sidebarCollapsed ? "ml-0 md:ml-12" : ""
         }`}
-        style={{ paddingTop: "64px" }}
+        style={{
+          paddingTop: "64px",
+          marginLeft: sidebarCollapsed ? "0" : `${sidebarWidth}px`,
+        }}
       >
         <div className="md:hidden p-4 border-b border-gray-200">
           <button
@@ -378,7 +701,7 @@ export default function Blog() {
             <div className="h-full overflow-y-auto chatbot-scrollbar">
               <div className="max-w-[900px] mx-auto px-6 py-8">
                 <div className="w-full">
-                  {activePost.cover && (
+                  {activePost && activePost.cover && (
                     <div
                       className="relative mb-8 rounded-lg overflow-hidden"
                       onMouseEnter={() => setShowCoverActions(true)}
@@ -426,19 +749,21 @@ export default function Blog() {
                   <div className="mb-6">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center space-x-4">
-                        {!activePost.icon && !activePost.cover && (
-                          <button
-                            onClick={() =>
-                              setShowIconSelector(!showIconSelector)
-                            }
-                            className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors"
-                          >
-                            <Plus size={16} className="mr-2" />
-                            Add Icon
-                          </button>
-                        )}
+                        {activePost &&
+                          !activePost.icon &&
+                          !activePost.cover && (
+                            <button
+                              onClick={() =>
+                                setShowIconSelector(!showIconSelector)
+                              }
+                              className="flex items-center text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors"
+                            >
+                              <Plus size={16} className="mr-2" />
+                              Add Icon
+                            </button>
+                          )}
 
-                        {!activePost.cover && (
+                        {activePost && !activePost.cover && (
                           <button
                             onClick={() =>
                               setShowCoverOptions(!showCoverOptions)
@@ -451,9 +776,33 @@ export default function Blog() {
                         )}
                       </div>
 
-                      <button className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
-                        <MoreHorizontal size={16} />
-                      </button>
+                      <div className="relative">
+                        <button
+                          onClick={() =>
+                            setShowDeleteDropdown(!showDeleteDropdown)
+                          }
+                          className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors relative"
+                        >
+                          <MoreHorizontal size={16} />
+                        </button>
+
+                        {showDeleteDropdown && (
+                          <div
+                            ref={dropdownRef}
+                            className="absolute right-0 mt-1 w-40 bg-white rounded-md shadow-lg z-50 border border-gray-200"
+                          >
+                            <div className="py-1">
+                              <button
+                                onClick={handleDeletePost}
+                                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"
+                              >
+                                <Trash2 size={14} className="mr-2" />
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {showIconSelector && (
@@ -462,14 +811,20 @@ export default function Blog() {
                           {iconOptions.map((icon) => (
                             <button
                               key={icon}
-                              onClick={() => setPostIcon(activePostId, icon)}
+                              onClick={() => {
+                                setPostIcon(activePostId, icon);
+                                setShowIconSelector(false);
+                              }}
                               className="text-2xl p-3 hover:bg-gray-100 rounded-lg transition-colors"
                             >
                               {icon}
                             </button>
                           ))}
                           <button
-                            onClick={() => removePostIcon(activePostId)}
+                            onClick={() => {
+                              removePostIcon(activePostId);
+                              setShowIconSelector(false);
+                            }}
                             className="text-sm p-3 hover:bg-gray-100 rounded-lg flex items-center justify-center text-gray-500"
                           >
                             Remove
@@ -537,7 +892,7 @@ export default function Blog() {
                     )}
 
                     <div className="flex items-center justify-center">
-                      {activePost.icon && (
+                      {activePost && activePost.icon && (
                         <div className="relative mr-4">
                           <span
                             className="text-3xl cursor-pointer hover:bg-gray-100 p-2 rounded-lg transition-colors"
@@ -551,9 +906,9 @@ export default function Blog() {
                         <input
                           id={`title-input-${activePostId}`}
                           type="text"
-                          value={activePost.title}
-                          onChange={(e) =>
-                            updatePostTitle(activePostId, e.target.value)
+                          value={activePost ? activePost.title : ""}
+                          onChange={async (e) =>
+                            await updatePostTitle(activePostId, e.target.value)
                           }
                           placeholder="Untitled"
                           className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-4xl font-bold text-gray-800 placeholder-gray-400 text-center"
@@ -564,8 +919,14 @@ export default function Blog() {
 
                   <div className="min-h-[400px]">
                     <Editor
-                      initialContent={activePost.content}
-                      onChange={updatePostContent}
+                      initialContent={
+                        activePost?.content && activePost.content.length > 0
+                          ? activePost.content
+                          : [{ type: "paragraph", content: "" }]
+                      }
+                      onChange={(content) => updatePostContent(content)}
+                      onSave={handleManualSave}
+                      isSaving={isSaving}
                     />
                   </div>
                 </div>
@@ -585,9 +946,7 @@ export default function Blog() {
               top: "64px",
               bottom: "0",
             }}
-          >
-            <GripVertical size={16} className="text-gray-600" />
-          </div>
+          ></div>
           <div
             className="fixed right-0 bg-white shadow-xl flex flex-col z-10 transition-all duration-300"
             style={{

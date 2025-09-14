@@ -115,7 +115,6 @@ Expanded version:`;
     getCurrentModel: () => { id: string; provider: string } | undefined,
     getApiKey: (provider: string) => string | null
   ): Promise<ContinuationResponse[]> {
-    // 为了避免配额问题，只生成一个建议
     const suggestion = await this.generateContinuation(
       request,
       settings,

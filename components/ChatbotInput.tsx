@@ -59,7 +59,7 @@ export default function ChatbotInput({
       for (const item of items) {
         if (item.type.startsWith("image/")) {
           e.preventDefault();
-          e.stopPropagation(); // 阻止事件冒泡
+          e.stopPropagation();
           const file = item.getAsFile();
           if (file) handleImageUpload(file);
           return;
@@ -117,9 +117,7 @@ export default function ChatbotInput({
   const handleMentionSelect = (mention: MentionItem) => {
     const atIndex = inputValue.lastIndexOf("@");
     if (atIndex === -1) return;
-    const newText = `${inputValue.substring(0, atIndex)}@${
-      mention.title
-    } `;
+    const newText = `${inputValue.substring(0, atIndex)}@${mention.title} `;
     setInputValue(newText);
     setShowMentions(false);
     textareaRef.current?.focus();

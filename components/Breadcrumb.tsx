@@ -1,5 +1,7 @@
 "use client";
 
+import React from "react";
+
 interface BreadcrumbItem {
   label: string;
   icon?: string;
@@ -16,7 +18,10 @@ export default function Breadcrumb({ items }: BreadcrumbProps) {
       {items.map((item, index) => (
         <div key={index} className="flex items-center">
           {item.href ? (
-            <a href={item.href} className="flex items-center hover:text-blue-600">
+            <a
+              href={item.href}
+              className="flex items-center hover:text-blue-600"
+            >
               {item.icon && <span className="mr-1">{item.icon}</span>}
               {item.label}
             </a>

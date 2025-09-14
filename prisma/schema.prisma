@@ -1,0 +1,145 @@
+// Prisma schema for Workspaces, Blogs, and Tasks features
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String     @id @default(uuid())
+  username      String?    @unique
+  fullName      String?
+  avatarUrl     String?
+  website       String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @default(now()) @updatedAt
+  workspaces    Workspace[]
+  blogPosts     BlogPost[]
+  taskBoards    TaskBoard[]
+  taskTags      TaskTag[]
+  storageFiles  StorageFile[]
+}
+
+model Workspace {
+  id            String          @id @default(uuid())
+  userId        String
+  user          User            @relation(fields: [userId], references: [id])
+  name          String
+  icon          String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @default(now()) @updatedAt
+  workspacePages WorkspacePage[]
+}
+
+model WorkspacePage {
+  id         String       @id @default(uuid())
+  workspaceId String
+  workspace  Workspace    @relation(fields: [workspaceId], references: [id])
+  parentId   String?
+  parent     WorkspacePage? @relation("PageHierarchy", fields: [parentId], references: [id])
+  children   WorkspacePage[] @relation("PageHierarchy")
+  title      String       @default("Untitled")
+  content    Json?
+  icon       String?
+  cover      Json?        // Store cover information (color or image)
+  position   Int?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @default(now()) @updatedAt
+}
+
+model BlogPost {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  parentId  String?
+  parent    BlogPost? @relation("PostHierarchy", fields: [parentId], references: [id])
+  children  BlogPost[] @relation("PostHierarchy")
+  title     String    @default("Untitled")
+  content   Json?
+  icon      String?
+  cover     Json?     // Store cover information (color or image)
+  published Boolean   @default(false)
+  position  Int?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
+}
+
+model TaskBoard {
+  id         String       @id @default(uuid())
+  userId     String
+  user       User         @relation(fields: [userId], references: [id])
+  name       String
+  icon       String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @default(now()) @updatedAt
+  taskColumns TaskColumn[]
+  tasks      Task[]
+}
+
+model TaskColumn {
+  id        String    @id @default(uuid())
+  boardId   String
+  board     TaskBoard @relation(fields: [boardId], references: [id])
+  name      String
+  position  Int?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
+  tasks     Task[]
+}
+
+model Task {
+  id          String      @id @default(uuid())
+  boardId     String
+  board       TaskBoard   @relation(fields: [boardId], references: [id])
+  columnId    String?
+  column      TaskColumn? @relation(fields: [columnId], references: [id])
+  parentId    String?
+  parent      Task?       @relation("TaskHierarchy", fields: [parentId], references: [id])
+  children    Task[]      @relation("TaskHierarchy")
+  title       String
+  description String?
+  position    Int?
+  dueDate     DateTime?
+  completed   Boolean     @default(false)
+  priority    Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @default(now()) @updatedAt
+  tags        TaskTag[]   @relation("TaskTagAssignment")
+}
+
+model TaskTag {
+  id        String    @id @default(uuid())
+  name      String
+  color     String?
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  createdAt DateTime  @default(now())
+  tasks     Task[]    @relation("TaskTagAssignment")
+}
+
+// Explicit many-to-many relation table
+model TaskTagAssignment {
+  taskId String
+  tagId  String
+  task   Task      @relation(fields: [taskId], references: [id])
+  tag    TaskTag   @relation(fields: [tagId], references: [id])
+
+  @@id([taskId, tagId])
+}
+
+model StorageFile {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  bucketName String
+  filePath   String
+  fileName   String
+  fileSize   Int?
+  mimeType   String?
+  entityType String?
+  entityId   String?
+  createdAt  DateTime  @default(now())
+}

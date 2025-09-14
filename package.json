@@ -26,6 +26,7 @@
     "next": "15.5.2",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "react-icons": "^5.5.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
@@ -36,6 +37,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.5.2",
+    "prisma": "^6.16.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

@@ -66,12 +66,22 @@ export async function POST(request: NextRequest) {
         comment,
         is_anonymous: is_anonymous || false,
       })
-      .select()
-      .single();
+      .select();
 
     if (error) throw error;
 
-    return NextResponse.json(data);
+    // Check if any rows were inserted
+    if (!data || data.length === 0) {
+      return NextResponse.json(
+        { error: "Failed to create comment" },
+        { status: 500 }
+      );
+    }
+
+    // Return the first (and should be only) created comment
+    const createdComment = data[0];
+
+    return NextResponse.json(createdComment);
   } catch (error) {
     console.error("Error creating comment:", error);
     return NextResponse.json(

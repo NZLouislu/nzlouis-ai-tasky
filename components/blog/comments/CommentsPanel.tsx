@@ -1,7 +1,11 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useBlogStore } from "@/lib/stores/blog-store";
-import { Trash2, MessageCircle, User } from "lucide-react";
+import {
+  FaTrashAlt as Trash2,
+  FaComments as MessageCircle,
+  FaUser as User,
+} from "react-icons/fa";
 
 interface CommentsPanelProps {
   postId: string;
@@ -20,9 +24,7 @@ export default function CommentsPanel({ postId }: CommentsPanelProps) {
   const optimisticComments = currentComments;
 
   const loadAllComments = useCallback(async () => {
-    const postsNeedingComments = posts.filter(
-      (post) => !comments[post.post_id]
-    );
+    const postsNeedingComments = posts.filter((post) => !comments[post.id]);
 
     if (postsNeedingComments.length === 0) {
       setLoading(false);
@@ -33,18 +35,13 @@ export default function CommentsPanel({ postId }: CommentsPanelProps) {
       setLoading(true);
       const commentPromises = postsNeedingComments.map(async (post) => {
         try {
-          const response = await fetch(
-            `/api/blog/comments?postId=${post.post_id}`
-          );
+          const response = await fetch(`/api/blog/comments?postId=${post.id}`);
           if (response.ok) {
             const data = await response.json();
-            setComments(post.post_id, data);
+            setComments(post.id, data);
           }
         } catch (error) {
-          console.error(
-            `Failed to fetch comments for post ${post.post_id}:`,
-            error
-          );
+          console.error(`Failed to fetch comments for post ${post.id}:`, error);
         }
       });
 
@@ -78,7 +75,7 @@ export default function CommentsPanel({ postId }: CommentsPanelProps) {
   }, [loadAllComments]);
 
   useEffect(() => {
-    if (postId && posts.find((p) => p.post_id === postId)) {
+    if (postId && posts.find((p) => p.id === postId)) {
       setSelectedPostId(postId);
     }
   }, [postId, posts]);
@@ -133,10 +130,10 @@ export default function CommentsPanel({ postId }: CommentsPanelProps) {
           ) : (
             posts.map((post) => (
               <button
-                key={post.post_id}
-                onClick={() => setSelectedPostId(post.post_id)}
+                key={post.id}
+                onClick={() => setSelectedPostId(post.id)}
                 className={`w-full text-left p-3 rounded-lg transition-colors ${
-                  selectedPostId === post.post_id
+                  selectedPostId === post.id
                     ? "bg-blue-50 border border-blue-200"
                     : "hover:bg-gray-50 border border-gray-200"
                 }`}
@@ -145,7 +142,7 @@ export default function CommentsPanel({ postId }: CommentsPanelProps) {
                   {post.title || "Untitled Post"}
                 </div>
                 <div className="text-xs text-gray-500 mt-1">
-                  {comments[post.post_id]?.length || 0} comments
+                  {comments[post.id]?.length || 0} comments
                 </div>
               </button>
             ))
@@ -159,7 +156,7 @@ export default function CommentsPanel({ postId }: CommentsPanelProps) {
             <div className="p-4 border-b border-gray-200">
               <h3 className="text-lg font-semibold">
                 Comments for:{" "}
-                {posts.find((p) => p.post_id === selectedPostId)?.title ||
+                {posts.find((p) => p.id === selectedPostId)?.title ||
                   "Untitled Post"}
               </h3>
             </div>

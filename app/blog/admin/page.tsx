@@ -2,13 +2,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
-  BarChart3,
-  MessageCircle,
-  Settings,
-  Menu,
-  Eye,
-  Heart,
-} from "lucide-react";
+  FaChartBar as BarChart3,
+  FaComments as MessageCircle,
+  FaCog as Settings,
+  FaBars as Menu,
+  FaEye as Eye,
+  FaHeart as Heart,
+} from "react-icons/fa";
 import Sidebar from "@/components/Sidebar";
 
 import BlogAnalytics from "@/components/blog/analytics/BlogAnalytics";
@@ -149,16 +149,10 @@ export default function BlogAdminPage() {
       (sum, postComments) => sum + postComments.length,
       0
     );
-    const totalViews = posts.reduce((sum, post) => sum + post.views, 0);
-    const totalLikes = posts.reduce((sum, post) => sum + post.likes, 0);
-    const totalAISummaries = posts.reduce(
-      (sum, post) => sum + post.ai_summaries,
-      0
-    );
-    const totalAIQuestions = posts.reduce(
-      (sum, post) => sum + post.ai_questions,
-      0
-    );
+    const totalViews = 0;
+    const totalLikes = 0;
+    const totalAISummaries = 0;
+    const totalAIQuestions = 0;
 
     return (
       <div className="space-y-6">
