@@ -119,7 +119,7 @@ export default function Sidebar({
             {content}
           </Link>
         ) : (
-          <div className="group">
+          <div className="group" key={page.id}>
             <div
               onClick={() => {
                 onSelectPage(page.id);
@@ -169,7 +169,9 @@ export default function Sidebar({
 
             {hasChildren && isExpanded && (
               <div className="ml-2">
-                {page.children!.map((child) => renderPage(child, level + 1))}
+                {page.children!.map((child) => (
+                  <div key={child.id}>{renderPage(child, level + 1)}</div>
+                ))}
               </div>
             )}
           </div>

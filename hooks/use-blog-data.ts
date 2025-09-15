@@ -82,7 +82,7 @@ export const useBlogData = () => {
   useEffect(() => {
     let isMounted = true;
 
-    const convertPost = (post: any): BlogPost => {
+    const convertPost = (post: BlogPost): BlogPost => {
       let content: PartialBlock[] = [];
       if (
         post.content &&
@@ -117,7 +117,9 @@ export const useBlogData = () => {
     };
 
     if (isInitialized && blogPosts.length > 0) {
-      const convertedPosts = blogPosts.map(convertPost);
+      const convertedPosts = (blogPosts as unknown as BlogPost[]).map(
+        convertPost
+      );
 
       if (isMounted) {
         setLocalPosts(convertedPosts);
@@ -182,18 +184,6 @@ export const useBlogData = () => {
       cover: null,
     });
 
-    const newPostData = {
-      id: newPostId,
-      user_id: "00000000-0000-0000-0000-000000000000",
-      title: `Post ${localPosts.length + 1}`,
-      content: [],
-      published: false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      children: [],
-    };
-
-    setLocalPosts((prev) => [...prev, newPostData]);
     return newPostId;
   }, [localPosts.length, createPost]);
 
@@ -204,7 +194,7 @@ export const useBlogData = () => {
 
       const subPostCount = parentPost?.children?.length || 0;
 
-      const newSubPostId = await createPost({
+      const newSubPostIdResult = await createPost({
         user_id: "00000000-0000-0000-0000-000000000000",
         title: `Sub post ${subPostCount + 1}`,
         content: null,
@@ -214,30 +204,6 @@ export const useBlogData = () => {
         icon: null,
         cover: null,
       });
-
-      const newSubPostData: BlogPost = {
-        id: newSubPostId,
-        user_id: "00000000-0000-0000-0000-000000000000",
-        title: `Sub post ${subPostCount + 1}`,
-        content: [],
-        published: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        parent_id: parentId,
-        children: [],
-      };
-
-      setLocalPosts((prev) =>
-        prev.map((post) => {
-          if (post.id === parentId) {
-            return {
-              ...post,
-              children: [...(post.children || []), newSubPostData],
-            };
-          }
-          return post;
-        })
-      );
     },
     [localPosts, createPost]
   );
@@ -489,9 +455,7 @@ export const useBlogData = () => {
 
   const deletePost = useCallback(
     async (postId: string) => {
-      // First update local state optimistically
       setLocalPosts((prev) => {
-        // First, try to find and remove from top level
         const topLevelIndex = prev.findIndex((post) => post.id === postId);
         if (topLevelIndex !== -1) {
           return [
@@ -500,23 +464,19 @@ export const useBlogData = () => {
           ];
         }
 
-        // If not found at top level, search in children
         return prev.map((post) => ({
           ...post,
           children: post.children?.filter((child) => child.id !== postId) || [],
         }));
       });
 
-      // Then try to delete from the server
       try {
-        // First check if we need to delete children
         const postToDelete =
           localPosts.find((p) => p.id === postId) ||
           localPosts
             .flatMap((p) => p.children || [])
             .find((c) => c.id === postId);
 
-        // If the post has children, delete them first
         if (postToDelete?.children?.length) {
           await Promise.all(
             postToDelete.children.map((child) =>
@@ -525,12 +485,9 @@ export const useBlogData = () => {
           );
         }
 
-        // Then delete the post itself
         await deletePostContent(postId);
       } catch (error) {
         console.error("Failed to delete post:", error);
-        // The error is already logged, but we don't revert the UI
-        // since we're doing optimistic updates
       }
     },
     [localPosts, deletePostContent]

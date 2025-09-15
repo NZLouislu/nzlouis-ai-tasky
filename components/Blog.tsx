@@ -47,7 +47,7 @@ export default function Blog() {
     isLoading,
     error,
     addNewPost,
-    addNewSubPost,
+    addNewSubPost: addNewSubPostHook,
     updatePostTitle,
     updatePostContent: updatePostContentHook,
     setPostIcon,
@@ -165,7 +165,6 @@ export default function Blog() {
     }
   }, [savePostToDatabase]);
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _unused_saveAllUnsavedChanges = saveAllUnsavedChanges;
 
   useEffect(() => {
@@ -185,6 +184,19 @@ export default function Blog() {
       await savePostToDatabase(currentPost);
     }
   }, [activePostId, savePostToDatabase]);
+
+  const addNewSubPost = useCallback(
+    async (parentId: string) => {
+      try {
+        await addNewSubPostHook(parentId);
+
+        setExpandedPages((prev) => new Set(prev).add(parentId));
+      } catch (error) {
+        console.error("Error adding new sub post:", error);
+      }
+    },
+    [addNewSubPostHook]
+  );
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -206,10 +218,6 @@ export default function Blog() {
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
 
-      // Capture the current value of unsavedChanges to avoid stale closure issues
-      // We're creating a snapshot of the current Map to avoid issues with
-      // the ref value changing by the time this cleanup function runs
-      // eslint-disable-next-line react-hooks/exhaustive-deps
       const unsavedChangesSnapshot = new Map(unsavedChanges.current);
       if (unsavedChangesSnapshot.size > 0) {
         Promise.resolve().then(() => {
@@ -292,7 +300,6 @@ export default function Blog() {
       if (remainingPosts.length > 0) {
         setActivePostId(remainingPosts[0].id);
       } else {
-        // If no posts left, create a new one
         const newPostId = await addNewPost();
         setActivePostId(newPostId);
       }

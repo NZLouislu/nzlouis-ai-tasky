@@ -75,7 +75,6 @@ interface BlogState {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
 
-  // Blog posts
   fetchPosts: (userId: string) => Promise<void>;
   createPost: (
     postData: Omit<BlogPost, "id" | "created_at" | "updated_at"> & {
@@ -88,7 +87,6 @@ interface BlogState {
   ) => Promise<void>;
   deletePostContent: (id: string) => Promise<void>;
 
-  // Comments
   fetchComments: (postId: string) => Promise<void>;
   addNewComment: (comment: Omit<Comment, "id" | "created_at">) => Promise<void>;
   removeComment: (id: string) => Promise<void>;
@@ -222,9 +220,8 @@ export const useBlogStore = create<BlogState>((set) => ({
   ): Promise<string> => {
     set({ isLoading: true, error: null });
 
-    // Generate a new ID if not provided
-    const postId: string =
-      "id" in postData ? (postData.id as string) : generateUUID();
+    // Generate a new ID
+    const postId = generateUUID();
     const postWithId = {
       ...postData,
       id: postId,
@@ -317,7 +314,7 @@ export const useBlogStore = create<BlogState>((set) => ({
           posts: [...state.posts, { ...createdPost, children: [] }],
         }));
       }
-      return postId;
+      return postId; // Return the generated ID
     } catch (error) {
       console.error("Error creating post:", error);
       set({
@@ -361,7 +358,7 @@ export const useBlogStore = create<BlogState>((set) => ({
       } else {
         set((state) => ({ posts: [...state.posts, tempPost] }));
       }
-      return postId;
+      return postId; // Return the generated ID even in error case
     } finally {
       set({ isLoading: false });
     }
