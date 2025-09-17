@@ -94,14 +94,26 @@ export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const id = (await params).id;
-  const { error } = await supabaseService
-    .from("blog_posts")
-    .delete()
-    .eq("id", id);
+  try {
+    if (!supabase) {
+      return NextResponse.json(
+        { error: "Database not configured" },
+        { status: 503 }
+      );
+    }
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const id = (await params).id;
+    const { error } = await supabase.from("blog_posts").delete().eq("id", id);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting blog post:", error);
+    return NextResponse.json(
+      { error: "Failed to delete blog post" },
+      { status: 500 }
+    );
   }
-  return NextResponse.json({ success: true });
 }
