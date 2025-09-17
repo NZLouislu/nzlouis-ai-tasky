@@ -325,7 +325,6 @@ export default function Workspace() {
           onUpdatePageTitle={updatePageTitle}
           onSelectPage={setActivePageId}
           sidebarOpen={sidebarOpen}
-          setSidebarOpen={setSidebarOpen}
           className="top-16"
           onCollapse={handleToggleSidebar}
         />

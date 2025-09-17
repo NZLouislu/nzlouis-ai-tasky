@@ -1,4 +1,5 @@
 "use client";
+import React from "react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useChat } from "@/lib/hooks/use-chat";
 import { v4 as uuidv4 } from "uuid";
@@ -77,7 +78,7 @@ export default function UnifiedChatbot({
       for (const item of items) {
         if (item.type.startsWith("image/")) {
           e.preventDefault();
-          e.stopPropagation(); // 阻止事件冒泡
+          e.stopPropagation(); // Prevent event propagation
           const file = item.getAsFile();
           if (file) {
             handleImageUpload(file);
@@ -94,7 +95,7 @@ export default function UnifiedChatbot({
         const file = e.clipboardData.files[0];
         if (file.type.startsWith("image/")) {
           e.preventDefault();
-          e.stopPropagation(); // 阻止事件冒泡
+          e.stopPropagation(); // Prevent event bubbling
           handleImageUpload(file);
           console.log(
             "Chatbot handlePaste: Image pasted and handled",
@@ -232,10 +233,10 @@ export default function UnifiedChatbot({
                 remainingLength > 100
                   ? 3
                   : remainingLength > 50
-                  ? 8
-                  : remainingLength > 20
-                  ? 12
-                  : 18;
+                    ? 8
+                    : remainingLength > 20
+                      ? 12
+                      : 18;
 
               if (delay > 0) {
                 await new Promise((resolve) => setTimeout(resolve, delay));
@@ -426,8 +427,8 @@ export default function UnifiedChatbot({
                       ? "bg-blue-600 text-white max-w-[85%]"
                       : "bg-blue-600 text-white max-w-[80%] lg:max-w-[70%]"
                     : mode === "standalone"
-                    ? "bg-gray-100 text-gray-900 w-full"
-                    : "bg-gray-100 text-gray-900 w-full"
+                      ? "bg-gray-100 text-gray-900 w-full"
+                      : "bg-gray-100 text-gray-900 w-full"
                 }`}
               >
                 {renderMessageContent(message.content)}

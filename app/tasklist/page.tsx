@@ -124,7 +124,6 @@ export default function Page() {
           activePageId={activePage}
           onSelectPage={setActivePage}
           sidebarOpen={sidebarOpen}
-          setSidebarOpen={setSidebarOpen}
           className="top-16"
           onCollapse={handleToggleSidebar}
         />

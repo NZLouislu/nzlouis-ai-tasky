@@ -2,16 +2,16 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Blog from "@/components/Blog";
+import Blog from "@/components/blog/Blog";
 
 export default function BlogPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // 检查用户是否已认证
+    // Verify user authentication status
     const checkAuth = async () => {
       try {
-        // 尝试从cookie获取token
+        // Attempt to extract token from cookie
         let token = null;
         if (typeof document !== "undefined") {
           const cookie = document.cookie
@@ -22,18 +22,18 @@ export default function BlogPage() {
           }
         }
 
-        // 如果cookie中没有token，尝试从localStorage获取
+        // If no token in cookie, attempt to retrieve from localStorage
         if (!token && typeof localStorage !== "undefined") {
           token = localStorage.getItem("adminToken");
         }
 
-        // 如果没有token，重定向到登录页面
+        // If no token is found, redirect to login page
         if (!token) {
           router.push("/blog/admin/login");
           return;
         }
 
-        // 验证token的有效性
+        // Verify token validity
         const response = await fetch("/api/admin/verify", {
           method: "GET",
           credentials: "include",
@@ -43,7 +43,7 @@ export default function BlogPage() {
         });
 
         if (!response.ok) {
-          // Token无效，重定向到登录页面
+          // Token is invalid, redirect to login page
           router.push("/blog/admin/login");
         }
       } catch (error) {

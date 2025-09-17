@@ -67,7 +67,7 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
-    // Check if blogDb is available
+    // Verify blogDb availability
     if (!blogDb) {
       return NextResponse.json(
         { error: "Blog database not configured" },
@@ -95,7 +95,7 @@ export async function PUT(request: NextRequest) {
 
     let resultData;
 
-    // First, try to fetch the existing feature toggle
+    // First, attempt to fetch the existing feature toggle
     const { data: existingToggle, error: fetchError } = await blogDb
       .from("feature_toggles")
       .select("id")
@@ -103,7 +103,7 @@ export async function PUT(request: NextRequest) {
       .single();
 
     if (fetchError && fetchError.code !== "PGRST116") {
-      // PGRST116 means no rows found
+      // PGRST116 indicates no rows found
       throw fetchError;
     }
 

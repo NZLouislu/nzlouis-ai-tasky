@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FaBars as Menu } from "react-icons/fa";
 import Sidebar from "@/components/Sidebar";
-import BlogAnalytics from "@/components/blog/analytics/BlogAnalytics";
+import BlogAnalytics from "@/components/blogAdmin/analytics/BlogAnalytics";
 
 interface SidebarPage {
   id: string;
@@ -68,7 +68,6 @@ export default function BlogAnalyticsPage() {
           activePageId="analytics"
           onSelectPage={handleSelectPage}
           sidebarOpen={sidebarOpen}
-          setSidebarOpen={setSidebarOpen}
           className="top-16"
           onCollapse={handleToggleSidebar}
         />

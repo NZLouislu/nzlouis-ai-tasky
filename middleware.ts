@@ -1,30 +1,30 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// 定义需要保护的路由
+// Define routes that require protection
 const protectedRoutes = ["/blog"];
 
-// 定义不需要保护的路由（如登录页面）
+// Define routes that don't require protection (e.g., login page)
 const publicRoutes = ["/blog/admin/login"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 如果是公开路由，直接放行
+  // If it's a public route, allow access
   if (publicRoutes.includes(pathname)) {
     return NextResponse.next();
   }
 
-  // 检查是否为受保护路由
+  // Check if the route requires protection
   const isProtectedRoute = protectedRoutes.some((route) =>
     pathname.startsWith(route)
   );
 
   if (isProtectedRoute) {
-    // 尝试从cookie获取token
+    // Attempt to retrieve token from cookie
     let token = request.cookies.get("adminToken")?.value;
 
-    // 如果cookie中没有token，尝试从Authorization header获取
+    // If no token in cookie, attempt to retrieve from Authorization header
     if (!token) {
       const authHeader = request.headers.get("Authorization");
       if (authHeader && authHeader.startsWith("Bearer ")) {
@@ -32,7 +32,7 @@ export async function middleware(request: NextRequest) {
       }
     }
 
-    // 如果没有token，重定向到登录页面
+    // If no token is found, redirect to login page
     if (!token) {
       const loginUrl = new URL("/blog/admin/login", request.url);
       return NextResponse.redirect(loginUrl);
@@ -44,7 +44,7 @@ export async function middleware(request: NextRequest) {
       const username = decoded[0];
       const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
 
-      // 检查用户名是否匹配
+      // Verify username matches
       if (username !== ADMIN_USERNAME) {
         const loginUrl = new URL("/blog/admin/login", request.url);
         return NextResponse.redirect(loginUrl);
@@ -59,14 +59,14 @@ export async function middleware(request: NextRequest) {
   return NextResponse.next();
 }
 
-// 配置匹配器
+// Configure matcher
 export const config = {
   matcher: [
     /*
-     * 匹配所有请求路径，除了以下情况：
-     * 1. 以/_next/static或/_next/image开头的路径（静态资源）
-     * 2. 以/favicon.ico结尾的路径
-     * 3. 以/api开头的路径
+     * Match all request paths except for the following:
+     * 1. Paths starting with /_next/static or /_next/image (static resources)
+     * 2. Paths ending with /favicon.ico
+     * 3. Paths starting with /api
      */
     "/((?!_next/static|_next/image|favicon.ico|api).*)",
   ],

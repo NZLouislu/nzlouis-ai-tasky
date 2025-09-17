@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { PartialBlock } from "@blocknote/core";
 import {
@@ -23,14 +23,25 @@ const Editor = dynamic(() => import("./Editor"), {
   loading: () => <div className="p-4 text-gray-500">Loading editor...</div>,
 });
 
-const DEFAULT_POST_ID = "11111111-1111-1111-1111-111111111111";
+const DEFAULT_POST_ID = "11111111-1111-4111-8111-111111111111";
 
 interface PostCover {
   type: "color" | "image";
   value: string;
 }
 
-interface Post {
+interface BlogPost {
+  id: string;
+  title: string;
+  content: PartialBlock[] | null;
+  icon?: string;
+  cover?: PostCover;
+  parent_id?: string | null;
+  children?: BlogPost[];
+  [key: string]: unknown;
+}
+
+export interface Post {
   id: string;
   title: string;
   content: PartialBlock[];
@@ -55,10 +66,15 @@ export default function Blog() {
     setPostCover,
     removePostCover,
     deletePost,
+    userId,
+    setUserId,
   } = useBlogData();
 
   const [localPosts, setLocalPosts] = useState<Post[]>([]);
   const [activePostId, setActivePostId] = useState<string>(DEFAULT_POST_ID);
+  const [expandedPages, setExpandedPages] = useState<Set<string>>(
+    new Set([DEFAULT_POST_ID])
+  );
   const [showIconSelector, setShowIconSelector] = useState(false);
   const [showCoverOptions, setShowCoverOptions] = useState(false);
   const [showCoverActions, setShowCoverActions] = useState(false);
@@ -68,51 +84,85 @@ export default function Blog() {
   const [chatbotWidth, setChatbotWidth] = useState(600);
   const [isResizing, setIsResizing] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [sidebarWidth] = useState<number>(256);
-  const [userId] = useState<string>("00000000-0000-0000-0000-000000000000");
+  const [isSaving, setIsSaving] = useState(false);
   const [showDeleteDropdown, setShowDeleteDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
   const unsavedChanges = useRef<Map<string, Post>>(new Map());
 
-  function debounce<T extends (...args: [Post]) => void>(
-    func: T,
-    wait: number
-  ): (...args: [Post]) => void {
-    let timeout: NodeJS.Timeout | null = null;
-    return function executedFunction(...args: [Post]) {
-      const later = () => {
-        timeout = null;
-        func(...args);
-      };
-      if (timeout !== null) {
-        clearTimeout(timeout);
-      }
-      timeout = setTimeout(later, wait);
-    };
-  }
+  const createNewPost = useCallback(async () => {
+    try {
+      console.log("Creating new post");
+      const newPostId = await addNewPost();
+      console.log("Created new post with ID:", newPostId);
+      setActivePostId(newPostId);
+      return newPostId;
+    } catch (error) {
+      console.error("Failed to create new post:", error);
+      throw error;
+    }
+  }, [addNewPost]);
 
-  const [isSaving, setIsSaving] = useState(false);
+  useEffect(() => {
+    if (userId === "00000000-0000-0000-0000-000000000000") {
+      const newUserId = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
+        /[xy]/g,
+        function (c) {
+          const r = (Math.random() * 16) | 0,
+            v = c == "x" ? r : (r & 0x3) | 0x8;
+          return v.toString(16);
+        }
+      );
+      setUserId(newUserId);
+      console.log("Generated new userId:", newUserId);
+    } else {
+      console.log("Using existing userId:", userId);
+    }
+  }, [userId, setUserId]);
 
   // Sync local UI state with data fetched by useBlogData
-  useEffect(() => {
-    const mapped = (posts || []).map((p) => ({
-      id: p.id,
-      title: p.title,
+  const mapPosts = useCallback((posts: BlogPost[]): Post[] => {
+    return posts.map((p) => ({
+      ...p,
       content: (p.content as PartialBlock[]) || [],
-      icon: p.icon as string | undefined,
-      cover: p.cover as PostCover | undefined,
-      children: (p as unknown as Post).children || [],
+      children: p.children ? mapPosts(p.children) : [],
     }));
-    setLocalPosts(mapped);
-    if (mapped.length > 0 && !mapped.some((x) => x.id === activePostId)) {
-      setActivePostId(mapped[0].id);
-    }
-  }, [posts, activePostId]);
+  }, []);
+
+  const findPostById = useCallback(
+    (posts: Post[] | undefined, id: string): Post | null => {
+      if (!posts || !Array.isArray(posts)) return null;
+      for (const post of posts) {
+        if (post.id === id) return post;
+        if (post.children && post.children.length > 0) {
+          const found = findPostById(post.children, id);
+          if (found) return found;
+        }
+      }
+      return null;
+    },
+    []
+  );
+
+  const findFirstAvailablePost = useCallback(
+    (postList: Post[] | undefined): Post | null => {
+      if (!postList || !Array.isArray(postList)) return null;
+      for (const post of postList) {
+        if (!post.parent_id) {
+          return post;
+        }
+        if (post.children && post.children.length > 0) {
+          const childPost = findFirstAvailablePost(post.children);
+          if (childPost) return childPost;
+        }
+      }
+      return postList[0] || null;
+    },
+    []
+  );
 
   const savePostToDatabase = useCallback(
     async (post: Post) => {
-      if (!supabase) {
+      if (!supabase || supabase === null) {
         console.warn(
           "Supabase client not configured. Skipping save operation."
         );
@@ -121,8 +171,8 @@ export default function Blog() {
         return;
       }
 
+      setIsSaving(true);
       try {
-        setIsSaving(true);
         const { error } = await supabase.from("blog_posts").upsert({
           id: post.id,
           user_id: userId,
@@ -130,19 +180,19 @@ export default function Blog() {
           content: post.content,
           icon: post.icon,
           cover: post.cover,
+          parent_id: post.parent_id ?? null,
           updated_at: new Date().toISOString(),
         });
 
         if (error) {
-          console.error("Failed to save post to database:", error);
+          console.error(`Failed to save post ${post.id}:`, error);
           throw error;
         }
 
         console.log(`Successfully saved post ${post.id} to database`);
         unsavedChanges.current.delete(post.id);
       } catch (error) {
-        console.error("Error saving post to database:", error);
-        unsavedChanges.current.delete(post.id);
+        console.error(`Error saving post ${post.id}:`, error);
       } finally {
         setIsSaving(false);
       }
@@ -150,22 +200,82 @@ export default function Blog() {
     [userId]
   );
 
-  const saveAllUnsavedChanges = useCallback(async () => {
-    const promises = Array.from(unsavedChanges.current.values()).map((post) =>
-      savePostToDatabase(post)
-    );
+  const handleSetActivePostId = useCallback(
+    async (postId: string) => {
+      const currentPost = unsavedChanges.current.get(activePostId);
+      if (currentPost) {
+        await savePostToDatabase(currentPost);
+      }
+      setActivePostId(postId);
 
-    if (promises.length > 0) {
-      try {
-        await Promise.all(promises);
-        console.log(`Saved ${promises.length} posts to database`);
-      } catch (error) {
-        console.error("Error saving all unsaved changes:", error);
+      const newExpanded = new Set(expandedPages);
+      const post = findPostById(localPosts, postId);
+
+      if (post && post.parent_id) {
+        newExpanded.add(post.parent_id);
+      }
+
+      setExpandedPages(newExpanded);
+    },
+    [activePostId, expandedPages, localPosts, findPostById, savePostToDatabase]
+  );
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const togglePageExpansion = useCallback((pageId: string) => {
+    setExpandedPages((prev) => {
+      const newExpanded = new Set(prev);
+      if (newExpanded.has(pageId)) {
+        newExpanded.delete(pageId);
+      } else {
+        newExpanded.add(pageId);
+      }
+      return newExpanded;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (posts) {
+      const mapped = mapPosts(posts);
+      setLocalPosts(mapped);
+
+      if (mapped.length > 0) {
+        const currentPostExists = findPostById(mapped, activePostId);
+        if (!currentPostExists) {
+          const defaultPost = findFirstAvailablePost(mapped);
+          if (defaultPost) {
+            setActivePostId(defaultPost.id);
+          }
+        }
+      } else {
+        // Create a new post if none exist
+        console.log("No posts found, creating new post");
+        createNewPost().catch((error) => {
+          console.error("Failed to create new post:", error);
+        });
       }
     }
-  }, [savePostToDatabase]);
+  }, [
+    posts,
+    activePostId,
+    findPostById,
+    findFirstAvailablePost,
+    createNewPost,
+    mapPosts,
+  ]);
 
-  const _unused_saveAllUnsavedChanges = saveAllUnsavedChanges;
+  useEffect(() => {
+    if (userId && userId !== "00000000-0000-0000-0000-000000000000") {
+      console.log("UserId changed to:", userId);
+    }
+  }, [userId]);
+
+  // Add effect to monitor localPosts changes
+  useEffect(() => {
+    console.log("localPosts updated:", localPosts.length, "posts");
+    if (localPosts.length > 0) {
+      console.log("First post ID:", localPosts[0].id);
+    }
+  }, [localPosts]);
 
   useEffect(() => {
     const config = getTaskySupabaseConfig();
@@ -188,9 +298,15 @@ export default function Blog() {
   const addNewSubPost = useCallback(
     async (parentId: string) => {
       try {
+        // Wait for the hook to complete and get the new post ID
         await addNewSubPostHook(parentId);
 
-        setExpandedPages((prev) => new Set(prev).add(parentId));
+        // Expand the parent page to show the new subpage
+        setExpandedPages((prev) => {
+          const newExpanded = new Set(prev);
+          newExpanded.add(parentId);
+          return newExpanded;
+        });
       } catch (error) {
         console.error("Error adding new sub post:", error);
       }
@@ -198,14 +314,41 @@ export default function Blog() {
     [addNewSubPostHook]
   );
 
+  // Utility: recursive flatten posts for saving
+  interface FlattenedPost {
+    id: string;
+    title: string;
+    content: PartialBlock[];
+    icon?: string;
+    cover?: PostCover;
+    parent_id: string | null;
+    user_id?: string;
+    [key: string]: unknown;
+  }
+
+  const flattenPostsArr = useCallback(
+    (postsArr: Post[], parent_id: string | null = null): FlattenedPost[] => {
+      let all: FlattenedPost[] = [];
+      for (const p of postsArr) {
+        const { children, ...rest } = p;
+        all.push({ ...rest, parent_id, children: undefined } as FlattenedPost);
+        if (Array.isArray(children) && children.length > 0) {
+          all = all.concat(flattenPostsArr(children, p.id));
+        }
+      }
+      return all;
+    },
+    []
+  );
+
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      const unsavedChangesCount = unsavedChanges.current.size;
-      if (unsavedChangesCount > 0) {
+      if (localPosts.length > 0) {
         navigator.sendBeacon(
           "/api/blog/save",
           JSON.stringify({
-            posts: Array.from(unsavedChanges.current.values()),
+            posts: flattenPostsArr(localPosts),
+            userId: userId,
           })
         );
         e.preventDefault();
@@ -217,17 +360,24 @@ export default function Blog() {
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
-
-      const unsavedChangesSnapshot = new Map(unsavedChanges.current);
-      if (unsavedChangesSnapshot.size > 0) {
+      if (localPosts.length > 0) {
         Promise.resolve().then(() => {
-          Array.from(unsavedChangesSnapshot.values()).forEach((post) =>
-            savePostToDatabase(post)
-          );
+          fetch("/api/blog/save", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              posts: flattenPostsArr(localPosts),
+              userId: userId,
+            }),
+          }).catch((error) => {
+            console.error("Error saving posts on unload:", error);
+          });
         });
       }
     };
-  }, [savePostToDatabase]);
+  }, [localPosts, userId, flattenPostsArr]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -288,42 +438,69 @@ export default function Blog() {
   }, []);
 
   const handleDeletePost = async () => {
-    if (!activePostId) return;
+    console.log("Attempting to delete post with ID:", activePostId);
+    console.log("Current localPosts count:", localPosts.length);
+
+    if (!activePostId) {
+      console.error("No activePostId provided for deletion");
+      return;
+    }
+
+    // Use flexible UUID validation to support various test data formats
+    const uuidRegex =
+      /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+    if (!uuidRegex.test(activePostId)) {
+      console.error("Invalid UUID for post id:", activePostId);
+      return;
+    }
 
     try {
+      console.log("Calling deletePost with ID:", activePostId);
+      // Delete the post from the database
       await deletePost(activePostId);
-      const remainingPosts = localPosts.filter(
-        (post) => post.id !== activePostId
-      );
-      setLocalPosts(remainingPosts);
+      console.log("Successfully deleted post with ID:", activePostId);
 
-      if (remainingPosts.length > 0) {
-        setActivePostId(remainingPosts[0].id);
-      } else {
-        const newPostId = await addNewPost();
-        setActivePostId(newPostId);
-      }
+      // Update local state - no longer need manual updates as useBlogData hook handles it
+      // Wait for hook to complete before setting activePostId
+      setTimeout(() => {
+        // Get current remaining posts
+        const currentPosts = localPosts.filter(
+          (post) => post.id !== activePostId
+        );
+        console.log("Remaining posts after deletion:", currentPosts.length);
+        console.log("Remaining posts:", currentPosts);
+
+        // Get latest posts from useBlogData hook
+        const latestPosts = posts;
+        console.log("Latest posts from hook:", latestPosts.length);
+
+        if (latestPosts.length > 0) {
+          console.log(
+            "Setting active post to first remaining post:",
+            latestPosts[0].id
+          );
+          setActivePostId(latestPosts[0].id);
+        } else {
+          console.log("No remaining posts, creating new post");
+          createNewPost().catch((error) => {
+            console.error("Failed to create new post:", error);
+          });
+        }
+      }, 100);
+
+      console.log("Delete operation completed successfully");
     } catch (error) {
       console.error("Error deleting post:", error);
+      console.error("Error details:", {
+        postId: activePostId,
+        errorName: (error as Error)?.name,
+        errorMessage: (error as Error)?.message,
+        errorStack: (error as Error)?.stack,
+      });
     } finally {
+      console.log("Finished delete operation");
       setShowDeleteDropdown(false);
     }
-  };
-
-  const [expandedPages, setExpandedPages] = useState<Set<string>>(
-    new Set([DEFAULT_POST_ID])
-  );
-
-  const togglePageExpansion = (pageId: string) => {
-    setExpandedPages((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(pageId)) {
-        newSet.delete(pageId);
-      } else {
-        newSet.add(pageId);
-      }
-      return newSet;
-    });
   };
 
   useEffect(() => {
@@ -345,6 +522,14 @@ export default function Blog() {
       return false;
     };
 
+    const activePost = findPostById(localPosts, activePostId) || localPosts[0];
+    if (activePost && activePost.parent_id) {
+      const parentPost = findPostById(localPosts, activePost.parent_id);
+      if (parentPost) {
+        newExpanded.add(parentPost.id);
+      }
+    }
+
     expandParents(localPosts);
     if (
       newExpanded.size !== expandedPages.size ||
@@ -353,7 +538,7 @@ export default function Blog() {
     ) {
       setExpandedPages(newExpanded);
     }
-  }, [activePostId, localPosts, expandedPages]);
+  }, [activePostId, localPosts, expandedPages, findPostById]);
 
   useEffect(() => {
     const checkIsMobile = () => {
@@ -417,30 +602,23 @@ export default function Blog() {
     };
   }, [isResizing, handleMouseMove, handleMouseUp]);
 
-  const activePost = (() => {
-    for (const post of localPosts) {
-      if (post.id === activePostId) {
-        return post;
+  const activePost = useMemo(() => {
+    const findPostRecursively = (posts: Post[]): Post | undefined => {
+      for (const post of posts) {
+        if (post.id === activePostId) {
+          return post;
+        }
+        if (post.children && post.children.length > 0) {
+          const found = findPostRecursively(post.children);
+          if (found) return found;
+        }
       }
+      return undefined;
+    };
 
-      if (post.children) {
-        const findPost = (children: Post[]): Post | undefined => {
-          for (const child of children) {
-            if (child.id === activePostId) {
-              return child;
-            }
-            if (child.children) {
-              const found = findPost(child.children);
-              if (found) return found;
-            }
-          }
-        };
-        const found = findPost(post.children);
-        if (found) return found;
-      }
-    }
+    const found = findPostRecursively(localPosts);
 
-    return (
+    const result = found ||
       localPosts[0] || {
         id: DEFAULT_POST_ID,
         title: "Untitled",
@@ -448,53 +626,76 @@ export default function Blog() {
         icon: undefined,
         cover: undefined,
         children: [],
-      }
-    );
-  })();
+      };
+
+    return result;
+  }, [activePostId, localPosts]);
 
   const updatePostContent = (newContent: PartialBlock[]) => {
     const contentCopy = JSON.parse(JSON.stringify(newContent));
 
-    setLocalPosts((prev) =>
-      prev.map((post) => {
+    const updatePostRecursively = (posts: Post[]): Post[] => {
+      return posts.map((post) => {
         if (post.id === activePostId) {
-          const updatedPost = { ...post, content: contentCopy };
+          const updatedPost = {
+            ...post,
+            content: contentCopy,
+            updated_at: new Date().toISOString(),
+          };
           unsavedChanges.current.set(post.id, updatedPost);
           debouncedSavePostToDatabase(updatedPost);
           return updatedPost;
         }
-        if (post.children) {
-          const updatedChildren = post.children.map((child) => {
-            if (child.id === activePostId) {
-              const updatedChild = { ...child, content: contentCopy };
-              unsavedChanges.current.set(child.id, updatedChild);
-              debouncedSavePostToDatabase(updatedChild);
-              return updatedChild;
-            }
-            return child;
-          });
+        if (post.children && post.children.length > 0) {
+          const updatedChildren = updatePostRecursively(post.children);
+          const hasUpdatedChild = updatedChildren.some(
+            (child, index) => child !== post.children![index]
+          );
+          if (hasUpdatedChild) {
+            const updatedPost = {
+              ...post,
+              children: updatedChildren,
+              updated_at: new Date().toISOString(),
+            };
+            return updatedPost;
+          }
           return { ...post, children: updatedChildren };
         }
         return post;
-      })
-    );
+      });
+    };
 
+    setLocalPosts((prev) => updatePostRecursively(prev));
     updatePostContentHook(activePostId, newContent);
   };
 
   const handleManualSave = useCallback(async () => {
-    const postToSave = unsavedChanges.current.get(activePostId);
-    if (postToSave) {
-      await savePostToDatabase(postToSave);
+    const unsavedPosts = Array.from(unsavedChanges.current.values());
+    if (unsavedPosts.length > 0) {
+      for (const post of unsavedPosts) {
+        await savePostToDatabase(post);
+      }
+      console.log(`Manually saved ${unsavedPosts.length} posts`);
+    } else {
+      console.log("No unsaved changes to save");
     }
-  }, [activePostId, savePostToDatabase]);
+  }, [savePostToDatabase]);
+
+  const debouncedSaveMap = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   const debouncedSavePostToDatabase = useCallback(
     (post: Post) => {
-      const debouncedFunction = debounce((p: Post) => {
-        savePostToDatabase(p);
-      }, 3000);
-      return debouncedFunction(post);
+      const existingTimeout = debouncedSaveMap.current.get(post.id);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+      }
+
+      const timeout = setTimeout(() => {
+        savePostToDatabase(post);
+        debouncedSaveMap.current.delete(post.id);
+      }, 1500);
+
+      debouncedSaveMap.current.set(post.id, timeout);
     },
     [savePostToDatabase]
   );
@@ -580,13 +781,6 @@ export default function Blog() {
     }
   };
 
-  const handleSetActivePostId = async (postId: string) => {
-    if (postId !== activePostId) {
-      await saveCurrentPostBeforeNavigation();
-    }
-    setActivePostId(postId);
-  };
-
   const handleCoverFileUpload = (file: File) => {
     if (file && file.type.startsWith("image/")) {
       const reader = new FileReader();
@@ -655,7 +849,6 @@ export default function Blog() {
             onUpdatePageTitle={updatePostTitle}
             onSelectPage={handleSetActivePostId}
             sidebarOpen={sidebarOpen && !(isChatbotVisible && isMobile)}
-            setSidebarOpen={setSidebarOpen}
             className="top-16"
             onCollapse={handleToggleSidebar}
             expandedPages={expandedPages}
@@ -664,7 +857,7 @@ export default function Blog() {
           <div
             className="fixed h-full w-1 bg-gray-200 z-30"
             style={{
-              left: `${sidebarWidth}px`,
+              left: "64px",
               top: "64px",
             }}
           ></div>
@@ -689,7 +882,7 @@ export default function Blog() {
         }`}
         style={{
           paddingTop: "64px",
-          marginLeft: sidebarCollapsed ? "0" : `${sidebarWidth}px`,
+          marginLeft: sidebarCollapsed ? "0" : "64px",
         }}
       >
         <div className="md:hidden p-4 border-b border-gray-200">
@@ -918,9 +1111,49 @@ export default function Blog() {
                           id={`title-input-${activePostId}`}
                           type="text"
                           value={activePost ? activePost.title : ""}
-                          onChange={async (e) =>
-                            await updatePostTitle(activePostId, e.target.value)
-                          }
+                          onChange={async (e) => {
+                            const newTitle = e.target.value;
+                            const updatePostRecursively = (
+                              posts: Post[]
+                            ): Post[] => {
+                              return posts.map((post) => {
+                                if (post.id === activePostId) {
+                                  const updatedPost = {
+                                    ...post,
+                                    title: newTitle,
+                                    updated_at: new Date().toISOString(),
+                                  };
+                                  unsavedChanges.current.set(
+                                    post.id,
+                                    updatedPost
+                                  );
+                                  debouncedSavePostToDatabase(updatedPost);
+                                  return updatedPost;
+                                }
+                                if (post.children && post.children.length > 0) {
+                                  const updatedChildren = updatePostRecursively(
+                                    post.children
+                                  );
+                                  const hasUpdatedChild = updatedChildren.some(
+                                    (child, index) =>
+                                      child !== post.children![index]
+                                  );
+                                  if (hasUpdatedChild) {
+                                    return {
+                                      ...post,
+                                      children: updatedChildren,
+                                    };
+                                  }
+                                  return { ...post, children: updatedChildren };
+                                }
+                                return post;
+                              });
+                            };
+                            setLocalPosts((prev) =>
+                              updatePostRecursively(prev)
+                            );
+                            await updatePostTitle(activePostId, newTitle);
+                          }}
                           placeholder="Untitled"
                           className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-4xl font-bold text-gray-800 placeholder-gray-400 text-center"
                         />
@@ -998,28 +1231,9 @@ export default function Blog() {
           }}
           className="fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-colors z-30"
           title="Open Chatbot"
-          style={{ width: "56px", height: "56px" }}
         >
           <MessageCircle size={24} />
         </button>
-      )}
-
-      {isChatbotVisible && isMobile && (
-        <div
-          className="lg:hidden fixed inset-0 bg-white z-50 flex flex-col"
-          style={{ top: "64px" }}
-        >
-          <div className="p-4 border-b border-gray-200 flex items-center justify-center flex-shrink-0">
-            <h3 className="font-semibold">AI Blog Assistant</h3>
-          </div>
-
-          <div className="flex-1 overflow-y-auto pb-20">
-            <UnifiedChatbot
-              mode="workspace"
-              onPageModification={handlePageModification}
-            />
-          </div>
-        </div>
       )}
     </div>
   );

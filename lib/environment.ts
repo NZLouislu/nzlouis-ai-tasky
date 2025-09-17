@@ -74,14 +74,6 @@ export function getEnvironmentConfig(): EnvironmentConfig {
     nodeEnv: process.env.NODE_ENV,
   };
 
-  console.log("Final config:", {
-    taskySupabaseUrl: config.taskySupabaseUrl ? "Present" : "Missing",
-    taskySupabaseAnonKey: config.taskySupabaseAnonKey ? "Present" : "Missing",
-    taskySupabaseServiceRoleKey: config.taskySupabaseServiceRoleKey
-      ? "Present"
-      : "Missing",
-  });
-
   return config;
 }
 

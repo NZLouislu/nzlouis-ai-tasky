@@ -2,7 +2,7 @@
 import { useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import UnifiedChatbot from "@/components/UnifiedChatbot";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 interface SidebarPage {
   id: string;
@@ -15,13 +15,18 @@ export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const router = useRouter();
-  const pathname = usePathname();
+  // const pathname = usePathname();
 
-  const activePageId =
-    pathname === "/chatbot/settings" ? "settings" : "chatbot";
+  // const activePageId =
+  //   pathname === "/chatbot/settings" ? "settings" : "chatbot";
 
   const pages: SidebarPage[] = [
-    { id: "chatbot", title: "AI Chatbot", icon: "🤖", href: "/chatbot" },
+    {
+      id: "chatbot",
+      title: "Chatbot",
+      icon: "🤖",
+      href: "/chatbot",
+    },
     {
       id: "settings",
       title: "Settings",
@@ -56,10 +61,9 @@ export default function Page() {
           title="AI Assistant"
           icon="🤖"
           pages={pages}
-          activePageId={activePageId}
+          activePageId="chatbot"
           onSelectPage={handleSelectPage}
           sidebarOpen={sidebarOpen}
-          setSidebarOpen={setSidebarOpen}
           className="top-16"
           onCollapse={handleToggleSidebar}
         />

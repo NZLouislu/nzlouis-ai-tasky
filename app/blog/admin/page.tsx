@@ -11,8 +11,8 @@ import {
 } from "react-icons/fa";
 import Sidebar from "@/components/Sidebar";
 
-import BlogAnalytics from "@/components/blog/analytics/BlogAnalytics";
-import CommentsPanel from "@/components/blog/comments/CommentsPanel";
+import BlogAnalytics from "@/components/blogAdmin/analytics/BlogAnalytics";
+import CommentsPanel from "@/components/blogAdmin/comments/CommentsPanel";
 import { useBlogStore } from "@/lib/stores/blog-store";
 import { verifyAuth } from "@/lib/auth";
 
@@ -382,7 +382,6 @@ export default function BlogAdminPage() {
           activePageId={activePageId}
           onSelectPage={handleSelectPage}
           sidebarOpen={sidebarOpen}
-          setSidebarOpen={setSidebarOpen}
           className="top-16"
           onCollapse={handleToggleSidebar}
         />

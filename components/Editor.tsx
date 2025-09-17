@@ -1,4 +1,5 @@
 "use client";
+import React from "react";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 import { useCreateBlockNote } from "@blocknote/react";
@@ -181,6 +182,17 @@ export default function Editor({
   }, []);
 
   useEffect(() => {
+    // Skip DOM operations in Storybook environment
+    const isStorybook =
+      typeof window !== "undefined" &&
+      (window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1") &&
+      (window.location.port === "6006" || window.location.port === "6007");
+
+    if (isStorybook) {
+      return;
+    }
+
     if (!globalFileInputRef.current) {
       const fi = document.createElement("input");
       fi.type = "file";
@@ -354,7 +366,7 @@ export default function Editor({
           <span>AI Writing Assistant</span>
         </div>
         <div className="flex items-center space-x-2">
-          {/* 保存按钮 */}
+          {/* Save button */}
           <button
             onClick={handleImmediateSave}
             disabled={isSaving}

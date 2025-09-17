@@ -1,12 +1,11 @@
 "use client";
-import { useState } from "react";
+import React, { useState } from "react";
 import {
   FaPlus as Plus,
   FaChevronRight as ChevronRight,
   FaChevronDown as ChevronDown,
   FaBars as PanelLeftClose,
 } from "react-icons/fa";
-import Link from "next/link";
 
 interface Page {
   id: string;
@@ -29,7 +28,7 @@ interface SidebarProps {
   ) => void | Promise<void>;
   onSelectPage: (pageId: string, href?: string) => void;
   sidebarOpen: boolean;
-  setSidebarOpen: (open: boolean) => void;
+  // setSidebarOpen: (open: boolean) => void;
   className?: string;
   onCollapse?: () => void;
   expandedPages?: Set<string>;
@@ -46,7 +45,7 @@ export default function Sidebar({
   onUpdatePageTitle,
   onSelectPage,
   sidebarOpen,
-  setSidebarOpen,
+  // setSidebarOpen,
   className = "",
   onCollapse,
   expandedPages,
@@ -75,105 +74,88 @@ export default function Sidebar({
     }
   };
 
+  const handlePageClick = (pageId: string, href?: string) => {
+    onSelectPage(pageId, href);
+    if (onToggleExpand) {
+      onToggleExpand(pageId);
+    }
+  };
+
   const renderPage = (page: Page, level = 0) => {
     const isExpanded = currentExpandedPages.has(page.id);
     const hasChildren = page.children && page.children.length > 0;
     const isActive = activePageId === page.id;
-
-    const content = (
-      <>
-        {page.icon && <span className="mr-2">{page.icon}</span>}
-        {activePageId === page.id && onUpdatePageTitle ? (
-          <input
-            type="text"
-            value={page.title}
-            onChange={(e) => onUpdatePageTitle(page.id, e.target.value)}
-            onClick={(e) => e.stopPropagation()}
-            className="flex-1 bg-transparent border-none focus:outline-none focus:ring-0 text-sm"
-            style={{ fontSize: "inherit" }}
-          />
-        ) : (
-          <span className="truncate">{page.title}</span>
-        )}
-      </>
-    );
+    // Increase indentation to make hierarchy more obvious
+    const paddingLeft = 12 + level * 20;
 
     return (
       <div key={page.id}>
-        {page.href ? (
-          <Link
-            href={page.href}
-            onClick={() => {
-              onSelectPage(page.id, page.href);
-              if (window.innerWidth < 768) {
-                setSidebarOpen(false);
-              }
-            }}
-            className={`flex items-center px-3 py-2 text-sm rounded-lg cursor-pointer transition-colors ${
-              isActive
-                ? "bg-blue-100 text-blue-800"
-                : "text-gray-700 hover:bg-gray-100"
-            }`}
-            style={{ paddingLeft: `${12 + level * 16}px` }}
-          >
-            {content}
-          </Link>
-        ) : (
-          <div className="group" key={page.id}>
-            <div
-              onClick={() => {
-                onSelectPage(page.id);
-                if (window.innerWidth < 768) {
-                  setSidebarOpen(false);
+        <div
+          className={`group flex items-center justify-between w-full ${
+            isActive
+              ? "bg-blue-50 text-blue-700"
+              : "text-gray-700 hover:bg-gray-100"
+          } rounded px-3 py-2 transition-colors cursor-pointer`}
+          style={{ paddingLeft }}
+          onClick={() => handlePageClick(page.id, page.href)}
+        >
+          <div className="flex items-center flex-1 min-w-0">
+            {hasChildren ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleExpanded(page.id);
+                }}
+                className="p-1 -ml-1 mr-1 text-gray-500 hover:text-gray-700"
+              >
+                {isExpanded ? (
+                  <ChevronDown size={14} />
+                ) : (
+                  <ChevronRight size={14} />
+                )}
+              </button>
+            ) : (
+              // For pages without subpages, also display a placeholder icon to maintain alignment
+              <div className="w-5 mr-1"></div>
+            )}
+            {page.icon && <span className="mr-2">{page.icon}</span>}
+            {activePageId === page.id && onUpdatePageTitle ? (
+              <input
+                type="text"
+                value={page.title}
+                onChange={(e) => onUpdatePageTitle(page.id, e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                className="flex-1 bg-transparent border-none focus:outline-none focus:ring-0 text-sm"
+                style={{ fontSize: "inherit" }}
+              />
+            ) : (
+              <span className="truncate font-medium">
+                {page.title || "Untitled"}
+              </span>
+            )}
+          </div>
+          {onAddSubPage && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const result = onAddSubPage(page.id);
+                if (result instanceof Promise) {
+                  result.catch(console.error);
                 }
               }}
-              className={`flex items-center px-3 py-2 text-sm rounded-lg cursor-pointer transition-colors ${
-                isActive
-                  ? "bg-blue-100 text-blue-800"
-                  : "text-gray-700 hover:bg-gray-100"
-              }`}
-              style={{ paddingLeft: `${12 + level * 16}px` }}
+              className="opacity-0 group-hover:opacity-100 p-1 text-green-600 hover:text-green-800 rounded transition-opacity"
+              title="Add sub-page"
             >
-              {hasChildren && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleExpanded(page.id);
-                  }}
-                  className="mr-1 p-0.5 rounded hover:bg-gray-200"
-                >
-                  {isExpanded ? (
-                    <ChevronDown size={12} />
-                  ) : (
-                    <ChevronRight size={12} />
-                  )}
-                </button>
-              )}
-              <div className="flex-1">{content}</div>
-              {onAddSubPage && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const result = onAddSubPage(page.id);
-                    if (result instanceof Promise) {
-                      result.catch(console.error);
-                    }
-                  }}
-                  className="opacity-100 group-hover:opacity-100 p-1 text-green-600 hover:text-green-800 rounded transition-opacity"
-                  title="Add sub-page"
-                >
-                  <Plus size={12} />
-                </button>
-              )}
-            </div>
+              <Plus size={12} />
+            </button>
+          )}
+        </div>
 
-            {hasChildren && isExpanded && (
-              <div className="ml-2">
-                {page.children!.map((child) => (
-                  <div key={child.id}>{renderPage(child, level + 1)}</div>
-                ))}
-              </div>
-            )}
+        {hasChildren && isExpanded && (
+          <div>
+            {page.children!.map((child) => (
+              <div key={child.id}>{renderPage(child, level + 1)}</div>
+            ))}
           </div>
         )}
       </div>
@@ -182,9 +164,10 @@ export default function Sidebar({
 
   return (
     <div
-      className={`fixed inset-y-0 left-0 z-30 transform ${className} ${
-        sidebarOpen ? "translate-x-0" : "-translate-x-full"
-      } md:translate-x-0 transition-transform duration-200 ease-in-out w-64 bg-white border-r border-gray-200 flex flex-col`}
+      className={`fixed top-0 left-0 h-full bg-white border-r border-gray-200 flex flex-col transition-all duration-200 z-40 ${className} ${
+        sidebarOpen ? "w-64" : "w-0 overflow-hidden"
+      }`}
+      style={{ paddingTop: "64px" }} // Account for header height
     >
       <div className="p-4 border-b border-gray-200 flex justify-between items-center">
         <h2 className="text-lg font-semibold text-gray-800 flex items-center">

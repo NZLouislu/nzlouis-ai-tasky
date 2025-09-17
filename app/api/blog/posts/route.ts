@@ -1,8 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase/supabase-client";
 
-export async function GET() {
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
+
+// Authentication helper function
+async function verifyAuth(request: NextRequest): Promise<boolean> {
   try {
+    let token = request.cookies.get("adminToken")?.value;
+
+    if (!token) {
+      const authHeader = request.headers.get("Authorization");
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        token = authHeader.substring(7);
+      }
+    }
+
+    if (!token) {
+      return false;
+    }
+
+    const decoded = Buffer.from(token, "base64").toString().split(":");
+    const username = decoded[0];
+
+    return username === ADMIN_USERNAME;
+  } catch (error) {
+    console.error("Auth verification error:", error);
+    return false;
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    // Verify authentication
+    if (!(await verifyAuth(request))) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     if (!supabase) {
       return NextResponse.json(
         { error: "Database not configured" },
@@ -10,7 +43,10 @@ export async function GET() {
       );
     }
 
-    const userId = "user-1";
+    // Get userId from request, use default value if not present
+    const url = new URL(request.url);
+    const userId =
+      url.searchParams.get("userId") || "00000000-0000-0000-0000-000000000000";
 
     const { data, error } = await supabase
       .from("blog_posts")
@@ -33,6 +69,11 @@ export async function GET() {
 // Create a new blog post
 export async function POST(request: NextRequest) {
   try {
+    // Verify authentication
+    if (!(await verifyAuth(request))) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     if (!supabase) {
       return NextResponse.json(
         { error: "Database not configured" },
@@ -42,7 +83,8 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-    const userId = "user-1";
+    // Get userId from request body, use default value if not present
+    const userId = body.userId || "00000000-0000-0000-0000-000000000000";
 
     const { data, error } = await supabase
       .from("blog_posts")

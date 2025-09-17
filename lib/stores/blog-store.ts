@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase/supabase-client";
 import type { Database as TaskyDatabase } from "@/lib/supabase/supabase-client";
 import { blogDb } from "@/lib/supabase/blog-client";
 import type { Database as BlogDatabase } from "@/lib/supabase/blog-client";
+import { generateUuid } from "@/lib/utils/uuid";
 
 interface PostCover {
   type: "color" | "image";
@@ -60,6 +61,7 @@ interface BlogState {
   analytics: AnalyticsData | null;
   isLoading: boolean;
   error: string | null;
+  userId: string; // Add userId state
 
   setPosts: (posts: BlogPost[]) => void;
   setCurrentPost: (postId: string) => void;
@@ -74,6 +76,7 @@ interface BlogState {
   setAnalytics: (analytics: AnalyticsData) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  setUserId: (userId: string) => void; // Add function to set userId
 
   fetchPosts: (userId: string) => Promise<void>;
   createPost: (
@@ -100,6 +103,7 @@ export const useBlogStore = create<BlogState>((set) => ({
   analytics: null,
   isLoading: false,
   error: null,
+  userId: "00000000-0000-0000-0000-000000000000", // Initialize userId
 
   setPosts: (posts) => set({ posts }),
   setCurrentPost: (postId) => set({ currentPostId: postId }),
@@ -148,64 +152,127 @@ export const useBlogStore = create<BlogState>((set) => ({
   setAnalytics: (analytics) => set({ analytics }),
   setLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error }),
+  setUserId: (userId) => set({ userId }), // Implement function to set userId
 
   fetchPosts: async (userId) => {
+    console.log("fetchPosts called with userId:", userId);
     set({ isLoading: true, error: null });
     try {
       if (!supabase) {
         console.warn(
           "Supabase client not initialized. Running in offline mode."
         );
-        set({ posts: [] });
+        set({ posts: [], isLoading: false });
         return;
       }
 
-      const { data: rootPosts, error } = await supabase
+      // Fetch all posts for the current user only
+      const { data: userPosts, error } = await supabase
         .from("blog_posts")
         .select("*")
         .eq("user_id", userId)
-        .is("parent_id", null)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.warn("Database error, falling back to offline mode:", error);
+        set({ posts: [], isLoading: false });
+        return;
+      }
 
-      const postsWithChildren = await Promise.all(
-        (rootPosts || []).map(async (post) => {
-          if (!supabase) return post as BlogPost;
-          const { data: children } = await supabase
+      console.log(`Found ${userPosts?.length || 0} posts for user ${userId}`);
+
+      // If no posts exist, create a default post
+      if (!userPosts || userPosts.length === 0) {
+        console.log("No posts found in database for user:", userId);
+        // Create default post
+        const defaultPost = {
+          user_id: userId,
+          title: "Welcome to your blog",
+          content: JSON.stringify([
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "text",
+                  text: "This is your first blog post. You can edit this content or create new posts.",
+                  styles: {},
+                },
+              ],
+            },
+          ]),
+          published: true,
+          parent_id: null,
+          position: 0,
+          icon: "📝",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        try {
+          const { data: createdPost, error: createError } = await supabase
             .from("blog_posts")
-            .select("*")
-            .eq("user_id", userId)
-            .eq("parent_id", post.id)
-            .order("created_at", { ascending: false });
+            .insert(defaultPost)
+            .select();
 
-          const postWithChildren = {
-            ...post,
-            children: children || [],
-          } as BlogPost;
+          if (createError) {
+            console.error("Error creating default post:", createError);
+            set({ posts: [], isLoading: false });
+            return;
+          }
 
-          // Recursively load grandchildren if needed
-          postWithChildren.children = await Promise.all(
-            (postWithChildren.children || []).map(async (child) => {
-              if (!supabase) return child as BlogPost;
-              const { data: grandchildren } = await supabase
-                .from("blog_posts")
-                .select("*")
-                .eq("user_id", userId)
-                .eq("parent_id", child.id)
-                .order("created_at", { ascending: false });
-              return { ...child, children: grandchildren || [] } as BlogPost;
-            })
-          );
+          console.log("Created default post:", createdPost);
+          set({ posts: [{ ...createdPost[0], children: [] }] });
+          return;
+        } catch (createError) {
+          console.error("Error creating default post:", createError);
+          set({ posts: [], isLoading: false });
+          return;
+        }
+      }
 
-          return postWithChildren;
-        })
-      );
+      // Build hierarchical structure for posts
+      const rootPosts = userPosts.filter((post) => post.parent_id === null);
+      const childPosts = userPosts.filter((post) => post.parent_id !== null);
 
+      // Group child posts by parent_id
+      const childrenByParentId: Record<string, typeof userPosts> = {};
+      childPosts.forEach((child) => {
+        const parentId = child.parent_id as string;
+        if (!childrenByParentId[parentId]) {
+          childrenByParentId[parentId] = [];
+        }
+        childrenByParentId[parentId].push(child);
+      });
+
+      // Build hierarchical structure
+      const postsWithChildren = rootPosts.map((post) => {
+        const children = childrenByParentId[post.id] || [];
+
+        // Recursively build children structure
+        const buildChildrenStructure = (
+          childPosts: typeof userPosts
+        ): BlogPost[] => {
+          return childPosts.map((child) => {
+            const grandchildren = childrenByParentId[child.id] || [];
+            return {
+              ...child,
+              children: buildChildrenStructure(grandchildren),
+            } as BlogPost;
+          });
+        };
+
+        return {
+          ...post,
+          children: buildChildrenStructure(children),
+        } as BlogPost;
+      });
+
+      console.log("Setting posts in store:", postsWithChildren.length);
       set({ posts: postsWithChildren });
     } catch (error) {
       console.error("Error fetching posts:", error);
       set({
+        posts: [],
         error: error instanceof Error ? error.message : "Failed to fetch posts",
       });
     } finally {
@@ -221,7 +288,7 @@ export const useBlogStore = create<BlogState>((set) => ({
     set({ isLoading: true, error: null });
 
     // Generate a new ID
-    const postId = generateUUID();
+    const postId = generateUuid();
     const postWithId = {
       ...postData,
       id: postId,
@@ -235,7 +302,8 @@ export const useBlogStore = create<BlogState>((set) => ({
         );
         const tempPost = {
           ...postWithId,
-          user_id: "offline-user",
+          user_id:
+            ("user_id" in postWithId && postWithId.user_id) || "offline-user",
           title: "title" in postWithId ? postWithId.title : "Untitled",
           content: null,
           published: false,
@@ -244,7 +312,7 @@ export const useBlogStore = create<BlogState>((set) => ({
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           children: [],
-        } as BlogPost;
+        } as unknown as BlogPost;
         const updatePosts = (posts: BlogPost[]): BlogPost[] => {
           return posts.map((post) => {
             if (post.id === postWithId.parent_id) {
@@ -323,7 +391,8 @@ export const useBlogStore = create<BlogState>((set) => ({
       // Fallback to local addition in case of error
       const tempPost = {
         ...postWithId,
-        user_id: "offline-user",
+        user_id:
+          ("user_id" in postWithId && postWithId.user_id) || "offline-user",
         title: "title" in postWithId ? postWithId.title : "Untitled",
         content: null,
         published: false,
@@ -332,7 +401,7 @@ export const useBlogStore = create<BlogState>((set) => ({
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         children: [],
-      } as BlogPost;
+      } as unknown as BlogPost;
       const updatePosts = (posts: BlogPost[]): BlogPost[] => {
         return posts.map((post) => {
           if (post.id === postWithId.parent_id) {
@@ -389,11 +458,13 @@ export const useBlogStore = create<BlogState>((set) => ({
         return;
       }
 
-      const updateData = {
+      const updateData: Partial<BlogPost> & { updated_at: string } = {
         ...updates,
         updated_at: new Date().toISOString(),
-        parent_id: updates.parent_id ?? null,
       };
+      if (Object.prototype.hasOwnProperty.call(updates, "parent_id")) {
+        updateData.parent_id = updates.parent_id ?? null;
+      }
 
       const { data, error } = await supabase
         .from("blog_posts")
@@ -443,8 +514,18 @@ export const useBlogStore = create<BlogState>((set) => ({
   },
 
   deletePostContent: async (id) => {
+    console.log("Store deletePostContent called with ID:", id);
     set({ isLoading: true, error: null });
     try {
+      // Use flexible UUID validation to support various test data formats
+      const uuidRegex =
+        /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+      if (!uuidRegex.test(id)) {
+        const error = new Error(`Invalid UUID for post id: ${id}`);
+        console.error("Invalid UUID for post id:", id);
+        throw error;
+      }
+
       if (!supabase) {
         console.warn(
           "Supabase client not initialized. Running in offline mode."
@@ -455,18 +536,51 @@ export const useBlogStore = create<BlogState>((set) => ({
         return;
       }
 
+      console.log("Checking if post exists in database:", id);
+      // First check if the post exists
+      const { data: existingPost, error: fetchError } = await supabase
+        .from("blog_posts")
+        .select("id")
+        .eq("id", id)
+        .single();
+
+      if (fetchError && fetchError.code !== "PGRST116") {
+        // PGRST116 means no rows returned, which is fine
+        console.warn("Error checking if post exists:", fetchError);
+        // Continue with deletion attempt for other errors
+      } else if (fetchError && fetchError.code === "PGRST116") {
+        console.log(
+          "Post does not exist in database, but continuing with deletion"
+        );
+      } else {
+        console.log("Post exists in database:", existingPost);
+      }
+
+      console.log("Attempting to delete post from database:", id);
+      // Delete the post (CASCADE will handle children)
       const { error } = await supabase.from("blog_posts").delete().eq("id", id);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error deleting post from database:", error);
+        throw error;
+      }
 
-      set((state) => ({
-        posts: state.posts.filter((post) => post.id !== id),
-      }));
+      console.log("Successfully deleted post from database:", id);
+      // If we got here, the deletion was successful
+      set((state) => {
+        const updatedPosts = state.posts.filter((post) => post.id !== id);
+        console.log("Updated posts after deletion:", updatedPosts);
+        return {
+          posts: updatedPosts,
+        };
+      });
     } catch (error) {
       console.error("Error deleting post:", error);
       set({
         error: error instanceof Error ? error.message : "Failed to delete post",
       });
+      // Re-throw the error so the calling function knows it failed
+      throw error;
     } finally {
       set({ isLoading: false });
     }
@@ -519,7 +633,7 @@ export const useBlogStore = create<BlogState>((set) => ({
 
       const newComment = {
         ...comment,
-        id: generateUUID(),
+        id: generateUuid(),
         created_at: new Date().toISOString(),
       };
 
@@ -591,11 +705,3 @@ export const useBlogStore = create<BlogState>((set) => ({
     }
   },
 }));
-
-function generateUUID() {
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
-    const r = (Math.random() * 16) | 0,
-      v = c == "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}

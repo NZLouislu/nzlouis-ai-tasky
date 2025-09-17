@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FaBars as Menu } from "react-icons/fa";
 import Sidebar from "@/components/Sidebar";
-import CommentsPanel from "@/components/blog/comments/CommentsPanel";
+import CommentsPanel from "@/components/blogAdmin/comments/CommentsPanel";
 
 interface SidebarPage {
   id: string;
@@ -68,7 +68,6 @@ export default function BlogCommentsPage() {
           activePageId="comments"
           onSelectPage={handleSelectPage}
           sidebarOpen={sidebarOpen}
-          setSidebarOpen={setSidebarOpen}
           className="top-16"
           onCollapse={handleToggleSidebar}
         />
