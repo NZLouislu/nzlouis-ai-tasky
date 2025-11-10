@@ -14,13 +14,14 @@ export default function LayoutWrapper({
   const isBlogPage = pathname === "/blog";
   const isWorkspacePage = pathname === "/workspace";
   const isTasksPage = pathname === "/tasklist";
+  const isAITaskyPage = pathname === "/ai-tasky" || pathname?.startsWith("/ai-tasky/");
 
   return (
     <>
       <Navbar />
       <main
         className={`flex-1 ${
-          isChatbotPage || isBlogPage || isWorkspacePage || isTasksPage
+          isChatbotPage || isBlogPage || isWorkspacePage || isTasksPage || isAITaskyPage
             ? ""
             : "pt-12 pb-4"
         }`}

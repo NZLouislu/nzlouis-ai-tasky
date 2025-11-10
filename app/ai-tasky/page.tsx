@@ -229,11 +229,11 @@ export default function AITaskyPage() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="flex h-screen bg-gray-50 overflow-hidden pt-16">
       {/* Sidebar */}
       {sidebarOpen && (
-        <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-full">
-          <div className="p-4 border-b border-gray-200">
+        <div className="w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+          <div className="p-4 border-b border-gray-200 flex-shrink-0">
             <button
               onClick={createNewSession}
               className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 mb-2"
@@ -269,13 +269,13 @@ export default function AITaskyPage() {
       )}
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Header */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Header - Fixed at top */}
         <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
           <h1 className="text-2xl font-bold text-gray-800">AI Tasky</h1>
         </div>
 
-        {/* Messages */}
+        {/* Messages - Scrollable area */}
         <div className="flex-1 overflow-y-auto chatbot-scrollbar">
           <div className="max-w-[900px] mx-auto p-6">
             {messages.length === 0 && (
@@ -339,7 +339,7 @@ export default function AITaskyPage() {
           </div>
         </div>
 
-        {/* Input */}
+        {/* Input - Fixed at bottom */}
         <div className="bg-white border-t border-gray-200 p-4 flex-shrink-0">
           <div className="max-w-[900px] mx-auto">
             {previewImage && (

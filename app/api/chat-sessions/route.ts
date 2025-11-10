@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { taskyDb } from '@/lib/supabase/tasky-db-client';
 
 // GET /api/chat-sessions - Get all sessions for user
 export async function GET() {
@@ -12,17 +10,15 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const sessions = await prisma.chatSession.findMany({
-      where: { userId: session.user.id },
-      orderBy: { updatedAt: 'desc' },
-      include: {
-        _count: {
-          select: { messages: true },
-        },
-      },
-    });
+    const { data: sessions, error } = await taskyDb
+      .from('chat_sessions')
+      .select('*, messages:chat_messages(count)')
+      .eq('user_id', session.user.id)
+      .order('updated_at', { ascending: false });
 
-    return NextResponse.json({ sessions });
+    if (error) throw error;
+
+    return NextResponse.json({ sessions: sessions || [] });
   } catch (error) {
     console.error('Get sessions error:', error);
     return NextResponse.json(
@@ -43,14 +39,20 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { title, provider, model } = body;
 
-    const chatSession = await prisma.chatSession.create({
-      data: {
-        userId: session.user.id,
+    const { data: chatSession, error } = await taskyDb
+      .from('chat_sessions')
+      .insert({
+        user_id: session.user.id,
         title: title || 'New Chat',
         provider: provider || 'google',
         model: model || 'gemini-2.5-flash',
-      },
-    });
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
 
     return NextResponse.json({ session: chatSession });
   } catch (error) {

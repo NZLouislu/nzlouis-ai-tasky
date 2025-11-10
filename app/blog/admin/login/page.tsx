@@ -1,33 +1,43 @@
 "use client";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function BlogLoginPage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [loading, setLoading] = useState(false);
+
+  // If already logged in, redirect to blog
+  useEffect(() => {
+    if (status === "authenticated" && session) {
+      router.replace("/blog");
+    }
+  }, [session, status, router]);
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
-      const result = await signIn("google", {
+      // Use redirect: true to let NextAuth handle the redirect
+      await signIn("google", {
         callbackUrl: "/blog",
-        redirect: false,
+        redirect: true,
       });
-
-      if (result?.ok) {
-        router.push("/blog");
-      } else if (result?.error) {
-        console.error("Sign in error:", result.error);
-        alert("Failed to sign in. Please try again.");
-      }
     } catch (error) {
       console.error("Sign in error:", error);
       alert("Failed to sign in. Please try again.");
-    } finally {
       setLoading(false);
     }
   };
+
+  // Show loading if already authenticated
+  if (status === "authenticated") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-gray-600">Redirecting...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">

@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { taskyDb } from '@/lib/supabase/tasky-db-client';
 
 // POST /api/chat-sessions/[id]/messages - Save messages
 export async function POST(
@@ -17,14 +15,14 @@ export async function POST(
     }
 
     // Verify session belongs to user
-    const chatSession = await prisma.chatSession.findFirst({
-      where: {
-        id: id,
-        userId: session.user.id,
-      },
-    });
+    const { data: chatSession, error: sessionError } = await taskyDb
+      .from('chat_sessions')
+      .select('id')
+      .eq('id', id)
+      .eq('user_id', session.user.id)
+      .single();
 
-    if (!chatSession) {
+    if (sessionError || !chatSession) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
 
@@ -42,24 +40,30 @@ export async function POST(
       imageUrl?: string;
     }
     
-    const savedMessages = await prisma.chatMessage.createMany({
-      data: (messages as MessageInput[]).map((msg) => ({
-        sessionId: id,
-        role: msg.role,
-        content: msg.content,
-        imageUrl: msg.imageUrl || null,
-      })),
-    });
+    const { data: savedMessages, error: messagesError } = await taskyDb
+      .from('chat_messages')
+      .insert(
+        (messages as MessageInput[]).map((msg) => ({
+          session_id: id,
+          role: msg.role,
+          content: msg.content,
+          image_url: msg.imageUrl || null,
+          created_at: new Date().toISOString(),
+        }))
+      )
+      .select();
+
+    if (messagesError) throw messagesError;
 
     // Update session timestamp
-    await prisma.chatSession.update({
-      where: { id: id },
-      data: { updatedAt: new Date() },
-    });
+    await taskyDb
+      .from('chat_sessions')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', id);
 
     return NextResponse.json({ 
       success: true,
-      count: savedMessages.count,
+      count: savedMessages?.length || 0,
     });
   } catch (error) {
     console.error('Save messages error:', error);

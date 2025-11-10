@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth-config";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { taskyDb } from "@/lib/supabase/tasky-db-client";
 
 export async function GET() {
   const session = await auth();
@@ -11,21 +9,32 @@ export async function GET() {
   }
 
   try {
-    let settings = await prisma.userAISettings.findUnique({
-      where: { userId: session.user.id },
-    });
+    const { data: settings, error } = await taskyDb
+      .from('user_ai_settings')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error;
 
     if (!settings) {
-      settings = await prisma.userAISettings.create({
-        data: {
-          userId: session.user.id,
-          defaultProvider: 'google',
-          defaultModel: 'gemini-1.5-flash',
+      const { data: newSettings, error: createError } = await taskyDb
+        .from('user_ai_settings')
+        .insert({
+          user_id: session.user.id,
+          default_provider: 'google',
+          default_model: 'gemini-1.5-flash',
           temperature: 0.8,
-          maxTokens: 1024,
-          systemPrompt: 'You are a helpful AI assistant.',
-        },
-      });
+          max_tokens: 1024,
+          system_prompt: 'You are a helpful AI assistant.',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (createError) throw createError;
+      return NextResponse.json({ settings: newSettings });
     }
 
     return NextResponse.json({ settings });
@@ -65,21 +74,23 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const settings = await prisma.userAISettings.upsert({
-      where: { userId: session.user.id },
-      update: {
-        ...data,
-        updatedAt: new Date(),
-      },
-      create: {
-        userId: session.user.id,
-        defaultProvider: data.defaultProvider || 'google',
-        defaultModel: data.defaultModel || 'gemini-1.5-flash',
+    const { data: settings, error } = await taskyDb
+      .from('user_ai_settings')
+      .upsert({
+        user_id: session.user.id,
+        default_provider: data.defaultProvider || data.default_provider || 'google',
+        default_model: data.defaultModel || data.default_model || 'gemini-1.5-flash',
         temperature: data.temperature ?? 0.8,
-        maxTokens: data.maxTokens ?? 1024,
-        systemPrompt: data.systemPrompt || 'You are a helpful AI assistant.',
-      },
-    });
+        max_tokens: (data.maxTokens || data.max_tokens) ?? 1024,
+        system_prompt: data.systemPrompt || data.system_prompt || 'You are a helpful AI assistant.',
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'user_id',
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
 
     return NextResponse.json({ 
       success: true,

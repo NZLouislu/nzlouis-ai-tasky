@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth-config";
-import { PrismaClient } from "@prisma/client";
+import { taskyDb } from "@/lib/supabase/tasky-db-client";
 import { encryptAPIKey } from "@/lib/encryption";
-
-const prisma = new PrismaClient();
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -31,27 +29,20 @@ export async function POST(req: NextRequest) {
 
     const { encrypted, iv, authTag } = encryptAPIKey(apiKey);
 
-    await prisma.userAPIKey.upsert({
-      where: {
-        userId_provider: {
-          userId: session.user.id,
-          provider,
-        },
-      },
-      update: {
-        keyEncrypted: encrypted,
-        iv,
-        authTag,
-        updatedAt: new Date(),
-      },
-      create: {
-        userId: session.user.id,
+    const { error } = await taskyDb
+      .from('user_api_keys')
+      .upsert({
+        user_id: session.user.id,
         provider,
-        keyEncrypted: encrypted,
+        encrypted_key: encrypted,
         iv,
-        authTag,
-      },
-    });
+        auth_tag: authTag,
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'user_id,provider',
+      });
+
+    if (error) throw error;
 
     return NextResponse.json({ 
       success: true,
@@ -73,17 +64,14 @@ export async function GET() {
   }
 
   try {
-    const keys = await prisma.userAPIKey.findMany({
-      where: { userId: session.user.id },
-      select: { 
-        id: true,
-        provider: true, 
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    const { data: keys, error } = await taskyDb
+      .from('user_api_keys')
+      .select('id, provider, created_at, updated_at')
+      .eq('user_id', session.user.id);
 
-    return NextResponse.json({ keys });
+    if (error) throw error;
+
+    return NextResponse.json({ keys: keys || [] });
   } catch (error) {
     console.error('Error fetching API keys:', error);
     return NextResponse.json(
@@ -110,14 +98,13 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    await prisma.userAPIKey.delete({
-      where: {
-        userId_provider: {
-          userId: session.user.id,
-          provider,
-        },
-      },
-    });
+    const { error } = await taskyDb
+      .from('user_api_keys')
+      .delete()
+      .eq('user_id', session.user.id)
+      .eq('provider', provider);
+
+    if (error) throw error;
 
     return NextResponse.json({ 
       success: true,

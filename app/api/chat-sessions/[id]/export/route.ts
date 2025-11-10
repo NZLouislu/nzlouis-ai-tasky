@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { PrismaClient } from '@prisma/client';
+import { taskyDb } from '@/lib/supabase/tasky-db-client';
 import {
   generateMarkdownFromSession,
   generateJiraMarkdown,
   generateTrelloMarkdown,
 } from '@/lib/markdown-generator';
-
-const prisma = new PrismaClient();
 
 // GET /api/chat-sessions/[id]/export?format=markdown|jira|trello
 export async function GET(
@@ -21,20 +19,15 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify session belongs to user
-    const chatSession = await prisma.chatSession.findFirst({
-      where: {
-        id: id,
-        userId: session.user.id,
-      },
-      include: {
-        messages: {
-          orderBy: { createdAt: 'asc' },
-        },
-      },
-    });
+    // Verify session belongs to user and get messages
+    const { data: chatSession, error } = await taskyDb
+      .from('chat_sessions')
+      .select('*, messages:chat_messages(*)')
+      .eq('id', id)
+      .eq('user_id', session.user.id)
+      .single();
 
-    if (!chatSession) {
+    if (error || !chatSession) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
 

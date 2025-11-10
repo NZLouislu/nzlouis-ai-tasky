@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { taskyDb } from '@/lib/supabase/tasky-db-client';
 
 // GET /api/chat-sessions/[id] - Get session with messages
 export async function GET(
@@ -16,19 +14,14 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const chatSession = await prisma.chatSession.findFirst({
-      where: {
-        id: id,
-        userId: session.user.id,
-      },
-      include: {
-        messages: {
-          orderBy: { createdAt: 'asc' },
-        },
-      },
-    });
+    const { data: chatSession, error } = await taskyDb
+      .from('chat_sessions')
+      .select('*, messages:chat_messages(*)')
+      .eq('id', id)
+      .eq('user_id', session.user.id)
+      .single();
 
-    if (!chatSession) {
+    if (error || !chatSession) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
 
@@ -57,18 +50,17 @@ export async function PATCH(
     const body = await req.json();
     const { title } = body;
 
-    const chatSession = await prisma.chatSession.updateMany({
-      where: {
-        id: id,
-        userId: session.user.id,
-      },
-      data: {
+    const { data, error } = await taskyDb
+      .from('chat_sessions')
+      .update({
         title,
-        updatedAt: new Date(),
-      },
-    });
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .eq('user_id', session.user.id)
+      .select();
 
-    if (chatSession.count === 0) {
+    if (error || !data || data.length === 0) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
 
@@ -94,14 +86,14 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const chatSession = await prisma.chatSession.deleteMany({
-      where: {
-        id: id,
-        userId: session.user.id,
-      },
-    });
+    const { data, error } = await taskyDb
+      .from('chat_sessions')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', session.user.id)
+      .select();
 
-    if (chatSession.count === 0) {
+    if (error || !data || data.length === 0) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
 

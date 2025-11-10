@@ -19,41 +19,37 @@
   }
 }
 
-html, body {
+html,
+body {
   overflow-x: hidden;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  height: 100%;
 }
 
-html::-webkit-scrollbar,
+/* 只隐藏 body 的滚动条，但保留滚动功能 */
 body::-webkit-scrollbar {
-  display: none; /* Chrome, Safari and Opera */
-}
-
-/* 隐藏所有滚动条 */
-* {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE and Edge */
-}
-
-*::-webkit-scrollbar {
-  display: none; /* Chrome, Safari and Opera */
+  width: 0px;
+  background: transparent;
 }
 
 .chatbot-scroll {
   overflow: hidden;
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE and Edge */
 }
 
 .chatbot-scroll::-webkit-scrollbar {
-  display: none; /* Chrome, Safari and Opera */
+  display: none;
+  /* Chrome, Safari and Opera */
 }
 
 /* 自定义聊天机器人滚动条样式 */
 .chatbot-scrollbar {
-  scrollbar-width: thin; /* Firefox */
-  scrollbar-color: #cbd5e1 #f1f5f9; /* Firefox - thumb color, track color */
+  scrollbar-width: thin;
+  /* Firefox */
+  scrollbar-color: #cbd5e1 #f1f5f9;
+  /* Firefox - thumb color, track color */
 }
 
 .chatbot-scrollbar::-webkit-scrollbar {

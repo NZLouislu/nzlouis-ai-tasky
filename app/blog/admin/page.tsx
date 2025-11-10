@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   FaChartBar as BarChart3,
   FaComments as MessageCircle,
@@ -14,7 +15,6 @@ import Sidebar from "@/components/Sidebar";
 import BlogAnalytics from "@/components/blogAdmin/analytics/BlogAnalytics";
 import CommentsPanel from "@/components/blogAdmin/comments/CommentsPanel";
 import { useBlogStore } from "@/lib/stores/blog-store";
-import { verifyAuth } from "@/lib/auth";
 
 interface SidebarPage {
   id: string;
@@ -26,33 +26,19 @@ interface SidebarPage {
 export default function BlogAdminPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState("overview");
   const router = useRouter();
+  const { status } = useSession();
 
   const { posts, comments, featureToggles, setPosts, setFeatureToggles } =
     useBlogStore();
 
-  const checkAuthentication = useCallback(async () => {
-    try {
-      const isAuth = await verifyAuth();
-      if (isAuth) {
-        setIsAuthenticated(true);
-        setLoading(false);
-      } else {
-        router.replace("/blog/admin/login");
-      }
-    } catch (error) {
-      console.error("Authentication check failed:", error);
+  // Check authentication using NextAuth
+  useEffect(() => {
+    if (status === "unauthenticated") {
       router.replace("/blog/admin/login");
     }
-  }, [router]);
-
-  useEffect(() => {
-    checkAuthentication();
-  }, [checkAuthentication]);
+  }, [status, router]);
 
   const loadPosts = useCallback(async () => {
     if (posts.length > 0) return;
@@ -356,11 +342,7 @@ export default function BlogAdminPage() {
     );
   };
 
-  if (loading && !isAuthenticated) {
-    return null;
-  }
-
-  if (loading) {
+  if (status === "loading") {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -368,8 +350,12 @@ export default function BlogAdminPage() {
     );
   }
 
-  if (!isAuthenticated) {
-    return null;
+  if (status === "unauthenticated") {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-gray-600">Redirecting to login...</div>
+      </div>
+    );
   }
 
   return (

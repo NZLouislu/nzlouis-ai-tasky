@@ -7,15 +7,14 @@ import Blog from "@/components/blog/Blog";
 
 export default function BlogPage() {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { status } = useSession();
 
   useEffect(() => {
-    if (status === "loading") return;
-    
-    if (!session) {
-      router.push("/blog/admin/login");
+    // Only redirect if we're sure there's no session
+    if (status === "unauthenticated") {
+      router.replace("/blog/admin/login");
     }
-  }, [session, status, router]);
+  }, [status, router]);
 
   if (status === "loading") {
     return (
@@ -25,8 +24,12 @@ export default function BlogPage() {
     );
   }
 
-  if (!session) {
-    return null;
+  if (status === "unauthenticated") {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="text-gray-500">Redirecting to login...</div>
+      </div>
+    );
   }
 
   return (
