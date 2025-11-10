@@ -2,58 +2,32 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Blog from "@/components/blog/Blog";
 
 export default function BlogPage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
 
   useEffect(() => {
-    // Verify user authentication status
-    const checkAuth = async () => {
-      try {
-        // Attempt to extract token from cookie
-        let token = null;
-        if (typeof document !== "undefined") {
-          const cookie = document.cookie
-            .split("; ")
-            .find((row) => row.startsWith("adminToken="));
-          if (cookie) {
-            token = cookie.split("=")[1];
-          }
-        }
+    if (status === "loading") return;
+    
+    if (!session) {
+      router.push("/blog/admin/login");
+    }
+  }, [session, status, router]);
 
-        // If no token in cookie, attempt to retrieve from localStorage
-        if (!token && typeof localStorage !== "undefined") {
-          token = localStorage.getItem("adminToken");
-        }
+  if (status === "loading") {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="text-gray-500">Loading...</div>
+      </div>
+    );
+  }
 
-        // If no token is found, redirect to login page
-        if (!token) {
-          router.push("/blog/admin/login");
-          return;
-        }
-
-        // Verify token validity
-        const response = await fetch("/api/admin/verify", {
-          method: "GET",
-          credentials: "include",
-          headers: {
-            "Cache-Control": "no-cache",
-          },
-        });
-
-        if (!response.ok) {
-          // Token is invalid, redirect to login page
-          router.push("/blog/admin/login");
-        }
-      } catch (error) {
-        console.error("Auth check error:", error);
-        router.push("/blog/admin/login");
-      }
-    };
-
-    checkAuth();
-  }, [router]);
+  if (!session) {
+    return null;
+  }
 
   return (
     <div className="h-screen overflow-hidden">

@@ -144,11 +144,10 @@ export default function UnifiedChatbot({
         }
 
         const chatMessages = [
-          { role: "system", content: settings.systemPrompt },
+          { role: "system" as const, content: settings.systemPrompt },
           {
-            role: "user",
+            role: "user" as const,
             content: text,
-            ...(previewImage && { image: previewImage }),
           },
         ];
 
@@ -158,12 +157,11 @@ export default function UnifiedChatbot({
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            modelId: settings.selectedModel,
             messages: chatMessages,
+            provider: currentModel.provider,
+            model: currentModel.id,
             temperature: settings.temperature,
             maxTokens: settings.maxTokens,
-            apiKey: apiKey,
-            stream: true,
           }),
         });
 
@@ -171,146 +169,71 @@ export default function UnifiedChatbot({
           throw new Error("Failed to get response from AI");
         }
 
-        const contentType = response.headers.get("content-type");
+        const reader = response.body?.getReader();
+        if (!reader) {
+          throw new Error("No reader available");
+        }
 
-        if (contentType?.includes("text/event-stream")) {
-          const reader = response.body?.getReader();
-          if (!reader) {
-            throw new Error("No reader available");
-          }
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let isFirstChunk = true;
 
-          const decoder = new TextDecoder();
-          let buffer = "";
-          let isFirstChunk = true;
+        const assistantMessageId = uuidv4();
+        let assistantMessage: Message = {
+          id: assistantMessageId,
+          content: "",
+          role: "assistant",
+          timestamp: new Date().toISOString(),
+        };
 
-          const assistantMessageId = uuidv4();
-          let assistantMessage: Message = {
-            id: assistantMessageId,
-            content: "",
-            role: "assistant",
-            timestamp: new Date().toISOString(),
-          };
+        let currentDisplayText = "";
 
-          const displayQueue: string[] = [];
-          let isDisplaying = false;
-          let currentDisplayText = "";
-
-          const displayNextChar = async () => {
-            if (isDisplaying) return;
-            isDisplaying = true;
-
-            while (displayQueue.length > 0) {
-              let batchSize = 1;
-              const remainingLength = displayQueue.length;
-
-              if (remainingLength > 200) {
-                batchSize = 12; // Quick display for very long text
-              } else if (remainingLength > 100) {
-                batchSize = 8; // Medium speed for long text
-              } else if (remainingLength > 50) {
-                batchSize = 4; // Medium text
-              } else if (remainingLength > 20) {
-                batchSize = 2; // Short text
-              } else {
-                batchSize = 1; // Display the last few characters one by one
-              }
-
-              let batchText = "";
-              for (let i = 0; i < batchSize && displayQueue.length > 0; i++) {
-                const char = displayQueue.shift()!;
-                batchText += char;
-              }
-
-              currentDisplayText += batchText;
-              assistantMessage = {
-                ...assistantMessage,
-                content: currentDisplayText,
-              };
-              appendMessage(assistantMessage);
-
-              // Dynamically adjust delay based on batch size
-              const delay =
-                remainingLength > 100
-                  ? 3
-                  : remainingLength > 50
-                    ? 8
-                    : remainingLength > 20
-                      ? 12
-                      : 18;
-
-              if (delay > 0) {
-                await new Promise((resolve) => setTimeout(resolve, delay));
-              }
-            }
-
-            isDisplaying = false;
-          };
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-              setIsLoading(false);
-              if (displayQueue.length > 0) {
-                await displayNextChar();
-              }
-              break;
-            }
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-
-            for (let i = 0; i < lines.length - 1; i++) {
-              const line = lines[i].trim();
-              if (line.startsWith("data: ")) {
-                const dataStr = line.slice(6);
-                if (dataStr === "[DONE]") {
-                  setIsLoading(false);
-                  break;
-                }
-
-                try {
-                  const data = JSON.parse(dataStr);
-                  if (data.text) {
-                    if (isFirstChunk) {
-                      setIsLoading(false);
-                      isFirstChunk = false;
-                      appendMessage(assistantMessage);
-                    }
-
-                    const newChars = data.text.split("");
-                    displayQueue.push(...newChars);
-
-                    if (!isDisplaying) {
-                      displayNextChar();
-                    }
-                  }
-                } catch (error) {
-                  console.log("Parsing error:", error);
-                }
-              }
-            }
-
-            buffer = lines[lines.length - 1];
-          }
-
-          if (!currentDisplayText && !isFirstChunk) {
-            assistantMessage = {
-              ...assistantMessage,
-              content: "No response received",
-            };
-            appendMessage(assistantMessage);
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
             setIsLoading(false);
+            break;
           }
-        } else {
-          setIsLoading(false);
-          const data = await response.json();
-          const assistantMessage: Message = {
-            id: uuidv4(),
-            content: data.response || "No response received",
-            role: "assistant",
-            timestamp: new Date().toISOString(),
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+
+          for (let i = 0; i < lines.length - 1; i++) {
+            const line = lines[i].trim();
+            if (line.startsWith("0:")) {
+              try {
+                // Parse format: 0:"text content"
+                const jsonStr = line.substring(2);
+                const text = JSON.parse(jsonStr);
+                
+                if (isFirstChunk) {
+                  setIsLoading(false);
+                  isFirstChunk = false;
+                  appendMessage(assistantMessage);
+                }
+
+                currentDisplayText += text;
+                assistantMessage = {
+                  ...assistantMessage,
+                  content: currentDisplayText,
+                };
+                appendMessage(assistantMessage);
+              } catch (error) {
+                console.log("Parsing error:", error, "Line:", line);
+              }
+            }
+          }
+
+          buffer = lines[lines.length - 1];
+        }
+
+        if (!currentDisplayText) {
+          assistantMessage = {
+            ...assistantMessage,
+            content: "No response received",
           };
           appendMessage(assistantMessage);
+          setIsLoading(false);
         }
       } catch (error) {
         console.error("Error:", error);
