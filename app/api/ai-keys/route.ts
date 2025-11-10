@@ -32,14 +32,17 @@ export async function POST(req: NextRequest) {
     const { error } = await taskyDb
       .from('user_api_keys')
       .upsert({
+        id: crypto.randomUUID(),
         user_id: session.user.id,
         provider,
-        encrypted_key: encrypted,
+        key_encrypted: encrypted,
         iv,
         auth_tag: authTag,
+        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'user_id,provider',
+        ignoreDuplicates: false,
       });
 
     if (error) throw error;

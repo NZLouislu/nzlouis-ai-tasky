@@ -21,6 +21,7 @@ export async function GET() {
       const { data: newSettings, error: createError } = await taskyDb
         .from('user_ai_settings')
         .insert({
+          id: crypto.randomUUID(),
           user_id: session.user.id,
           default_provider: 'google',
           default_model: 'gemini-1.5-flash',
@@ -77,15 +78,18 @@ export async function POST(req: NextRequest) {
     const { data: settings, error } = await taskyDb
       .from('user_ai_settings')
       .upsert({
+        id: crypto.randomUUID(),
         user_id: session.user.id,
         default_provider: data.defaultProvider || data.default_provider || 'google',
         default_model: data.defaultModel || data.default_model || 'gemini-1.5-flash',
         temperature: data.temperature ?? 0.8,
         max_tokens: (data.maxTokens || data.max_tokens) ?? 1024,
         system_prompt: data.systemPrompt || data.system_prompt || 'You are a helpful AI assistant.',
+        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'user_id',
+        ignoreDuplicates: false,
       })
       .select()
       .single();

@@ -31,6 +31,7 @@ interface ChatSessionUpdate {
 interface UserAPIKeyInput {
   encryptedKey?: string;
   encrypted_key?: string;
+  key_encrypted?: string;
   iv: string;
   authTag?: string;
   auth_tag?: string;
@@ -73,15 +74,18 @@ export const taskyDbHelpers = {
     const { data, error } = await taskyDb
       .from('user_ai_settings')
       .upsert({
+        id: crypto.randomUUID(), // Generate UUID for new records
         user_id: userId,
         default_provider: settings.defaultProvider || settings.default_provider,
         default_model: settings.defaultModel || settings.default_model,
         temperature: settings.temperature,
         max_tokens: settings.maxTokens || settings.max_tokens,
         system_prompt: settings.systemPrompt || settings.system_prompt,
+        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'user_id',
+        ignoreDuplicates: false,
       })
       .select()
       .single();
@@ -118,6 +122,7 @@ export const taskyDbHelpers = {
     const { data, error } = await taskyDb
       .from('chat_sessions')
       .insert({
+        id: crypto.randomUUID(), // Generate UUID
         user_id: userId,
         title: sessionData.title,
         provider: sessionData.provider,
@@ -174,7 +179,7 @@ export const taskyDbHelpers = {
   async getUserAPIKeys(userId: string) {
     const { data, error } = await taskyDb
       .from('user_api_keys')
-      .select('provider, encrypted_key, iv, auth_tag, created_at, updated_at')
+      .select('provider, key_encrypted, iv, auth_tag, created_at, updated_at')
       .eq('user_id', userId);
     
     if (error) throw error;
@@ -185,14 +190,17 @@ export const taskyDbHelpers = {
     const { data, error } = await taskyDb
       .from('user_api_keys')
       .upsert({
+        id: crypto.randomUUID(), // Generate UUID for new records
         user_id: userId,
         provider,
-        encrypted_key: keyData.encryptedKey || keyData.encrypted_key,
+        key_encrypted: keyData.encryptedKey || keyData.encrypted_key || keyData.key_encrypted,
         iv: keyData.iv,
         auth_tag: keyData.authTag || keyData.auth_tag,
+        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'user_id,provider',
+        ignoreDuplicates: false,
       })
       .select()
       .single();

@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
     const { data: chatSession, error } = await taskyDb
       .from('chat_sessions')
       .insert({
+        id: crypto.randomUUID(),
         user_id: session.user.id,
         title: title || 'New Chat',
         provider: provider || 'google',

@@ -44,6 +44,7 @@ export async function POST(
       .from('chat_messages')
       .insert(
         (messages as MessageInput[]).map((msg) => ({
+          id: crypto.randomUUID(),
           session_id: id,
           role: msg.role,
           content: msg.content,
