@@ -1,6 +1,12 @@
 import "@testing-library/jest-dom";
 // Remove TextEncoder and TextDecoder imports as they are available in Node.js 16+
 
+// Add TransformStream polyfill for AI SDK
+if (typeof global.TransformStream === 'undefined') {
+  const { TransformStream } = require('stream/web');
+  global.TransformStream = TransformStream;
+}
+
 // Mock fetch API for testing
 global.fetch = jest.fn(() =>
   Promise.resolve({

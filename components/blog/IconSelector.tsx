@@ -20,7 +20,7 @@ export default function IconSelector({
   if (!showIconSelector) return null;
 
   return (
-    <div className="mb-4 p-4 bg-white border border-gray-200 rounded-lg shadow-lg">
+    <div className="mb-4 p-4 bg-white border border-gray-200 rounded-lg shadow-lg mx-auto max-w-2xl">
       <div className="grid grid-cols-8 gap-3">
         {iconOptions.map((icon) => (
           <button
@@ -29,7 +29,7 @@ export default function IconSelector({
               setPostIcon(activePostId, icon);
               setShowIconSelector(false);
             }}
-            className="text-2xl p-3 hover:bg-gray-100 rounded-lg transition-colors"
+            className="text-2xl p-3 hover:bg-gray-100 rounded-lg transition-colors flex items-center justify-center"
           >
             {icon}
           </button>

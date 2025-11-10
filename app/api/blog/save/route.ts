@@ -1,7 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase/supabase-client";
+import { createClient } from "@supabase/supabase-js";
+import { getBlogSupabaseConfig } from "@/lib/environment";
 
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
+
+// Create Blog Supabase client
+const blogConfig = getBlogSupabaseConfig();
+const blogSupabase = blogConfig.url && blogConfig.serviceRoleKey
+  ? createClient(blogConfig.url, blogConfig.serviceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  })
+  : null;
 
 // Authentication helper function
 async function verifyAuth(request: NextRequest): Promise<boolean> {
@@ -64,9 +77,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!supabase) {
+    if (!blogSupabase) {
       return NextResponse.json(
-        { error: "Database not configured" },
+        { error: "Blog database not configured" },
         { status: 500 }
       );
     }
@@ -92,10 +105,10 @@ export async function POST(request: NextRequest) {
     const flatPosts = flattenPosts(posts);
 
     const savePromises = flatPosts.map(async (post: BlogPost) => {
-      if (!supabase) {
-        throw new Error("Database not configured");
+      if (!blogSupabase) {
+        throw new Error("Blog database not configured");
       }
-      const { error } = await supabase.from("blog_posts").upsert({
+      const { error } = await blogSupabase.from("posts").upsert({
         id: post.id,
         user_id: userIdToUse,
         title: post.title,

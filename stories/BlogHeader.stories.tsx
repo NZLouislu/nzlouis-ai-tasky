@@ -14,43 +14,23 @@ const meta: Meta<typeof BlogHeader> = {
 export default meta;
 type Story = StoryObj<typeof BlogHeader>;
 
+// Mock functions for Storybook
+const mockHandleDeletePost = () => {
+  console.log("Handle delete post");
+};
+
 export const WithIconAndCover: Story = {
   args: {
-    activePost: {
-      id: "1",
-      title: "Sample Post",
-      content: [],
-      icon: "📝",
-      cover: {
-        type: "color",
-        value: "bg-blue-500",
-      },
-    },
-    setShowIconSelector: () => {},
-    setShowCoverOptions: () => {},
-    setShowDeleteDropdown: () => {},
-    showIconSelector: false,
-    showCoverOptions: false,
+    setShowDeleteDropdown: (show: boolean) =>
+      console.log("Set show delete dropdown:", show),
     showDeleteDropdown: false,
-    dropdownRef: { current: null },
-    handleDeletePost: () => {},
+    dropdownRef: React.createRef(),
+    handleDeletePost: mockHandleDeletePost,
   },
 };
 
-export const WithoutIconOrCover: Story = {
+export const WithoutIconAndCover: Story = {
   args: {
-    activePost: {
-      id: "1",
-      title: "Sample Post",
-      content: [],
-    },
-    setShowIconSelector: () => {},
-    setShowCoverOptions: () => {},
-    setShowDeleteDropdown: () => {},
-    showIconSelector: false,
-    showCoverOptions: false,
-    showDeleteDropdown: false,
-    dropdownRef: { current: null },
-    handleDeletePost: () => {},
+    ...WithIconAndCover.args,
   },
 };

@@ -1,7 +1,7 @@
 import React from "react";
 import { Meta, StoryObj } from "@storybook/react";
 
-// 创建一个简化的 BlogContent 组件用于测试
+// Create a simplified BlogContent component for testing
 const SimpleBlogContent = () => {
   return (
     <div style={{ padding: "20px", fontFamily: "sans-serif" }}>

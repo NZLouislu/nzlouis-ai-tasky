@@ -1,5 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase/supabase-client";
+import { createClient } from "@supabase/supabase-js";
+import { getBlogSupabaseConfig } from "@/lib/environment";
+
+// Create Blog Supabase client
+const blogConfig = getBlogSupabaseConfig();
+const blogSupabase = blogConfig.url && blogConfig.serviceRoleKey
+  ? createClient(blogConfig.url, blogConfig.serviceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  })
+  : null;
 
 // Get a specific blog post
 export async function GET(
@@ -7,17 +20,17 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    if (!supabase) {
+    if (!blogSupabase) {
       return NextResponse.json(
-        { error: "Database not configured" },
+        { error: "Blog database not configured" },
         { status: 503 }
       );
     }
 
     const { id } = await params;
 
-    const { data, error } = await supabase
-      .from("blog_posts")
+    const { data, error } = await blogSupabase
+      .from("posts")
       .select("*")
       .eq("id", id);
 
@@ -44,9 +57,9 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    if (!supabase) {
+    if (!blogSupabase) {
       return NextResponse.json(
-        { error: "Database not configured" },
+        { error: "Blog database not configured" },
         { status: 503 }
       );
     }
@@ -54,8 +67,8 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
-    const { data, error } = await supabase
-      .from("blog_posts")
+    const { data, error } = await blogSupabase
+      .from("posts")
       .update({
         title: body.title,
         content: body.content,
@@ -95,15 +108,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    if (!supabase) {
+    if (!blogSupabase) {
       return NextResponse.json(
-        { error: "Database not configured" },
+        { error: "Blog database not configured" },
         { status: 503 }
       );
     }
 
     const id = (await params).id;
-    const { error } = await supabase.from("blog_posts").delete().eq("id", id);
+    const { error } = await blogSupabase.from("posts").delete().eq("id", id);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

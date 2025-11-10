@@ -1,7 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase/supabase-client";
+import { createClient } from "@supabase/supabase-js";
+import { getBlogSupabaseConfig } from "@/lib/environment";
 
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
+
+// Create Blog Supabase client
+const blogConfig = getBlogSupabaseConfig();
+const blogSupabase = blogConfig.url && blogConfig.serviceRoleKey
+  ? createClient(blogConfig.url, blogConfig.serviceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  })
+  : null;
 
 // Authentication helper function
 async function verifyAuth(request: NextRequest): Promise<boolean> {
@@ -36,9 +49,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (!supabase) {
+    if (!blogSupabase) {
       return NextResponse.json(
-        { error: "Database not configured" },
+        { error: "Blog database not configured. Please check BLOG_SUPABASE_URL and BLOG_SUPABASE_SERVICE_ROLE_KEY" },
         { status: 503 }
       );
     }
@@ -48,8 +61,8 @@ export async function GET(request: NextRequest) {
     const userId =
       url.searchParams.get("userId") || "00000000-0000-0000-0000-000000000000";
 
-    const { data, error } = await supabase
-      .from("blog_posts")
+    const { data, error } = await blogSupabase
+      .from("posts")
       .select("*")
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
@@ -74,9 +87,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (!supabase) {
+    if (!blogSupabase) {
       return NextResponse.json(
-        { error: "Database not configured" },
+        { error: "Blog database not configured. Please check BLOG_SUPABASE_URL and BLOG_SUPABASE_SERVICE_ROLE_KEY" },
         { status: 503 }
       );
     }
@@ -86,8 +99,8 @@ export async function POST(request: NextRequest) {
     // Get userId from request body, use default value if not present
     const userId = body.userId || "00000000-0000-0000-0000-000000000000";
 
-    const { data, error } = await supabase
-      .from("blog_posts")
+    const { data, error } = await blogSupabase
+      .from("posts")
       .insert({
         user_id: userId,
         parent_id: body.parent_id || null,

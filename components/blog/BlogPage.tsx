@@ -343,12 +343,46 @@ export default function BlogPage() {
     error: null,
     addNewPost: () => Promise.resolve("new-post-id"),
     addNewSubPost: () => Promise.resolve("new-sub-post-id"),
-    updatePostTitle: () => Promise.resolve(),
-    updatePostContent: () => Promise.resolve(),
-    setPostIcon: () => Promise.resolve(),
-    removePostIcon: () => Promise.resolve(),
-    setPostCover: () => Promise.resolve(),
-    removePostCover: () => Promise.resolve(),
+    updatePostTitle: (postId: string, title: string) => {
+      console.log("Mock updatePostTitle:", postId, title);
+      return Promise.resolve();
+    },
+    updatePostContent: (postId: string, content: unknown) => {
+      console.log("Mock updatePostContent:", postId, content);
+      return Promise.resolve();
+    },
+    setPostIcon: (postId: string, icon: string) => {
+      console.log("Mock setPostIcon:", postId, icon);
+      setLocalPosts((prev) =>
+        prev.map((post) => (post.id === postId ? { ...post, icon } : post))
+      );
+      return Promise.resolve();
+    },
+    removePostIcon: (postId: string) => {
+      console.log("Mock removePostIcon:", postId);
+      setLocalPosts((prev) =>
+        prev.map((post) =>
+          post.id === postId ? { ...post, icon: undefined } : post
+        )
+      );
+      return Promise.resolve();
+    },
+    setPostCover: (postId: string, cover: PostCover) => {
+      console.log("Mock setPostCover:", postId, cover);
+      setLocalPosts((prev) =>
+        prev.map((post) => (post.id === postId ? { ...post, cover } : post))
+      );
+      return Promise.resolve();
+    },
+    removePostCover: (postId: string) => {
+      console.log("Mock removePostCover:", postId);
+      setLocalPosts((prev) =>
+        prev.map((post) =>
+          post.id === postId ? { ...post, cover: undefined } : post
+        )
+      );
+      return Promise.resolve();
+    },
     deletePost: () => Promise.resolve(),
     userId: "storybook-user",
     setUserId: () => {},
@@ -407,16 +441,9 @@ export default function BlogPage() {
 
   useEffect(() => {
     if (userId === "00000000-0000-0000-0000-000000000000") {
-      const newUserId = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
-        /[xy]/g,
-        function (c) {
-          const r = (Math.random() * 16) | 0,
-            v = c == "x" ? r : (r & 0x3) | 0x8;
-          return v.toString(16);
-        }
-      );
-      setUserId(newUserId);
-      console.log("Generated new userId:", newUserId);
+      const realUserId = "6d5ae2bf-cf17-4c69-b026-f86529ee37cd";
+      setUserId(realUserId);
+      console.log("Using real userId for blog page:", realUserId);
     } else {
       console.log("Using existing userId:", userId);
     }
@@ -491,7 +518,6 @@ export default function BlogPage() {
         return;
       }
 
-      setIsSaving(true);
       try {
         const { error } = await supabase.from("blog_posts").upsert({
           id: post.id,
@@ -513,8 +539,7 @@ export default function BlogPage() {
         unsavedChanges.current.delete(post.id);
       } catch (error) {
         console.error(`Error saving post ${post.id}:`, error);
-      } finally {
-        setIsSaving(false);
+        throw error;
       }
     },
     [userId, isStorybook]
@@ -540,7 +565,6 @@ export default function BlogPage() {
     [activePostId, expandedPages, localPosts, findPostById, savePostToDatabase]
   );
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const togglePageExpansion = useCallback((pageId: string) => {
     setExpandedPages((prev) => {
       const newExpanded = new Set(prev);
@@ -554,7 +578,7 @@ export default function BlogPage() {
   }, []);
 
   useEffect(() => {
-    if (posts) {
+    if (posts && localPosts.length === 0) {
       // Convert BlogPost[] to Post[] with proper type handling
       const convertedPosts: Post[] = posts.map((post) => ({
         ...post,
@@ -578,13 +602,7 @@ export default function BlogPage() {
       }));
 
       const mapped = mapPosts(convertedPosts);
-
-      // Check if we really need to update localPosts
-      const shouldUpdate =
-        JSON.stringify(localPosts) !== JSON.stringify(mapped);
-      if (shouldUpdate) {
-        setLocalPosts(mapped);
-      }
+      setLocalPosts(mapped);
 
       if (mapped.length > 0) {
         const currentPostExists = findPostById(mapped, activePostId);
@@ -597,14 +615,6 @@ export default function BlogPage() {
             }
           }
         }
-      } else {
-        // Only create a new post in non-Storybook and non-test environments
-        if (!isStorybook && process.env.NODE_ENV !== "test") {
-          console.log("No posts found, creating new post");
-          createNewPost().catch((error) => {
-            console.error("Failed to create new post:", error);
-          });
-        }
       }
     }
   }, [
@@ -612,9 +622,8 @@ export default function BlogPage() {
     activePostId,
     findPostById,
     findFirstAvailablePost,
-    createNewPost,
     mapPosts,
-    localPosts,
+    localPosts.length,
     isStorybook,
   ]);
 
@@ -656,15 +665,57 @@ export default function BlogPage() {
         return;
       }
 
-      const savePromises = unsaved.map((post) => savePostToDatabase(post));
-      await Promise.all(savePromises);
+      // Save all posts directly to database and update localPosts
+      for (const post of unsaved) {
+        try {
+          const { error } = await supabase.from("blog_posts").upsert({
+            id: post.id,
+            user_id: userId,
+            title: post.title,
+            content: post.content,
+            icon: post.icon,
+            cover: post.cover,
+            parent_id: post.parent_id ?? null,
+            updated_at: new Date().toISOString(),
+          });
+
+          if (error) {
+            console.error(`Failed to save post ${post.id}:`, error);
+            throw error;
+          }
+
+          console.log(`Successfully saved post ${post.id} to database`);
+
+          // Update localPosts with the saved content
+          setLocalPosts((prev) => {
+            const updatePostRecursively = (posts: Post[]): Post[] => {
+              return posts.map((p) => {
+                if (p.id === post.id) {
+                  return { ...post, updated_at: new Date().toISOString() };
+                }
+                if (p.children && p.children.length > 0) {
+                  return { ...p, children: updatePostRecursively(p.children) };
+                }
+                return p;
+              });
+            };
+            return updatePostRecursively(prev);
+          });
+
+          unsavedChanges.current.delete(post.id);
+        } catch (error) {
+          console.error(`Error saving post ${post.id}:`, error);
+          throw error;
+        }
+      }
+
       console.log("All unsaved posts saved successfully");
     } catch (error) {
       console.error("Error saving all unsaved posts:", error);
     } finally {
       setIsSaving(false);
     }
-  }, [savePostToDatabase, isStorybook]);
+  }, [userId, isStorybook]);
 
   const updateLocalPostContent = useCallback(
     (newContent: PartialBlock[]) => {
@@ -1012,13 +1063,27 @@ export default function BlogPage() {
         <div className="h-16"></div>
         {activePost && (
           <>
-            <BlogHeader
-              activePost={activePost}
-              setShowIconSelector={setShowIconSelector}
-              setShowCoverOptions={setShowCoverOptions}
-              setShowDeleteDropdown={setShowDeleteDropdown}
+            {/* Move IconSelector and CoverOptions here to show above the title */}
+            <IconSelector
               showIconSelector={showIconSelector}
+              setShowIconSelector={setShowIconSelector}
+              iconOptions={iconOptions}
+              setPostIcon={setPostIcon}
+              removePostIcon={removePostIcon}
+              activePostId={activePostId}
+            />
+
+            <CoverOptions
               showCoverOptions={showCoverOptions}
+              setShowCoverOptions={setShowCoverOptions}
+              colorOptions={colorOptions}
+              setPostCover={setPostCover}
+              activePostId={activePostId}
+              handleCoverFileSelect={handleCoverFileSelect}
+            />
+
+            <BlogHeader
+              setShowDeleteDropdown={setShowDeleteDropdown}
               showDeleteDropdown={showDeleteDropdown}
               dropdownRef={dropdownRef}
               handleDeletePost={handleDeletePost}
@@ -1044,24 +1109,6 @@ export default function BlogPage() {
                 handleManualSave={handleManualSave}
               />
             </div>
-
-            <IconSelector
-              showIconSelector={showIconSelector}
-              setShowIconSelector={setShowIconSelector}
-              iconOptions={iconOptions}
-              setPostIcon={setPostIcon}
-              removePostIcon={removePostIcon}
-              activePostId={activePostId}
-            />
-
-            <CoverOptions
-              showCoverOptions={showCoverOptions}
-              setShowCoverOptions={setShowCoverOptions}
-              colorOptions={colorOptions}
-              setPostCover={setPostCover}
-              activePostId={activePostId}
-              handleCoverFileSelect={handleCoverFileSelect}
-            />
 
             <DeleteDropdown
               dropdownRef={dropdownRef}

@@ -220,7 +220,6 @@ export default function Blog() {
     [activePostId, expandedPages, localPosts, findPostById, savePostToDatabase]
   );
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const togglePageExpansion = useCallback((pageId: string) => {
     setExpandedPages((prev) => {
       const newExpanded = new Set(prev);

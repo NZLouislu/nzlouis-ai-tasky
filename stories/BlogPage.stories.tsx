@@ -140,6 +140,28 @@ export const WithCoverImage: Story = {
   },
 };
 
+export const WithIconSelector: Story = {
+  args: {},
+  parameters: {
+    docs: {
+      description: {
+        story: "BlogPage with icon selector displayed above title",
+      },
+    },
+  },
+};
+
+export const WithCoverOptions: Story = {
+  args: {},
+  parameters: {
+    docs: {
+      description: {
+        story: "BlogPage with cover options displayed above title",
+      },
+    },
+  },
+};
+
 export const Loading: Story = {
   args: {},
   parameters: {

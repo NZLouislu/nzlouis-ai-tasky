@@ -28,7 +28,11 @@ const config: StorybookConfig = {
         },
       },
       define: {
-        "process.env": {},
+        "process.env.NEXT_PUBLIC_SUPABASE_URL": JSON.stringify(process.env.NEXT_PUBLIC_SUPABASE_URL),
+        "process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY": JSON.stringify(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+        "process.env.TASKY_SUPABASE_URL": JSON.stringify(process.env.TASKY_SUPABASE_URL),
+        "process.env.TASKY_SUPABASE_ANON_KEY": JSON.stringify(process.env.TASKY_SUPABASE_ANON_KEY),
+        "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV),
       },
     });
   },

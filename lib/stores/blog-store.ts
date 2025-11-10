@@ -181,55 +181,6 @@ export const useBlogStore = create<BlogState>((set) => ({
 
       console.log(`Found ${userPosts?.length || 0} posts for user ${userId}`);
 
-      // If no posts exist, create a default post
-      if (!userPosts || userPosts.length === 0) {
-        console.log("No posts found in database for user:", userId);
-        // Create default post
-        const defaultPost = {
-          user_id: userId,
-          title: "Welcome to your blog",
-          content: JSON.stringify([
-            {
-              type: "paragraph",
-              content: [
-                {
-                  type: "text",
-                  text: "This is your first blog post. You can edit this content or create new posts.",
-                  styles: {},
-                },
-              ],
-            },
-          ]),
-          published: true,
-          parent_id: null,
-          position: 0,
-          icon: "📝",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-
-        try {
-          const { data: createdPost, error: createError } = await supabase
-            .from("blog_posts")
-            .insert(defaultPost)
-            .select();
-
-          if (createError) {
-            console.error("Error creating default post:", createError);
-            set({ posts: [], isLoading: false });
-            return;
-          }
-
-          console.log("Created default post:", createdPost);
-          set({ posts: [{ ...createdPost[0], children: [] }] });
-          return;
-        } catch (createError) {
-          console.error("Error creating default post:", createError);
-          set({ posts: [], isLoading: false });
-          return;
-        }
-      }
-
       // Build hierarchical structure for posts
       const rootPosts = userPosts.filter((post) => post.parent_id === null);
       const childPosts = userPosts.filter((post) => post.parent_id !== null);

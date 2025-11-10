@@ -38,7 +38,7 @@ export const useBlogData = () => {
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Position convertPost function at the beginning to ensure it can be accessed in useEffect
-  const convertPost = (post: BlogPost): BlogPost => {
+  const convertPost = useCallback((post: BlogPost): BlogPost => {
     let content: PartialBlock[] = [];
     if (
       post.content &&
@@ -51,10 +51,28 @@ export const useBlogData = () => {
         const parsed = JSON.parse(post.content);
         if (Array.isArray(parsed)) {
           content = parsed as PartialBlock[];
+        } else {
+          // Handle case where content is a stringified object
+          content = [parsed] as PartialBlock[];
         }
       } catch (e) {
-        content = [];
+        // If JSON parsing fails, create a paragraph with the content as text
+        content = [
+          {
+            type: "paragraph",
+            content: [
+              {
+                type: "text",
+                text: post.content as string,
+                styles: {},
+              },
+            ],
+          },
+        ] as PartialBlock[];
       }
+    } else if (post.content === null || post.content === undefined) {
+      // Handle null or undefined content
+      content = [];
     }
 
     // Validate and convert cover object
@@ -82,43 +100,9 @@ export const useBlogData = () => {
       parent_id: post.parent_id,
       children: post.children ? post.children.map(convertPost) : [],
     };
-  };
+  }, []);
 
-  // Define function to create default post
-  const createDefaultPost = useCallback(
-    async (userId: string) => {
-      try {
-        console.log("Creating default post for userId:", userId);
-        const newPostId = await createPost({
-          user_id: userId,
-          title: "Welcome to your blog",
-          content: [
-            {
-              type: "paragraph",
-              content: [
-                {
-                  type: "text",
-                  text: "This is your first blog post. You can edit this content or create new posts.",
-                  styles: {},
-                },
-              ],
-            },
-          ] as any,
-          published: true,
-          parent_id: null,
-          position: 0,
-          icon: "📝",
-        });
 
-        console.log("Created default post with ID:", newPostId);
-        return newPostId;
-      } catch (error) {
-        console.error("Failed to create default post:", error);
-        throw error;
-      }
-    },
-    [createPost]
-  );
 
   function generateUUID() {
     return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
@@ -135,11 +119,14 @@ export const useBlogData = () => {
     let isMounted = true;
 
     const initializeBlogData = async () => {
-      if (isInitialized) return;
+      // Only initialize if we have a valid userId (not the default one)
+      if (userId === "00000000-0000-0000-0000-000000000000") {
+        return;
+      }
 
       try {
         setIsLoading(true);
-        // Use dynamic userId instead of fixed "00000000-0000-0000-0000-000000000000"
+        setIsInitialized(false); // Reset initialization when userId changes
         await fetchPosts(userId);
         if (isMounted) {
           setIsInitialized(true);
@@ -164,15 +151,14 @@ export const useBlogData = () => {
     return () => {
       isMounted = false;
     };
-  }, [fetchPosts, isInitialized, userId]); // Add userId to dependency array
+  }, [fetchPosts, userId]); // Remove isInitialized from dependency array
 
   useEffect(() => {
     let isMounted = true;
 
-    if (isInitialized) {
-      // Only use default post when there are no articles
-      // If blogPosts is an empty array, it means the database query has completed but no articles were found
-      // In this case, we need to create a default post for new users
+    if (isInitialized && localPosts.length === 0) {
+      // Only set localPosts if it's empty (initial load)
+      // Don't overwrite existing localPosts to preserve user modifications
       if (blogPosts.length > 0) {
         const convertedPosts = (blogPosts as unknown as BlogPost[]).map(
           convertPost
@@ -181,31 +167,17 @@ export const useBlogData = () => {
           setLocalPosts(convertedPosts);
         }
       } else {
-        // Database query completed but no posts found, create default post for new user
-        console.log(
-          "No posts found for user, creating default post for userId:",
-          userId
-        );
-        createDefaultPost(userId)
-          .then(() => {
-            if (isMounted) {
-              // Re-fetch post list
-              fetchPosts(userId);
-            }
-          })
-          .catch((error) => {
-            console.error("Failed to create default post:", error);
-            if (isMounted) {
-              setLocalPosts([]);
-            }
-          });
+        // If no posts found, just set empty array
+        if (isMounted) {
+          setLocalPosts([]);
+        }
       }
     }
 
     return () => {
       isMounted = false;
     };
-  }, [blogPosts, isInitialized, userId, createDefaultPost, fetchPosts]);
+  }, [blogPosts, isInitialized, convertPost, localPosts.length]);
 
   const addNewPost = useCallback(async () => {
     const newPostId = await createPost({
@@ -373,25 +345,44 @@ export const useBlogData = () => {
     [updatePostContent]
   );
 
-  const removePostIcon = useCallback((postId: string) => {
-    setLocalPosts((prev) =>
-      prev.map((post) => {
-        if (post.id === postId) {
-          return { ...post, icon: undefined };
-        }
-        if (post.children) {
-          const updatedChildren = post.children.map((child) => {
-            if (child.id === postId) {
-              return { ...child, icon: undefined };
+  const removePostIcon = useCallback(
+    async (postId: string) => {
+      const updatePostRecursively = (posts: BlogPost[]): BlogPost[] => {
+        return posts.map((post) => {
+          if (post.id === postId) {
+            return { ...post, icon: undefined, updated_at: new Date().toISOString() };
+          }
+          if (post.children && post.children.length > 0) {
+            const updatedChildren = updatePostRecursively(post.children);
+            const hasUpdatedChild = updatedChildren.some(
+              (child, index) => child !== post.children![index]
+            );
+            if (hasUpdatedChild) {
+              return {
+                ...post,
+                children: updatedChildren,
+                updated_at: new Date().toISOString(),
+              };
             }
-            return child;
-          });
-          return { ...post, children: updatedChildren };
-        }
-        return post;
-      })
-    );
-  }, []);
+            return { ...post, children: updatedChildren };
+          }
+          return post;
+        });
+      };
+
+      setLocalPosts((prev) => updatePostRecursively(prev));
+
+      try {
+        await updatePostContent(postId, {
+          icon: null,
+          updated_at: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.error("Failed to remove post icon:", error);
+      }
+    },
+    [updatePostContent]
+  );
 
   const setPostCover = useCallback(
     async (postId: string, cover: PostCover) => {
@@ -432,25 +423,44 @@ export const useBlogData = () => {
     [updatePostContent]
   );
 
-  const removePostCover = useCallback((postId: string) => {
-    setLocalPosts((prev) =>
-      prev.map((post) => {
-        if (post.id === postId) {
-          return { ...post, cover: undefined };
-        }
-        if (post.children) {
-          const updatedChildren = post.children.map((child) => {
-            if (child.id === postId) {
-              return { ...child, cover: undefined };
+  const removePostCover = useCallback(
+    async (postId: string) => {
+      const updatePostRecursively = (posts: BlogPost[]): BlogPost[] => {
+        return posts.map((post) => {
+          if (post.id === postId) {
+            return { ...post, cover: undefined, updated_at: new Date().toISOString() };
+          }
+          if (post.children && post.children.length > 0) {
+            const updatedChildren = updatePostRecursively(post.children);
+            const hasUpdatedChild = updatedChildren.some(
+              (child, index) => child !== post.children![index]
+            );
+            if (hasUpdatedChild) {
+              return {
+                ...post,
+                children: updatedChildren,
+                updated_at: new Date().toISOString(),
+              };
             }
-            return child;
-          });
-          return { ...post, children: updatedChildren };
-        }
-        return post;
-      })
-    );
-  }, []);
+            return { ...post, children: updatedChildren };
+          }
+          return post;
+        });
+      };
+
+      setLocalPosts((prev) => updatePostRecursively(prev));
+
+      try {
+        await updatePostContent(postId, {
+          cover: null,
+          updated_at: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.error("Failed to remove post cover:", error);
+      }
+    },
+    [updatePostContent]
+  );
 
   const deletePost = useCallback(
     async (postId: string) => {

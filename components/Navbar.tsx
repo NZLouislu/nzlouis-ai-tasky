@@ -97,7 +97,7 @@ export default function Navbar() {
     { label: "Workspace", href: "/workspace" },
     { label: "Tasks", href: "/tasklist" },
     { label: "Blog", href: "/blog" },
-    { label: "Chatbot", href: "/chatbot" },
+    { label: "AI Tasky", href: "/ai-tasky" },
   ];
 
   const linkCls = (isActive: boolean) =>

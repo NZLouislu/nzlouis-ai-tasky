@@ -26,7 +26,7 @@ export default function CoverOptions({
   if (!showCoverOptions) return null;
 
   return (
-    <div className="mb-4 p-4 bg-white border border-gray-200 rounded-lg shadow-lg relative">
+    <div className="mb-4 p-4 bg-white border border-gray-200 rounded-lg shadow-lg mx-auto max-w-2xl relative">
       <button
         onClick={() => setShowCoverOptions(false)}
         className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"

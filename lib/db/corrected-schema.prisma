@@ -1,0 +1,168 @@
+// ============================================
+// 修正后的 Prisma Schema
+// 与 Supabase 数据库完全匹配
+// ============================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// 用户模型
+// ============================================
+
+model User {
+  id            String     @id @default(uuid())
+  username      String?    @unique
+  fullName      String?    @map("full_name")
+  avatarUrl     String?    @map("avatar_url")
+  website       String?
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+  
+  // 关联
+  workspaces    Workspace[]
+  blogPosts     BlogPost[]
+  taskBoards    TaskBoard[]
+  taskTags      TaskTag[]
+  storageFiles  StorageFile[]
+  
+  @@map("user_profiles")
+}
+
+// ============================================
+// 工作区模型
+// ============================================
+
+model Workspace {
+  id            String          @id @default(uuid())
+  userId        String          @map("user_id")
+  user          User            @relation(fields: [userId], references: [id])
+  name          String
+  icon          String?
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  
+  workspacePages WorkspacePage[]
+}
+
+model WorkspacePage {
+  id          String          @id @default(uuid())
+  workspaceId String          @map("workspace_id")
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id])
+  parentId    String?         @map("parent_id")
+  parent      WorkspacePage?  @relation("PageHierarchy", fields: [parentId], references: [id])
+  children    WorkspacePage[] @relation("PageHierarchy")
+  title       String          @default("Untitled")
+  content     Json?
+  icon        String?
+  cover       Json?
+  position    Int?
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+}
+
+// ============================================
+// 博客模型
+// ============================================
+
+model BlogPost {
+  id        String      @id @default(uuid())
+  userId    String      @map("user_id")
+  user      User        @relation(fields: [userId], references: [id])
+  parentId  String?     @map("parent_id")
+  parent    BlogPost?   @relation("PostHierarchy", fields: [parentId], references: [id])
+  children  BlogPost[]  @relation("PostHierarchy")
+  title     String      @default("Untitled")
+  content   Json?
+  icon      String?
+  cover     Json?
+  published Boolean     @default(false)
+  position  Int?
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+}
+
+// ============================================
+// 任务管理模型
+// ============================================
+
+model TaskBoard {
+  id         String       @id @default(uuid())
+  userId     String       @map("user_id")
+  user       User         @relation(fields: [userId], references: [id])
+  name       String
+  icon       String?
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+  
+  taskColumns TaskColumn[]
+  tasks       Task[]
+}
+
+model TaskColumn {
+  id        String    @id @default(uuid())
+  boardId   String    @map("board_id")
+  board     TaskBoard @relation(fields: [boardId], references: [id])
+  name      String
+  position  Int?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  
+  tasks     Task[]
+}
+
+model Task {
+  id          String      @id @default(uuid())
+  boardId     String      @map("board_id")
+  board       TaskBoard   @relation(fields: [boardId], references: [id])
+  columnId    String?     @map("column_id")
+  column      TaskColumn? @relation(fields: [columnId], references: [id])
+  parentId    String?     @map("parent_id")
+  parent      Task?       @relation("TaskHierarchy", fields: [parentId], references: [id])
+  children    Task[]      @relation("TaskHierarchy")
+  title       String
+  description String?
+  position    Int?
+  dueDate     DateTime?   @map("due_date")
+  completed   Boolean     @default(false)
+  priority    Int         @default(0)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  
+  tags        TaskTag[]   @relation("TaskTagAssignment")
+}
+
+model TaskTag {
+  id        String    @id @default(uuid())
+  name      String
+  color     String?
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id])
+  createdAt DateTime  @default(now()) @map("created_at")
+  
+  tasks     Task[]    @relation("TaskTagAssignment")
+}
+
+// ============================================
+// 存储模型
+// ============================================
+
+model StorageFile {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  user       User      @relation(fields: [userId], references: [id])
+  bucketName String    @map("bucket_name")
+  filePath   String    @map("file_path")
+  fileName   String    @map("file_name")
+  fileSize   Int?      @map("file_size")
+  mimeType   String?   @map("mime_type")
+  entityType String?   @map("entity_type")
+  entityId   String?   @map("entity_id")
+  createdAt  DateTime  @default(now()) @map("created_at")
+}

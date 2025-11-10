@@ -14,26 +14,47 @@ const meta: Meta<typeof IconSelector> = {
 export default meta;
 type Story = StoryObj<typeof IconSelector>;
 
-const iconOptions = ["📝", "📄", "📑", "📊", "📋", "📌", "⭐", "💡"];
+// Mock functions for Storybook
+const mockSetPostIcon = (postId: string, icon: string) => {
+  console.log("Setting icon", icon, "for post", postId);
+};
+
+const mockRemovePostIcon = (postId: string) => {
+  console.log("Removing icon for post", postId);
+};
 
 export const Default: Story = {
   args: {
     showIconSelector: true,
-    setShowIconSelector: () => {},
-    iconOptions,
-    setPostIcon: () => {},
-    removePostIcon: () => {},
+    setShowIconSelector: (show: boolean) =>
+      console.log("Set show icon selector:", show),
+    iconOptions: [
+      "📝",
+      "📘",
+      "📚",
+      "📋",
+      "📌",
+      "🔍",
+      "💡",
+      "⚙️",
+      "🛠️",
+      "🔬",
+      "🎨",
+      "📊",
+      "📈",
+      "📉",
+      "💰",
+      "🛒",
+    ],
+    setPostIcon: mockSetPostIcon,
+    removePostIcon: mockRemovePostIcon,
     activePostId: "1",
   },
 };
 
 export const Hidden: Story = {
   args: {
+    ...Default.args,
     showIconSelector: false,
-    setShowIconSelector: () => {},
-    iconOptions,
-    setPostIcon: () => {},
-    removePostIcon: () => {},
-    activePostId: "1",
   },
 };

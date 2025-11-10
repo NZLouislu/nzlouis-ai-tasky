@@ -14,6 +14,15 @@ const meta: Meta<typeof BlogCover> = {
 export default meta;
 type Story = StoryObj<typeof BlogCover>;
 
+// Mock functions for Storybook
+const mockSetShowCoverOptions = (show: boolean) => {
+  console.log("Set show cover options:", show);
+};
+
+const mockRemovePostCover = (postId: string) => {
+  console.log("Removing cover for post", postId);
+};
+
 export const WithColorCover: Story = {
   args: {
     activePost: {
@@ -26,44 +35,42 @@ export const WithColorCover: Story = {
       },
     },
     showCoverActions: true,
-    setShowCoverActions: () => {},
-    setShowCoverOptions: () => {},
-    removePostCover: () => {},
+    setShowCoverActions: (show: boolean) =>
+      console.log("Set show cover actions:", show),
+    setShowCoverOptions: mockSetShowCoverOptions,
+    removePostCover: mockRemovePostCover,
     activePostId: "1",
   },
 };
 
 export const WithImageCover: Story = {
   args: {
+    ...WithColorCover.args,
     activePost: {
-      id: "1",
-      title: "Sample Post",
+      id: "2",
+      title: "Sample Post with Image",
       content: [],
       cover: {
         type: "image",
-        value:
-          "https://images.unsplash.com/photo-1501504905252-473c47e087f8?w=800",
+        value: "https://images.unsplash.com/photo-1677442135722-5f11e06a4e6d",
       },
     },
-    showCoverActions: true,
-    setShowCoverActions: () => {},
-    setShowCoverOptions: () => {},
-    removePostCover: () => {},
-    activePostId: "1",
+    activePostId: "2",
   },
 };
 
 export const WithoutCover: Story = {
   args: {
     activePost: {
-      id: "1",
-      title: "Sample Post",
+      id: "3",
+      title: "Sample Post without Cover",
       content: [],
     },
     showCoverActions: false,
-    setShowCoverActions: () => {},
-    setShowCoverOptions: () => {},
-    removePostCover: () => {},
-    activePostId: "1",
+    setShowCoverActions: (show: boolean) =>
+      console.log("Set show cover actions:", show),
+    setShowCoverOptions: mockSetShowCoverOptions,
+    removePostCover: mockRemovePostCover,
+    activePostId: "3",
   },
 };

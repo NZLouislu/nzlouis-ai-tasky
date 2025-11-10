@@ -1,4 +1,9 @@
-// Prisma schema for Workspaces, Blogs, and Tasks features
+// ============================================
+// Complete Prisma Schema - Including AI Tasky Features
+// Version: 2.0
+// Last Updated: 2025-01-08
+// ============================================
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,138 +13,368 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================================
+// User and Authentication Models
+// ============================================
+
 model User {
-  id            String     @id @default(uuid())
-  username      String?    @unique
-  fullName      String?
-  avatarUrl     String?
+  id            String    @id @default(uuid())
+  username      String?   @unique
+  email         String?   @unique // NextAuth OAuth
+  emailVerified DateTime? @map("email_verified")
+  name          String?
+  image         String?
+  fullName      String?   @map("full_name")
+  avatarUrl     String?   @map("avatar_url")
   website       String?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @default(now()) @updatedAt
-  workspaces    Workspace[]
-  blogPosts     BlogPost[]
-  taskBoards    TaskBoard[]
-  taskTags      TaskTag[]
-  storageFiles  StorageFile[]
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Existing Relations
+  workspaces   Workspace[]
+  blogPosts    BlogPost[]
+  taskBoards   TaskBoard[]
+  taskTags     TaskTag[]
+  storageFiles StorageFile[]
+
+  // NextAuth Relations
+  accounts Account[]
+  sessions Session[]
+
+  // AI Tasky Relations
+  aiSettings    UserAISettings?
+  apiKeys       UserAPIKey[]
+  chatSessions  ChatSession[]
+  documents     Document[]
+  exportConfigs ExportConfig[]
+
+  @@map("user_profiles")
 }
 
+// NextAuth Tables
+model Account {
+  id                String  @id @default(uuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================
+// AI Tasky - User Settings
+// ============================================
+
+model UserAISettings {
+  id              String   @id @default(uuid())
+  userId          String   @unique @map("user_id")
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  defaultProvider String   @default("google") @map("default_provider")
+  defaultModel    String   @default("gemini-2.5-flash") @map("default_model")
+  temperature     Float    @default(0.8)
+  maxTokens       Int      @default(1024) @map("max_tokens")
+  systemPrompt    String   @default("You are a helpful AI assistant.") @map("system_prompt") @db.Text
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("user_ai_settings")
+}
+
+model UserAPIKey {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     String // "openai", "anthropic", "google", "openrouter", "kilo"
+  keyEncrypted String   @map("key_encrypted") @db.Text
+  iv           String // Initialization vector
+  authTag      String   @map("auth_tag") // Authentication tag
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, provider])
+  @@index([userId])
+  @@map("user_api_keys")
+}
+
+// ============================================
+// AI Tasky - Chat Features
+// ============================================
+
+model ChatSession {
+  id           String        @id @default(uuid())
+  userId       String        @map("user_id")
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title        String        @default("New Chat")
+  provider     String        @default("google")
+  model        String        @default("gemini-2.5-flash")
+  temperature  Float         @default(0.8)
+  maxTokens    Int           @default(1024) @map("max_tokens")
+  systemPrompt String        @default("You are a helpful AI assistant.") @map("system_prompt") @db.Text
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  messages     ChatMessage[]
+  documents    Document[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id        String      @id @default(uuid())
+  sessionId String      @map("session_id")
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      String // "user", "assistant", "system"
+  content   String      @db.Text
+  imageUrl  String?     @map("image_url")
+  metadata  Json? // token usage, model info, etc.
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  @@index([sessionId, createdAt])
+  @@map("chat_messages")
+}
+
+// ============================================
+// AI Tasky - Document Management
+// ============================================
+
+model Document {
+  id        String       @id @default(uuid())
+  userId    String       @map("user_id")
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId String?      @map("session_id")
+  session   ChatSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  title     String
+  content   String       @db.Text // Markdown content
+  metadata  Json? // frontmatter data
+  stories   Story[]
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("documents")
+}
+
+model Story {
+  id          String   @id @default(uuid())
+  documentId  String   @map("document_id")
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  title       String
+  description String   @db.Text
+  acceptance  String?  @db.Text // Acceptance criteria
+  priority    String?  @default("medium") // low, medium, high
+  estimate    Int? // Estimate (hours)
+  tags        String[] @default([])
+  position    Int      @default(0)
+  exported    Boolean  @default(false)
+  exportedTo  String? // "trello", "jira"
+  externalId  String?  @map("external_id") // Trello Card ID or Jira Issue Key
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([documentId, position])
+  @@map("stories")
+}
+
+// ============================================
+// AI Tasky - Export Configuration
+// ============================================
+
+model ExportConfig {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform     String // "trello", "jira"
+  accessToken  String   @map("access_token") @db.Text // 加密存储
+  refreshToken String?  @map("refresh_token") @db.Text
+  workspace    String? // Trello Workspace ID 或 Jira Site
+  boardId      String?  @map("board_id") // Trello Board ID
+  projectKey   String?  @map("project_key") // Jira Project Key
+  listId       String?  @map("list_id") // Trello List ID
+  issueType    String?  @default("Story") @map("issue_type") // Jira Issue Type
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, platform])
+  @@index([userId])
+  @@map("export_configs")
+}
+
+// ============================================
+// 工作区模型
+// ============================================
+
 model Workspace {
-  id            String          @id @default(uuid())
-  userId        String
-  user          User            @relation(fields: [userId], references: [id])
-  name          String
-  icon          String?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @default(now()) @updatedAt
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  name      String
+  icon      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   workspacePages WorkspacePage[]
+
+  @@map("workspaces")
 }
 
 model WorkspacePage {
-  id         String       @id @default(uuid())
-  workspaceId String
-  workspace  Workspace    @relation(fields: [workspaceId], references: [id])
-  parentId   String?
-  parent     WorkspacePage? @relation("PageHierarchy", fields: [parentId], references: [id])
-  children   WorkspacePage[] @relation("PageHierarchy")
-  title      String       @default("Untitled")
-  content    Json?
-  icon       String?
-  cover      Json?        // Store cover information (color or image)
-  position   Int?
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @default(now()) @updatedAt
+  id          String          @id @default(uuid())
+  workspaceId String          @map("workspace_id")
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id])
+  parentId    String?         @map("parent_id")
+  parent      WorkspacePage?  @relation("PageHierarchy", fields: [parentId], references: [id])
+  children    WorkspacePage[] @relation("PageHierarchy")
+  title       String          @default("Untitled")
+  content     Json?
+  icon        String?
+  cover       Json?
+  position    Int?
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  @@map("workspace_pages")
 }
+
+// ============================================
+// 博客模型
+// ============================================
 
 model BlogPost {
-  id        String    @id @default(uuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [id])
-  parentId  String?
-  parent    BlogPost? @relation("PostHierarchy", fields: [parentId], references: [id])
+  id        String     @id @default(uuid())
+  userId    String     @map("user_id")
+  user      User       @relation(fields: [userId], references: [id])
+  parentId  String?    @map("parent_id")
+  parent    BlogPost?  @relation("PostHierarchy", fields: [parentId], references: [id])
   children  BlogPost[] @relation("PostHierarchy")
-  title     String    @default("Untitled")
+  title     String     @default("Untitled")
   content   Json?
   icon      String?
-  cover     Json?     // Store cover information (color or image)
-  published Boolean   @default(false)
+  cover     Json?
+  published Boolean    @default(false)
   position  Int?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @default(now()) @updatedAt
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  @@map("blog_posts")
 }
 
+// ============================================
+// 任务管理模型
+// ============================================
+
 model TaskBoard {
-  id         String       @id @default(uuid())
-  userId     String
-  user       User         @relation(fields: [userId], references: [id])
-  name       String
-  icon       String?
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @default(now()) @updatedAt
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  name      String
+  icon      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   taskColumns TaskColumn[]
-  tasks      Task[]
+  tasks       Task[]
+
+  @@map("task_boards")
 }
 
 model TaskColumn {
   id        String    @id @default(uuid())
-  boardId   String
+  boardId   String    @map("board_id")
   board     TaskBoard @relation(fields: [boardId], references: [id])
   name      String
   position  Int?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @default(now()) @updatedAt
-  tasks     Task[]
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  tasks Task[]
+
+  @@map("task_columns")
 }
 
 model Task {
   id          String      @id @default(uuid())
-  boardId     String
+  boardId     String      @map("board_id")
   board       TaskBoard   @relation(fields: [boardId], references: [id])
-  columnId    String?
+  columnId    String?     @map("column_id")
   column      TaskColumn? @relation(fields: [columnId], references: [id])
-  parentId    String?
+  parentId    String?     @map("parent_id")
   parent      Task?       @relation("TaskHierarchy", fields: [parentId], references: [id])
   children    Task[]      @relation("TaskHierarchy")
   title       String
   description String?
   position    Int?
-  dueDate     DateTime?
+  dueDate     DateTime?   @map("due_date")
   completed   Boolean     @default(false)
   priority    Int         @default(0)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @default(now()) @updatedAt
-  tags        TaskTag[]   @relation("TaskTagAssignment")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  tags TaskTag[] @relation("TaskTagAssignment")
+
+  @@map("tasks")
 }
 
 model TaskTag {
-  id        String    @id @default(uuid())
+  id        String   @id @default(uuid())
   name      String
   color     String?
-  userId    String
-  user      User      @relation(fields: [userId], references: [id])
-  createdAt DateTime  @default(now())
-  tasks     Task[]    @relation("TaskTagAssignment")
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tasks Task[] @relation("TaskTagAssignment")
+
+  @@map("task_tags")
 }
 
-// Explicit many-to-many relation table
-model TaskTagAssignment {
-  taskId String
-  tagId  String
-  task   Task      @relation(fields: [taskId], references: [id])
-  tag    TaskTag   @relation(fields: [tagId], references: [id])
-
-  @@id([taskId, tagId])
-}
+// ============================================
+// 存储模型
+// ============================================
 
 model StorageFile {
-  id         String    @id @default(uuid())
-  userId     String
-  user       User      @relation(fields: [userId], references: [id])
-  bucketName String
-  filePath   String
-  fileName   String
-  fileSize   Int?
-  mimeType   String?
-  entityType String?
-  entityId   String?
-  createdAt  DateTime  @default(now())
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id])
+  bucketName String   @map("bucket_name")
+  filePath   String   @map("file_path")
+  fileName   String   @map("file_name")
+  fileSize   Int?     @map("file_size")
+  mimeType   String?  @map("mime_type")
+  entityType String?  @map("entity_type")
+  entityId   String?  @map("entity_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("storage_files")
 }

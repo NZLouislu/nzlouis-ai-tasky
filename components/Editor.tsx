@@ -22,6 +22,23 @@ export default function Editor({
   onSave,
   isSaving,
 }: EditorProps) {
+  // Check if we're in a Storybook environment
+  const isStorybook =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1") &&
+    (window.location.port === "6006" ||
+      window.location.port === "6007" ||
+      window.location.port === "6008" ||
+      window.location.port === "6009" ||
+      window.location.port === "6010" ||
+      window.location.port === "6011" ||
+      window.location.port === "6012" ||
+      window.location.port === "6013" ||
+      window.location.port === "6014" ||
+      window.location.port === "6015" ||
+      window.location.port === "6016");
+
   const editor = useCreateBlockNote({
     initialContent,
     defaultStyles: true,
@@ -183,12 +200,6 @@ export default function Editor({
 
   useEffect(() => {
     // Skip DOM operations in Storybook environment
-    const isStorybook =
-      typeof window !== "undefined" &&
-      (window.location.hostname === "localhost" ||
-        window.location.hostname === "127.0.0.1") &&
-      (window.location.port === "6006" || window.location.port === "6007");
-
     if (isStorybook) {
       return;
     }
@@ -356,7 +367,7 @@ export default function Editor({
         globalFileInputRef.current = null;
       }
     };
-  }, [editor, insertImageDataUrl, handleContentChange, handleTextSelection]);
+  }, [editor, insertImageDataUrl, handleContentChange, handleTextSelection, isStorybook]);
 
   return (
     <div className="w-full relative">

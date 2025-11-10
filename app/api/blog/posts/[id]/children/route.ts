@@ -1,11 +1,31 @@
-import { supabaseService } from "@/lib/supabase/service-server-client";
 import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import { getBlogSupabaseConfig } from "@/lib/environment";
+
+// Create Blog Supabase client
+const blogConfig = getBlogSupabaseConfig();
+const blogSupabase = blogConfig.url && blogConfig.serviceRoleKey
+  ? createClient(blogConfig.url, blogConfig.serviceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  })
+  : null;
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!blogSupabase) {
+    return NextResponse.json(
+      { error: "Blog database not configured" },
+      { status: 503 }
+    );
+  }
+
   const parent_id = (await params).id;
   const { title, user_id, icon, cover, content } = await req.json();
   let id: string;
@@ -21,8 +41,8 @@ export async function POST(
       return v.toString(16);
     });
   }
-  const { error, data } = await supabaseService
-    .from("blog_posts")
+  const { error, data } = await blogSupabase
+    .from("posts")
     .insert({
       id,
       user_id,

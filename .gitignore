@@ -14,6 +14,7 @@
 /coverage
 /tasks/
 .qoder/
+/docs/
 
 # next.js
 /.next/
