@@ -1,17 +1,22 @@
-import { auth } from "@/lib/auth-config";
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
-export default auth((req) => {
-  if (!req.auth && req.nextUrl.pathname.startsWith('/ai-tasky')) {
-    return Response.redirect(new URL('/auth/signin', req.url));
+export function middleware(request: NextRequest) {
+  // For AI Tasky routes, check authentication via session cookie
+  if (request.nextUrl.pathname.startsWith('/ai-tasky')) {
+    const sessionToken = request.cookies.get('authjs.session-token') || 
+                        request.cookies.get('__Secure-authjs.session-token');
+    
+    if (!sessionToken) {
+      return NextResponse.redirect(new URL('/auth/signin', request.url));
+    }
   }
-});
+  
+  return NextResponse.next();
+}
 
 export const config = {
   matcher: [
     "/ai-tasky/:path*",
-    "/api/chat/:path*",
-    "/api/ai-settings/:path*",
-    "/api/ai-keys/:path*",
-    "/api/chat-sessions/:path*",
   ],
 };
