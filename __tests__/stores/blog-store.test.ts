@@ -1,6 +1,9 @@
 import { useBlogStore } from '@/lib/stores/blog-store';
 import { supabase } from '@/lib/supabase/supabase-client';
 
+// Mock fetch for API calls
+global.fetch = jest.fn();
+
 jest.mock('@/lib/supabase/supabase-client', () => ({
   supabase: {
     from: jest.fn(),
@@ -27,15 +30,10 @@ describe('Blog Store', () => {
         { id: 'post-2', title: 'Child', parent_id: 'post-1', user_id: 'user-1' },
       ];
 
-      mockSupabase.from = jest.fn().mockReturnValue({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            order: jest.fn().mockResolvedValue({
-              data: mockPosts,
-              error: null,
-            }),
-          }),
-        }),
+      // Mock fetch for API call
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: mockPosts }),
       });
 
       await useBlogStore.getState().fetchPosts('user-1');
@@ -48,15 +46,10 @@ describe('Blog Store', () => {
     });
 
     it('should handle empty posts', async () => {
-      mockSupabase.from = jest.fn().mockReturnValue({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            order: jest.fn().mockResolvedValue({
-              data: [],
-              error: null,
-            }),
-          }),
-        }),
+      // Mock fetch for API call
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [] }),
       });
 
       await useBlogStore.getState().fetchPosts('user-1');
@@ -76,13 +69,10 @@ describe('Blog Store', () => {
         published: false,
       };
 
-      mockSupabase.from = jest.fn().mockReturnValue({
-        insert: jest.fn().mockReturnValue({
-          select: jest.fn().mockResolvedValue({
-            data: [newPost],
-            error: null,
-          }),
-        }),
+      // Mock fetch for API call
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: newPost }),
       });
 
       const postId = await useBlogStore.getState().createPost({
@@ -122,13 +112,10 @@ describe('Blog Store', () => {
         published: false,
       };
 
-      mockSupabase.from = jest.fn().mockReturnValue({
-        insert: jest.fn().mockReturnValue({
-          select: jest.fn().mockResolvedValue({
-            data: [childPost],
-            error: null,
-          }),
-        }),
+      // Mock fetch for API call
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: childPost }),
       });
 
       await useBlogStore.getState().createPost({
@@ -181,6 +168,12 @@ describe('Blog Store', () => {
         }),
       });
 
+      // Mock fetch for API call
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: updatedPost }),
+      });
+
       await useBlogStore.getState().updatePostContent('post-1', {
         title: 'Updated',
         content: { blocks: [] },
@@ -211,20 +204,10 @@ describe('Blog Store', () => {
         }],
       });
 
-      mockSupabase.from = jest.fn().mockReturnValue({
-        select: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            single: jest.fn().mockResolvedValue({
-              data: { id: validUuid },
-              error: null,
-            }),
-          }),
-        }),
-        delete: jest.fn().mockReturnValue({
-          eq: jest.fn().mockResolvedValue({
-            error: null,
-          }),
-        }),
+      // Mock fetch for API call
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: { id: validUuid } }),
       });
 
       await useBlogStore.getState().deletePostContent(validUuid);

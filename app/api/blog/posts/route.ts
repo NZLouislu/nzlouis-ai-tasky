@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase/supabase-admin';
 import type { Database } from '@/lib/supabase/supabase-client';
 
 // GET - Fetch all user posts
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const session = await auth();
     if (!session?.user?.id) {

@@ -6,7 +6,6 @@ import Sidebar from "../Sidebar";
 import { useBlogData } from "@/hooks/use-blog-data";
 import { useBlogStore } from "@/lib/stores/blog-store";
 import { supabase } from "@/lib/supabase/supabase-client";
-import { getTaskySupabaseConfig } from "@/lib/environment";
 import BlogHeader from "./BlogHeader";
 import BlogContent from "./BlogContent";
 import BlogCover from "./BlogCover";
@@ -344,11 +343,11 @@ export default function BlogPage() {
       window.location.port === "6015" ||
       window.location.port === "6016");
 
-  // 直接使用 store 来获取最新数据 - 订阅整个 store 以确保嵌套更新被检测到
+  // Use store directly to get latest data - subscribe to entire store to ensure nested updates are detected
   const blogStore = useBlogStore();
   const storePosts = blogStore.posts;
   
-  // 仍然使用 useBlogData 来获取辅助函数
+  // Still use useBlogData to get helper functions
   const realBlogData = useBlogData();
 
   // Provide mock data for Storybook
@@ -405,10 +404,10 @@ export default function BlogPage() {
   };
 
   // Use mock data in Storybook, otherwise use real hook
-  // 使用 store 的 posts 来确保实时更新
+  // Use store posts to ensure real-time updates
   const blogData = isStorybook ? mockBlogData : {
     ...realBlogData,
-    posts: storePosts, // 直接使用 store 的 posts（通过选择器订阅）
+    posts: storePosts, // Use store posts directly (subscribed via selector)
   };
 
   const {
@@ -417,13 +416,11 @@ export default function BlogPage() {
     error,
     addNewPost,
     addNewSubPost: addNewSubPostHook,
-    updatePostTitle,
     setPostIcon,
     removePostIcon,
     setPostCover,
     removePostCover,
     deletePost,
-    fetchPosts,
     userId,
     setUserId,
   } = blogData;
@@ -456,7 +453,7 @@ export default function BlogPage() {
       console.log("Creating new post");
       isCreatingPost.current = true;
       
-      // 乐观更新：先创建临时 post 并添加到 UI
+      // Optimistic update: create temporary post and add to UI first
       const tempPostId = crypto.randomUUID();
       const tempPost: Post = {
         id: tempPostId,
@@ -468,15 +465,15 @@ export default function BlogPage() {
         children: [],
       };
       
-      // 立即添加到 localPosts
+      // Add to localPosts immediately
       setLocalPosts(prev => [...prev, tempPost]);
       setActivePostId(tempPostId);
       
-      // 后台创建真实 post
+      // Create real post in background
       const newPostId = await addNewPost();
       console.log("Created new post with ID:", newPostId);
       
-      // 用真实 ID 替换临时 ID
+      // Replace temporary ID with real ID
       setLocalPosts(prev => prev.map(p => 
         p.id === tempPostId ? { ...p, id: newPostId } : p
       ));
@@ -487,8 +484,8 @@ export default function BlogPage() {
     } catch (error) {
       console.error("Failed to create new post:", error);
       isCreatingPost.current = false;
-      // 如果失败，移除临时 post
-      setLocalPosts(prev => prev.filter(p => p.id.length === 36)); // 只保留有效的 UUID
+      // If failed, remove temporary post
+      setLocalPosts(prev => prev.filter(p => p.id.length === 36)); // Keep only valid UUIDs
       throw error;
     }
   }, [addNewPost, localPosts.length]);
@@ -604,7 +601,7 @@ export default function BlogPage() {
         throw error;
       }
     },
-    [userId, isStorybook]
+    [isStorybook]
   );
 
   const handleSetActivePostId = useCallback(
@@ -658,7 +655,7 @@ export default function BlogPage() {
       localPostsIds: localPosts.map(p => p.id.substring(0, 8)),
     });
 
-    // 如果正在创建 post，跳过同步
+    // Skip sync if creating post
     if (isCreatingPost.current) {
       console.log("⏸️ Skipping sync while creating post");
       return;
@@ -722,7 +719,7 @@ export default function BlogPage() {
     findPostById,
     findFirstAvailablePost,
     mapPosts,
-    localPosts.length,
+    localPosts,
     isStorybook,
     userId,
     isLoading,
@@ -917,7 +914,7 @@ export default function BlogPage() {
       // Trigger auto-save for title changes
       triggerAutoSave();
     },
-    [findPostById, triggerAutoSave]
+    [triggerAutoSave]
   );
 
   const addNewSubPost = useCallback(
@@ -1170,6 +1167,7 @@ export default function BlogPage() {
         return `❌ Error: ${errorMsg}\n\nPlease try again with a simpler request.`;
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [activePostId, localPosts, findPostById]
   );
 
@@ -1196,7 +1194,8 @@ export default function BlogPage() {
           const props = block.props as Record<string, unknown>;
           if (props?.['data-ai-modified']) {
             // Remove AI highlighting from old modifications
-            const { 'data-ai-modified': _aiModified, 'data-block-id': _blockId, ...restProps } = props;
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { 'data-ai-modified': _aiModified, 'data-block-id': _blockId, backgroundColor: _backgroundColor, ...restProps } = props;
             return {
               ...block,
               props: restProps,
@@ -1220,7 +1219,7 @@ export default function BlogPage() {
       // Helper to mark blocks as AI-modified (only for new modifications)
       const markBlocksAsAIModified = (blocks: PartialBlock[]): PartialBlock[] => {
         return blocks.map(block => {
-          const blockId = `ai-${timestamp}-${Math.random().toString(36).substr(2, 9)}`;
+          const blockId = `ai-${timestamp}-${Math.random().toString(36).substring(2, 11)}`;
           newBlockIds.push(blockId);
           return {
             ...block,
@@ -1653,7 +1652,7 @@ export default function BlogPage() {
                 
                 {showAIHistory && (
                   <div className="mt-2 space-y-2">
-                    {aiModifications.map((mod, index) => (
+                    {aiModifications.map((mod) => (
                       <div
                         key={mod.timestamp}
                         className="text-xs bg-white p-2 rounded border border-yellow-100"

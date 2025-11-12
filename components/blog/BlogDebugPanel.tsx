@@ -10,7 +10,7 @@ export default function BlogDebugPanel() {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    // 监听键盘快捷键 Ctrl+Shift+D 来显示/隐藏调试面板
+    // Listen for keyboard shortcut Ctrl+Shift+D to show/hide debug panel
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && e.key === 'D') {
         e.preventDefault();

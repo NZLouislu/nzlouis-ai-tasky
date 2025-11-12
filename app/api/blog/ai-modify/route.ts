@@ -106,7 +106,7 @@ function buildModificationPrompt(params: {
   instruction: string;
   context?: string;
 }): string {
-  const { currentTitle, currentContent, instruction, context } = params;
+  const { currentTitle, currentContent, instruction } = params;
 
   // Convert BlockNote content to readable text
   const contentText = convertBlockNoteToText(currentContent);
@@ -345,7 +345,7 @@ function parseAIResponse(aiResponse: string): ContentModification[] {
       if (jsonObjectMatch) {
         try {
           parsed = JSON.parse(jsonObjectMatch[0]);
-        } catch (e) {
+        } catch {
           console.warn('Failed to parse JSON object');
         }
       }
@@ -355,7 +355,7 @@ function parseAIResponse(aiResponse: string): ContentModification[] {
     if (!parsed) {
       try {
         parsed = JSON.parse(aiResponse);
-      } catch (e) {
+      } catch {
         console.warn('Failed to parse entire response as JSON');
       }
     }

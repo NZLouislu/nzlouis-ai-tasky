@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { supabaseAdmin } from '@/lib/supabase/supabase-admin';
 import { defaultWelcomePosts } from '@/lib/blog/default-posts';
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     const session = await auth();
     if (!session?.user?.id) {

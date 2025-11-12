@@ -20,7 +20,7 @@ const config: Config.InitialOptions = {
     "!components/**/*.d.ts",
   ],
   transformIgnorePatterns: [
-    "/node_modules/(?!uuid)",
+    "/node_modules/(?!(uuid|next-auth|@auth))",
     "^.+\\.module\\.(css|sass|scss)$",
   ],
 };

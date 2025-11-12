@@ -122,9 +122,8 @@ export default function UnifiedChatbot({
       if (mode === "workspace" && onPageModification) {
         // Detect if the user wants to modify the blog content
         const modificationKeywords = [
-          '修改', '更改', '替换', '添加', '插入', '删除', '优化',
           'modify', 'change', 'replace', 'add', 'insert', 'delete', 'improve',
-          '帮我', '请', '能否', 'can you', 'please', 'help me'
+          'can you', 'please', 'help me'
         ];
 
         const isModificationRequest = modificationKeywords.some(keyword =>
@@ -302,7 +301,7 @@ export default function UnifiedChatbot({
         appendMessage(assistantMessage);
       }
     },
-    [appendMessage, getCurrentModel, getApiKey, settings, previewImage]
+    [appendMessage, getCurrentModel, getApiKey, settings, previewImage, mode, onPageModification]
   );
 
   const handleKeyDown = useCallback(

@@ -1,6 +1,4 @@
 import { create } from "zustand";
-import { supabase } from "@/lib/supabase/supabase-client";
-import { supabaseAdmin } from "@/lib/supabase/supabase-admin";
 import type { Database as TaskyDatabase } from "@/lib/supabase/supabase-client";
 import { blogDb } from "@/lib/supabase/blog-client";
 import type { Database as BlogDatabase } from "@/lib/supabase/blog-client";
@@ -96,7 +94,7 @@ interface BlogState {
   removeComment: (id: string) => Promise<void>;
 }
 
-export const useBlogStore = create<BlogState>((set, get) => ({
+export const useBlogStore = create<BlogState>((set) => ({
   posts: [],
   currentPostId: null,
   comments: {},
@@ -177,11 +175,11 @@ export const useBlogStore = create<BlogState>((set, get) => ({
       console.log(`Found ${userPosts?.length || 0} posts for user ${userId}`);
 
       // Build hierarchical structure for posts
-      const rootPosts = userPosts.filter((post: BlogPost) => post.parent_id === null);
-      const childPosts = userPosts.filter((post: BlogPost) => post.parent_id !== null);
+      const rootPosts = userPosts?.filter((post: BlogPost) => post.parent_id === null) || [];
+      const childPosts = userPosts?.filter((post: BlogPost) => post.parent_id !== null) || [];
 
       // Group child posts by parent_id
-      const childrenByParentId: Record<string, typeof userPosts> = {};
+      const childrenByParentId: Record<string, BlogPost[]> = {};
       childPosts.forEach((child: BlogPost) => {
         const parentId = child.parent_id as string;
         if (!childrenByParentId[parentId]) {
@@ -196,7 +194,7 @@ export const useBlogStore = create<BlogState>((set, get) => ({
 
         // Recursively build children structure
         const buildChildrenStructure = (
-          childPosts: typeof userPosts
+          childPosts: BlogPost[]
         ): BlogPost[] => {
           return childPosts.map((child: BlogPost) => {
             const grandchildren = childrenByParentId[child.id] || [];
@@ -252,10 +250,14 @@ export const useBlogStore = create<BlogState>((set, get) => ({
       const result = await response.json();
       const createdPost = result.data as BlogPost;
 
+      if (!createdPost) {
+        throw new Error('No post data returned from server');
+      }
+
       console.log("Post created successfully:", createdPost.id);
 
-      // Update local state
-      const updatePosts = (posts: BlogPost[]): BlogPost[] => {
+      // Update local state recursively
+      const updatePostsRecursive = (posts: BlogPost[]): BlogPost[] => {
         return posts.map((post) => {
           if (post.id === postData.parent_id) {
             console.log(`✅ Found parent ${postData.parent_id}, adding child ${createdPost.id}`);
@@ -270,7 +272,7 @@ export const useBlogStore = create<BlogState>((set, get) => ({
           if (post.children && post.children.length > 0) {
             return {
               ...post,
-              children: updatePosts(post.children),
+              children: updatePostsRecursive(post.children),
             };
           }
           return post;
@@ -278,9 +280,11 @@ export const useBlogStore = create<BlogState>((set, get) => ({
       };
 
       if (postData.parent_id) {
-        // For child posts, refetch all posts to ensure proper nesting
-        console.log("🔄 Refetching posts after creating child post");
-        await get().fetchPosts(postData.user_id as string);
+        // For child posts, use recursive update to ensure proper nesting
+        console.log("🔄 Updating posts with new child post");
+        set((state) => ({
+          posts: updatePostsRecursive(state.posts),
+        }));
       } else {
         set((state) => {
           const updatedPosts = [...state.posts, { ...createdPost, children: [] }];
@@ -324,6 +328,10 @@ export const useBlogStore = create<BlogState>((set, get) => ({
 
       const result = await response.json();
       const updatedPost = result.data as BlogPost;
+
+      if (!updatedPost) {
+        throw new Error('No post data returned from server');
+      }
 
       console.log("Post updated successfully:", updatedPost.id);
 

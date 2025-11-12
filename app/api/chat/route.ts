@@ -127,7 +127,7 @@ export async function POST(req: Request) {
           content.push({ type: 'text', text: msg.content });
         } else {
           // Use specific prompt for better vision results
-          content.push({ type: 'text', text: '请详细描述这张图片中你看到的所有内容，包括物体、颜色、场景等。' });
+          content.push({ type: 'text', text: 'Please describe in detail everything you see in this image, including objects, colors, scenes, etc.' });
         }
         
         promptMessages.push({

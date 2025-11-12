@@ -11,7 +11,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user, profile }) {
       // Create user profile record on first login
       if (user.email) {
         try {
@@ -57,7 +57,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       return true;
     },
-    async jwt({ token, user, account }) {
+    async jwt({ token, user }) {
       // Add user info to token on first login
       if (user) {
         // Get user ID from database

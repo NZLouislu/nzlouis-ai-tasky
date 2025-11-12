@@ -118,10 +118,10 @@ export const useBlogData = () => {
         setIsLoading(true);
         setIsInitialized(false); // Reset initialization when userId changes
         
-        // 获取用户的文章
+        // Get user's posts
         await fetchPosts(userId);
         
-        // 如果用户没有文章，初始化默认欢迎文章
+        // If user has no posts, initialize default welcome posts
         if (isMounted && blogPosts.length === 0) {
           console.log("No posts found, initializing welcome posts...");
           try {
@@ -133,13 +133,13 @@ export const useBlogData = () => {
               const result = await response.json();
               if (result.created) {
                 console.log(`Created ${result.count} welcome posts`);
-                // 重新获取文章
+                // Re-fetch posts
                 await fetchPosts(userId);
               }
             }
           } catch (initError) {
             console.error("Failed to initialize welcome posts:", initError);
-            // 继续，即使初始化失败
+            // Continue even if initialization fails
           }
         }
         
@@ -166,7 +166,7 @@ export const useBlogData = () => {
     return () => {
       isMounted = false;
     };
-  }, [fetchPosts, userId]); // 只在 userId 变化时重新初始化
+  }, [fetchPosts, userId]); // Only re-initialize when userId changes
 
   useEffect(() => {
     let isMounted = true;
@@ -508,7 +508,7 @@ export const useBlogData = () => {
         await deletePostContent(postId);
         console.log("Successfully deleted post from database:", postId);
 
-        // 不需要重新获取，store 的 deletePostContent 已经更新了状态
+        // No need to re-fetch, store's deletePostContent has already updated the state
       } catch (error) {
         console.error("Failed to delete post:", error);
         console.error("Error details:", {

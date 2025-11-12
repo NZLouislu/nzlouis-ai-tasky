@@ -1,5 +1,8 @@
 import { useBlogStore } from '@/lib/stores/blog-store';
 
+// Mock fetch for API calls
+global.fetch = jest.fn();
+
 describe('Blog Operations Integration', () => {
   beforeEach(() => {
     useBlogStore.setState({
@@ -7,10 +10,30 @@ describe('Blog Operations Integration', () => {
       isLoading: false,
       error: null,
     });
+    
+    // Reset fetch mock
+    (global.fetch as jest.Mock).mockClear();
   });
 
   describe('Post Creation', () => {
     it('should create a root post', async () => {
+      // Mock fetch for API call
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ 
+          data: {
+            id: 'test-post-id',
+            user_id: 'user-1',
+            title: 'Test Post',
+            content: [],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            parent_id: null,
+            children: []
+          }
+        }),
+      });
+      
       const store = useBlogStore.getState();
       
       const postId = await store.createPost({
@@ -24,6 +47,40 @@ describe('Blog Operations Integration', () => {
     });
 
     it('should create a child post', async () => {
+      // Mock fetch for parent post creation
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ 
+          data: {
+            id: 'parent-post-id',
+            user_id: 'user-1',
+            title: 'Parent Post',
+            content: [],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            parent_id: null,
+            children: []
+          }
+        }),
+      });
+      
+      // Mock fetch for child post creation
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ 
+          data: {
+            id: 'child-post-id',
+            user_id: 'user-1',
+            title: 'Child Post',
+            content: [],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            parent_id: 'parent-post-id',
+            children: []
+          }
+        }),
+      });
+      
       const store = useBlogStore.getState();
       
       const parentId = await store.createPost({
@@ -46,6 +103,40 @@ describe('Blog Operations Integration', () => {
 
   describe('Post Updates', () => {
     it('should update post content', async () => {
+      // Mock fetch for post creation
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ 
+          data: {
+            id: 'test-post-id',
+            user_id: 'user-1',
+            title: 'Test Post',
+            content: [],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            parent_id: null,
+            children: []
+          }
+        }),
+      });
+      
+      // Mock fetch for post update
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ 
+          data: {
+            id: 'test-post-id',
+            user_id: 'user-1',
+            title: 'Updated Title',
+            content: [{ type: 'paragraph', content: 'New content' }],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            parent_id: null,
+            children: []
+          }
+        }),
+      });
+      
       const store = useBlogStore.getState();
       
       const postId = await store.createPost({
@@ -68,6 +159,57 @@ describe('Blog Operations Integration', () => {
 
   describe('Post Hierarchy', () => {
     it('should maintain parent-child relationships', async () => {
+      // Mock fetch for parent post creation
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ 
+          data: {
+            id: 'parent-id',
+            user_id: 'user-1',
+            title: 'Parent',
+            content: [],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            parent_id: null,
+            children: []
+          }
+        }),
+      });
+      
+      // Mock fetch for child 1 creation
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ 
+          data: {
+            id: 'child-1-id',
+            user_id: 'user-1',
+            title: 'Child 1',
+            content: [],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            parent_id: 'parent-id',
+            children: []
+          }
+        }),
+      });
+      
+      // Mock fetch for child 2 creation
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ 
+          data: {
+            id: 'child-2-id',
+            user_id: 'user-1',
+            title: 'Child 2',
+            content: [],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            parent_id: 'parent-id',
+            children: []
+          }
+        }),
+      });
+      
       const store = useBlogStore.getState();
       
       const parentId = await store.createPost({

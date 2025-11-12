@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { X, Image as ImageIcon, Palette } from "lucide-react";
 
 interface PostCover {
@@ -204,9 +205,11 @@ export function CoverPicker({
 
             {imageUrl && (
               <div className="aspect-video rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700">
-                <img
+                <Image
                   src={imageUrl}
                   alt="Preview"
+                  width={800}
+                  height={450}
                   className="w-full h-full object-cover"
                   onError={(e) => {
                     e.currentTarget.src = "";

@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { supabaseAdmin } from '@/lib/supabase/supabase-admin';
 
-// 清理并重新创建测试数据
-export async function POST(request: NextRequest) {
+// Clean up and recreate test data
+export async function POST() {
   try {
     const session = await auth();
     if (!session?.user?.id) {
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. 删除用户的所有 posts
+    // 1. Delete all user posts
     console.log('Deleting all posts for user:', session.user.id);
     const { error: deleteError } = await supabaseAdmin
       .from('blog_posts')
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. 创建新的测试数据
+    // 2. Create new test data
     const now = new Date().toISOString();
     const testPosts = [
       {

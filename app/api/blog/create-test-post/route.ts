@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase/supabase-admin';
 
 export async function POST(request: NextRequest) {
   try {
-    // 验证用户登录
+    // Verify user login
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { user_id, title } = body;
 
-    // 验证 user_id 匹配
+    // Verify user_id matches
     if (user_id !== session.user.id) {
       return NextResponse.json(
         { error: 'User ID mismatch' },
@@ -31,11 +31,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 生成 UUID 和时间戳
+    // Generate UUID and timestamp
     const postId = crypto.randomUUID();
     const now = new Date().toISOString();
 
-    // 使用 admin client 创建 post（绕过 RLS）
+    // Use admin client to create post (bypass RLS)
     const insertData = {
       id: postId,
       user_id,
