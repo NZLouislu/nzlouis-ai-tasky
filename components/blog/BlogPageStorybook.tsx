@@ -11,6 +11,13 @@ import CoverOptions from "./CoverOptions";
 import DeleteDropdown from "./DeleteDropdown";
 import ChatbotPanel from "./ChatbotPanel";
 
+interface PageModification {
+  type: string;
+  target?: string;
+  content?: string;
+  title?: string;
+}
+
 const Editor = dynamic(() => import("../Editor"), {
   ssr: false,
   loading: () => <div>Loading editor...</div>,
@@ -34,12 +41,7 @@ interface Post {
   [key: string]: unknown;
 }
 
-interface PageModification {
-  type: string;
-  target?: string;
-  content?: string;
-  title?: string;
-}
+
 
 const mockBlogPosts = [
   {
@@ -330,7 +332,8 @@ export default function BlogPageStorybook() {
   }, [activePostId, localPosts]);
 
   const handlePageModification = useCallback(async (mod: PageModification) => {
-    console.log("Handling page modification", mod);
+    const instruction = typeof mod === 'string' ? mod : mod.content || mod.title || '';
+    console.log("Handling page modification", instruction);
     return "Modification applied";
   }, []);
 

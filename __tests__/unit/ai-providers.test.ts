@@ -47,7 +47,7 @@ describe('AI Providers', () => {
     });
 
     it('should return undefined for unknown provider', () => {
-      const key = getFallbackAPIKey('unknown' as any);
+      const key = getFallbackAPIKey('unknown' as 'google');
       expect(key).toBeUndefined();
     });
   });

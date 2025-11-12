@@ -79,7 +79,7 @@ describe('AI Models', () => {
     });
 
     it('should have at least one model per provider', () => {
-      Object.entries(MODEL_MAPPINGS).forEach(([provider, models]) => {
+      Object.entries(MODEL_MAPPINGS).forEach(([, models]) => {
         expect(Object.keys(models).length).toBeGreaterThan(0);
       });
     });

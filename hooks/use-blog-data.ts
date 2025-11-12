@@ -55,8 +55,7 @@ export const useBlogData = () => {
           // Handle case where content is a stringified object
           content = [parsed] as PartialBlock[];
         }
-      } catch (e) {
-        // If JSON parsing fails, create a paragraph with the content as text
+      } catch {
         content = [
           {
             type: "paragraph",
@@ -104,16 +103,7 @@ export const useBlogData = () => {
 
 
 
-  function generateUUID() {
-    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
-      /[xy]/g,
-      function (c) {
-        const r = (Math.random() * 16) | 0,
-          v = c == "x" ? r : (r & 0x3) | 0x8;
-        return v.toString(16);
-      }
-    );
-  }
+
 
   useEffect(() => {
     let isMounted = true;
@@ -127,7 +117,32 @@ export const useBlogData = () => {
       try {
         setIsLoading(true);
         setIsInitialized(false); // Reset initialization when userId changes
+        
+        // 获取用户的文章
         await fetchPosts(userId);
+        
+        // 如果用户没有文章，初始化默认欢迎文章
+        if (isMounted && blogPosts.length === 0) {
+          console.log("No posts found, initializing welcome posts...");
+          try {
+            const response = await fetch('/api/blog/initialize-user', {
+              method: 'POST',
+            });
+            
+            if (response.ok) {
+              const result = await response.json();
+              if (result.created) {
+                console.log(`Created ${result.count} welcome posts`);
+                // 重新获取文章
+                await fetchPosts(userId);
+              }
+            }
+          } catch (initError) {
+            console.error("Failed to initialize welcome posts:", initError);
+            // 继续，即使初始化失败
+          }
+        }
+        
         if (isMounted) {
           setIsInitialized(true);
         }
@@ -151,7 +166,7 @@ export const useBlogData = () => {
     return () => {
       isMounted = false;
     };
-  }, [fetchPosts, userId]); // Remove isInitialized from dependency array
+  }, [fetchPosts, userId]); // 只在 userId 变化时重新初始化
 
   useEffect(() => {
     let isMounted = true;
@@ -493,10 +508,7 @@ export const useBlogData = () => {
         await deletePostContent(postId);
         console.log("Successfully deleted post from database:", postId);
 
-        console.log("Refreshing posts after deletion for userId:", userId);
-        // Use dynamic userId instead of fixed "00000000-0000-0000-0000-000000000000"
-        await fetchPosts(userId);
-        console.log("Finished refreshing posts");
+        // 不需要重新获取，store 的 deletePostContent 已经更新了状态
       } catch (error) {
         console.error("Failed to delete post:", error);
         console.error("Error details:", {
@@ -508,7 +520,7 @@ export const useBlogData = () => {
         throw error;
       }
     },
-    [deletePostContent, userId] // Add userId to dependency array
+    [deletePostContent, userId]
   );
 
   return {
@@ -526,6 +538,7 @@ export const useBlogData = () => {
     deletePost,
     createPost,
     deletePostContent,
+    fetchPosts, // Export fetchPosts
     userId, // Export userId
     setUserId, // Export function to set userId
   };

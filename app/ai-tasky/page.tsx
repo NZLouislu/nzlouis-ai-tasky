@@ -1,8 +1,8 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
-import { useState, useEffect, useRef } from 'react';
-import { Send, Plus, MessageSquare, Settings, Paperclip } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Send, Plus, MessageSquare, Settings, Paperclip, Edit2, Trash2, Search } from 'lucide-react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -31,20 +31,45 @@ export default function AITaskyPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const handleImageUpload = (file: File) => {
+  const handleImageUpload = useCallback(async (file: File) => {
     if (file && file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setPreviewImage(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
+      try {
+        setIsLoading(true);
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('entityType', 'chat_message');
+        formData.append('entityId', currentSessionId || 'temp');
+        
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        
+        if (!res.ok) {
+          throw new Error('Upload failed');
+        }
+        
+        const data = await res.json();
+        setPreviewImage(data.publicUrl);
+      } catch (error) {
+        console.error('Image upload failed:', error);
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setPreviewImage(e.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+      } finally {
+        setIsLoading(false);
+      }
     }
-  };
+  }, [currentSessionId]);
 
-  // Handle paste event for screenshots
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
@@ -53,7 +78,6 @@ export default function AITaskyPage() {
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         
-        // Check if the item is an image
         if (item.type.indexOf('image') !== -1) {
           e.preventDefault();
           const file = item.getAsFile();
@@ -66,13 +90,12 @@ export default function AITaskyPage() {
       }
     };
 
-    // Add paste event listener to document
     document.addEventListener('paste', handlePaste);
     
     return () => {
       document.removeEventListener('paste', handlePaste);
     };
-  }, []);
+  }, [handleImageUpload]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -179,6 +202,10 @@ export default function AITaskyPage() {
 
         buffer = lines[lines.length - 1];
       }
+
+      if (currentSessionId) {
+        await saveMessages(currentSessionId, [userMessage, assistantMessage]);
+      }
     } catch (error) {
       console.error('Error:', error);
       setIsLoading(false);
@@ -192,20 +219,77 @@ export default function AITaskyPage() {
     }
   };
 
-  // Load sessions
-  useEffect(() => {
-    if (session?.user) {
-      loadSessions();
-    }
-  }, [session]);
-
-  const loadSessions = async () => {
+  const loadSessions = useCallback(async () => {
     try {
       const res = await fetch('/api/chat-sessions');
       const data = await res.json();
       setSessions(data.sessions || []);
+      
+      if (data.sessions && data.sessions.length > 0 && !currentSessionId) {
+        setCurrentSessionId(data.sessions[0].id);
+      }
     } catch (error) {
       console.error('Failed to load sessions:', error);
+    }
+  }, [currentSessionId]);
+
+  useEffect(() => {
+    if (session?.user) {
+      loadSessions();
+    }
+  }, [session, loadSessions]);
+
+  useEffect(() => {
+    if (currentSessionId) {
+      loadSessionMessages(currentSessionId);
+    }
+  }, [currentSessionId]);
+
+  const loadSessionMessages = async (sessionId: string) => {
+    try {
+      const res = await fetch(`/api/chat-sessions/${sessionId}`);
+      const data = await res.json();
+      
+      if (data.session && data.session.messages) {
+        interface DbMessage {
+          id: string;
+          role: string;
+          content: string;
+          image_url?: string;
+          created_at: string;
+        }
+        const loadedMessages: Message[] = data.session.messages.map((msg: DbMessage) => ({
+          id: msg.id,
+          role: msg.role as 'user' | 'assistant',
+          content: msg.content,
+          image: msg.image_url || undefined,
+          timestamp: new Date(msg.created_at),
+        }));
+        setMessages(loadedMessages);
+      } else {
+        setMessages([]);
+      }
+    } catch (error) {
+      console.error('Failed to load messages:', error);
+      setMessages([]);
+    }
+  };
+
+  const saveMessages = async (sessionId: string, messagesToSave: Message[]) => {
+    try {
+      await fetch(`/api/chat-sessions/${sessionId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: messagesToSave.map(msg => ({
+            role: msg.role,
+            content: msg.content,
+            imageUrl: msg.image,
+          })),
+        }),
+      });
+    } catch (error) {
+      console.error('Failed to save messages:', error);
     }
   };
 
@@ -222,11 +306,56 @@ export default function AITaskyPage() {
       });
       const data = await res.json();
       setCurrentSessionId(data.session.id);
+      setMessages([]);
       await loadSessions();
     } catch (error) {
       console.error('Failed to create session:', error);
     }
   };
+
+  const switchSession = (sessionId: string) => {
+    setCurrentSessionId(sessionId);
+  };
+
+  const renameSession = async (sessionId: string, newTitle: string) => {
+    try {
+      await fetch(`/api/chat-sessions/${sessionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: newTitle }),
+      });
+      setSessions(sessions.map(s => 
+        s.id === sessionId ? { ...s, title: newTitle } : s
+      ));
+      setEditingSessionId(null);
+    } catch (error) {
+      console.error('Failed to rename session:', error);
+    }
+  };
+
+  const deleteSession = async (sessionId: string) => {
+    if (!confirm('Are you sure you want to delete this chat session?')) {
+      return;
+    }
+
+    try {
+      await fetch(`/api/chat-sessions/${sessionId}`, {
+        method: 'DELETE',
+      });
+      setSessions(sessions.filter(s => s.id !== sessionId));
+      if (currentSessionId === sessionId) {
+        const remaining = sessions.filter(s => s.id !== sessionId);
+        setCurrentSessionId(remaining.length > 0 ? remaining[0].id : null);
+        setMessages([]);
+      }
+    } catch (error) {
+      console.error('Failed to delete session:', error);
+    }
+  };
+
+  const filteredSessions = sessions.filter(s =>
+    s.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden pt-16">
@@ -249,20 +378,86 @@ export default function AITaskyPage() {
               Settings
             </Link>
           </div>
+          <div className="px-4 pb-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+              <input
+                type="text"
+                placeholder="Search sessions..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
           <div className="flex-1 overflow-y-auto p-2">
-            {sessions.map((sess) => (
-              <button
+            {sessions.length === 0 && (
+              <div className="text-center text-gray-500 text-sm p-4">
+                No chat sessions yet. Create one to get started!
+              </div>
+            )}
+            {filteredSessions.map((sess) => (
+              <div
                 key={sess.id}
-                onClick={() => setCurrentSessionId(sess.id)}
-                className={`w-full text-left px-3 py-2 rounded-lg mb-1 flex items-center gap-2 ${
+                className={`group relative rounded-lg mb-1 ${
                   currentSessionId === sess.id
-                    ? 'bg-blue-50 text-blue-600'
+                    ? 'bg-blue-50'
                     : 'hover:bg-gray-100'
                 }`}
               >
-                <MessageSquare size={16} />
-                <span className="truncate">{sess.title}</span>
-              </button>
+                {editingSessionId === sess.id ? (
+                  <div className="px-3 py-2">
+                    <input
+                      type="text"
+                      value={editingTitle}
+                      onChange={(e) => setEditingTitle(e.target.value)}
+                      onBlur={() => renameSession(sess.id, editingTitle)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          renameSession(sess.id, editingTitle);
+                        } else if (e.key === 'Escape') {
+                          setEditingSessionId(null);
+                        }
+                      }}
+                      autoFocus
+                      className="w-full px-2 py-1 text-sm border border-blue-500 rounded focus:outline-none"
+                    />
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => switchSession(sess.id)}
+                    className="w-full text-left px-3 py-2 flex items-center gap-2"
+                  >
+                    <MessageSquare size={16} className={currentSessionId === sess.id ? 'text-blue-600' : ''} />
+                    <span className={`truncate flex-1 ${currentSessionId === sess.id ? 'text-blue-600' : ''}`}>
+                      {sess.title}
+                    </span>
+                  </button>
+                )}
+                <div className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 flex gap-1">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingSessionId(sess.id);
+                      setEditingTitle(sess.title);
+                    }}
+                    className="p-1 hover:bg-gray-200 rounded"
+                    title="Rename"
+                  >
+                    <Edit2 size={14} />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteSession(sess.id);
+                    }}
+                    className="p-1 hover:bg-red-100 text-red-600 rounded"
+                    title="Delete"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         </div>

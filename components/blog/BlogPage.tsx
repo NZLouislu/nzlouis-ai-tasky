@@ -4,15 +4,25 @@ import dynamic from "next/dynamic";
 import { PartialBlock } from "@blocknote/core";
 import Sidebar from "../Sidebar";
 import { useBlogData } from "@/hooks/use-blog-data";
+import { useBlogStore } from "@/lib/stores/blog-store";
 import { supabase } from "@/lib/supabase/supabase-client";
 import { getTaskySupabaseConfig } from "@/lib/environment";
 import BlogHeader from "./BlogHeader";
 import BlogContent from "./BlogContent";
 import BlogCover from "./BlogCover";
 import IconSelector from "./IconSelector";
+import { CoverPicker } from "./CoverPicker";
 import CoverOptions from "./CoverOptions";
-import DeleteDropdown from "./DeleteDropdown";
 import ChatbotPanel from "./ChatbotPanel";
+import BlogDebugPanel from "./BlogDebugPanel";
+import { useSession } from "next-auth/react";
+
+interface PageModification {
+  type: string;
+  target?: string;
+  content?: string;
+  title?: string;
+}
 
 // Use different Editor imports in Storybook environment and other environments
 const isStorybookEnv =
@@ -74,6 +84,7 @@ interface PageModification {
   target?: string;
   content?: string;
   title?: string;
+  position?: number;
 }
 
 // Mock data for Storybook - extended version
@@ -333,7 +344,11 @@ export default function BlogPage() {
       window.location.port === "6015" ||
       window.location.port === "6016");
 
-  // Always call the hook to comply with React Hooks rules
+  // 直接使用 store 来获取最新数据 - 订阅整个 store 以确保嵌套更新被检测到
+  const blogStore = useBlogStore();
+  const storePosts = blogStore.posts;
+  
+  // 仍然使用 useBlogData 来获取辅助函数
   const realBlogData = useBlogData();
 
   // Provide mock data for Storybook
@@ -384,12 +399,17 @@ export default function BlogPage() {
       return Promise.resolve();
     },
     deletePost: () => Promise.resolve(),
+    fetchPosts: () => Promise.resolve(),
     userId: "storybook-user",
     setUserId: () => {},
   };
 
   // Use mock data in Storybook, otherwise use real hook
-  const blogData = isStorybook ? mockBlogData : realBlogData;
+  // 使用 store 的 posts 来确保实时更新
+  const blogData = isStorybook ? mockBlogData : {
+    ...realBlogData,
+    posts: storePosts, // 直接使用 store 的 posts（通过选择器订阅）
+  };
 
   const {
     posts,
@@ -403,6 +423,7 @@ export default function BlogPage() {
     setPostCover,
     removePostCover,
     deletePost,
+    fetchPosts,
     userId,
     setUserId,
   } = blogData;
@@ -423,31 +444,74 @@ export default function BlogPage() {
   const [isMobile, setIsMobile] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteDropdown, setShowDeleteDropdown] = useState(false);
+  const [showCoverPicker, setShowCoverPicker] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const dropdownRef = useRef<HTMLDivElement>(null);
   const unsavedChanges = useRef<Map<string, Post>>(new Map());
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isCreatingPost = useRef<boolean>(false);
 
   const createNewPost = useCallback(async () => {
     try {
       console.log("Creating new post");
+      isCreatingPost.current = true;
+      
+      // 乐观更新：先创建临时 post 并添加到 UI
+      const tempPostId = crypto.randomUUID();
+      const tempPost: Post = {
+        id: tempPostId,
+        title: `Post ${localPosts.length + 1}`,
+        content: [],
+        icon: undefined,
+        cover: undefined,
+        parent_id: null,
+        children: [],
+      };
+      
+      // 立即添加到 localPosts
+      setLocalPosts(prev => [...prev, tempPost]);
+      setActivePostId(tempPostId);
+      
+      // 后台创建真实 post
       const newPostId = await addNewPost();
       console.log("Created new post with ID:", newPostId);
+      
+      // 用真实 ID 替换临时 ID
+      setLocalPosts(prev => prev.map(p => 
+        p.id === tempPostId ? { ...p, id: newPostId } : p
+      ));
       setActivePostId(newPostId);
+      
+      isCreatingPost.current = false;
       return newPostId;
     } catch (error) {
       console.error("Failed to create new post:", error);
+      isCreatingPost.current = false;
+      // 如果失败，移除临时 post
+      setLocalPosts(prev => prev.filter(p => p.id.length === 36)); // 只保留有效的 UUID
       throw error;
     }
-  }, [addNewPost]);
+  }, [addNewPost, localPosts.length]);
+
+  // Get NextAuth session to get real user ID
+  const { data: session, status: sessionStatus } = useSession();
 
   useEffect(() => {
-    if (userId === "00000000-0000-0000-0000-000000000000") {
-      const realUserId = "6d5ae2bf-cf17-4c69-b026-f86529ee37cd";
-      setUserId(realUserId);
-      console.log("Using real userId for blog page:", realUserId);
+    console.log("Session status:", sessionStatus);
+    console.log("Session data:", session);
+    console.log("Current userId:", userId);
+
+    // Use NextAuth session user ID if available
+    if (session?.user?.id && userId !== session.user.id) {
+      console.log("✅ Setting userId from NextAuth session:", session.user.id);
+      setUserId(session.user.id);
+    } else if (userId === "00000000-0000-0000-0000-000000000000") {
+      console.warn("⚠️ No valid user ID available. User may need to log in.");
+      console.warn("Session status:", sessionStatus);
     } else {
-      console.log("Using existing userId:", userId);
+      console.log("✅ Using existing userId:", userId);
     }
-  }, [userId, setUserId]);
+  }, [session, userId, setUserId, sessionStatus]);
 
   // Sync local UI state with data fetched by useBlogData
   const mapPosts = useCallback((posts: Post[]): Post[] => {
@@ -509,30 +573,28 @@ export default function BlogPage() {
         return;
       }
 
-      if (!supabase || supabase === null) {
-        console.warn(
-          "Supabase client not configured. Skipping save operation."
-        );
-        console.warn("Current Supabase config:", getTaskySupabaseConfig());
-        unsavedChanges.current.delete(post.id);
-        return;
-      }
-
       try {
-        const { error } = await supabase.from("blog_posts").upsert({
-          id: post.id,
-          user_id: userId,
-          title: post.title,
-          content: post.content,
-          icon: post.icon,
-          cover: post.cover,
-          parent_id: post.parent_id ?? null,
-          updated_at: new Date().toISOString(),
+        console.log(`Saving post ${post.id} via API`);
+        
+        const response = await fetch('/api/blog/posts', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            id: post.id,
+            title: post.title,
+            content: post.content,
+            icon: post.icon,
+            cover: post.cover,
+            parent_id: post.parent_id ?? null,
+          }),
         });
 
-        if (error) {
-          console.error(`Failed to save post ${post.id}:`, error);
-          throw error;
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error(`Failed to save post ${post.id}:`, errorData.error);
+          throw new Error(errorData.error || 'Failed to save post');
         }
 
         console.log(`Successfully saved post ${post.id} to database`);
@@ -547,14 +609,22 @@ export default function BlogPage() {
 
   const handleSetActivePostId = useCallback(
     async (postId: string) => {
+      console.log("🔄 Switching to post:", postId);
+      console.log("Current activePostId:", activePostId);
+      
       const currentPost = unsavedChanges.current.get(activePostId);
       if (currentPost) {
+        console.log("💾 Saving current post before switching");
         await savePostToDatabase(currentPost);
       }
+      
+      console.log("✅ Setting new activePostId:", postId);
       setActivePostId(postId);
 
       const newExpanded = new Set(expandedPages);
       const post = findPostById(localPosts, postId);
+      
+      console.log("📄 Found post:", post ? post.title : "null");
 
       if (post && post.parent_id) {
         newExpanded.add(post.parent_id);
@@ -578,43 +648,72 @@ export default function BlogPage() {
   }, []);
 
   useEffect(() => {
-    if (posts && localPosts.length === 0) {
-      // Convert BlogPost[] to Post[] with proper type handling
-      const convertedPosts: Post[] = posts.map((post) => ({
-        ...post,
-        content: (post.content as PartialBlock[]) || [],
-        children: post.children
-          ? post.children.map((child) => ({
-              ...child,
-              content: (child.content as PartialBlock[]) || [],
-            }))
-          : [],
-        // Ensure cover.type is properly typed
-        cover: post.cover
-          ? {
-              type:
-                post.cover.type === "color" || post.cover.type === "image"
-                  ? post.cover.type
-                  : "color",
-              value: post.cover.value || "",
-            }
-          : undefined,
-      }));
+    console.log("📊 Posts sync effect:", {
+      postsFromStore: posts?.length || 0,
+      localPostsCount: localPosts.length,
+      userId,
+      isLoading,
+      isCreating: isCreatingPost.current,
+      postsIds: posts?.map(p => p.id.substring(0, 8)),
+      localPostsIds: localPosts.map(p => p.id.substring(0, 8)),
+    });
 
-      const mapped = mapPosts(convertedPosts);
-      setLocalPosts(mapped);
+    // 如果正在创建 post，跳过同步
+    if (isCreatingPost.current) {
+      console.log("⏸️ Skipping sync while creating post");
+      return;
+    }
 
-      if (mapped.length > 0) {
-        const currentPostExists = findPostById(mapped, activePostId);
-        if (!currentPostExists) {
-          const defaultPost = findFirstAvailablePost(mapped);
-          if (defaultPost) {
-            // Only update if the current activePostId is not the default post's ID
-            if (activePostId !== defaultPost.id) {
-              setActivePostId(defaultPost.id);
+    // Sync when:
+    // 1. localPosts is empty (initial load)
+    // 2. posts count different from localPosts (create/delete)
+    if (posts && !isLoading) {
+      const postsLength = posts.length;
+      const needsSync = localPosts.length === 0 || 
+                       postsLength !== localPosts.length;
+      
+      console.log("Sync check:", { needsSync, postsLength, localPostsLength: localPosts.length });
+      
+      if (needsSync) {
+        console.log("🔄 Converting and setting posts from store:", postsLength);
+        
+        // Convert BlogPost[] to Post[] with proper type handling
+        const convertedPosts: Post[] = posts.map((post) => ({
+          ...post,
+          content: (post.content as PartialBlock[]) || [],
+          icon: post.icon ?? undefined,
+          children: post.children ? mapPosts(post.children as unknown as Post[]) : [],
+          // Ensure cover.type is properly typed
+          cover: post.cover
+            ? {
+                type:
+                  post.cover.type === "color" || post.cover.type === "image"
+                    ? post.cover.type
+                    : "color",
+                value: post.cover.value || "",
+              }
+            : undefined,
+        }));
+
+        const mapped = mapPosts(convertedPosts);
+        console.log("✅ Mapped posts:", mapped.length);
+        setLocalPosts(mapped);
+
+        if (mapped.length > 0) {
+          const currentPostExists = findPostById(mapped, activePostId);
+          if (!currentPostExists) {
+            const defaultPost = findFirstAvailablePost(mapped);
+            if (defaultPost) {
+              // Only update if the current activePostId is not the default post's ID
+              if (activePostId !== defaultPost.id) {
+                console.log("📌 Setting active post to:", defaultPost.id);
+                setActivePostId(defaultPost.id);
+              }
             }
           }
         }
+      } else {
+        console.log("ℹ️ Posts count matches, skipping sync");
       }
     }
   }, [
@@ -625,6 +724,8 @@ export default function BlogPage() {
     mapPosts,
     localPosts.length,
     isStorybook,
+    userId,
+    isLoading,
   ]);
 
   useEffect(() => {
@@ -639,8 +740,10 @@ export default function BlogPage() {
     console.log("localPosts updated:", localPosts.length, "posts");
     if (localPosts.length > 0) {
       console.log("First post ID:", localPosts[0].id);
+      const activePost = findPostById(localPosts, activePostId);
+      console.log("Active post cover:", activePost?.cover);
     }
-  }, [localPosts]);
+  }, [localPosts, activePostId, findPostById]);
 
   const saveAllUnsavedChanges = useCallback(async () => {
     const unsaved = Array.from(unsavedChanges.current.values());
@@ -665,26 +768,43 @@ export default function BlogPage() {
         return;
       }
 
-      // Save all posts directly to database and update localPosts
+      // Save all posts via API
       for (const post of unsaved) {
         try {
-          const { error } = await supabase.from("blog_posts").upsert({
-            id: post.id,
-            user_id: userId,
+          console.log(`💾 Saving post ${post.id}:`, {
             title: post.title,
-            content: post.content,
-            icon: post.icon,
-            cover: post.cover,
-            parent_id: post.parent_id ?? null,
-            updated_at: new Date().toISOString(),
+            user_id: userId,
+            content_length: post.content?.length || 0,
+            parent_id: post.parent_id,
+            has_children: post.children && post.children.length > 0,
           });
 
-          if (error) {
-            console.error(`Failed to save post ${post.id}:`, error);
-            throw error;
+          const response = await fetch('/api/blog/posts', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              id: post.id,
+              title: post.title,
+              content: post.content,
+              icon: post.icon,
+              cover: post.cover,
+              parent_id: post.parent_id ?? null,
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            console.error(`❌ Failed to save post ${post.id}:`, errorData.error);
+            throw new Error(errorData.error || 'Failed to save post');
           }
 
-          console.log(`Successfully saved post ${post.id} to database`);
+          const result = await response.json();
+          console.log(`✅ Successfully saved post ${post.id} to database:`, {
+            title: result.data?.title,
+            parent_id: result.data?.parent_id,
+          });
 
           // Update localPosts with the saved content
           setLocalPosts((prev) => {
@@ -717,6 +837,41 @@ export default function BlogPage() {
     }
   }, [userId, isStorybook]);
 
+  const triggerAutoSave = useCallback(() => {
+    if (!isStorybook) {
+      // Clear existing timeout
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+
+      // Set status to saving immediately for better UX
+      setSaveStatus('saving');
+
+      // Debounce save for 1 second (faster than before)
+      autoSaveTimeoutRef.current = setTimeout(async () => {
+        try {
+          console.log('Auto-saving changes...');
+          await saveAllUnsavedChanges();
+          setSaveStatus('saved');
+          console.log('Auto-save completed');
+
+          // Reset to neutral state after 2 seconds
+          setTimeout(() => {
+            setSaveStatus('saved');
+          }, 2000);
+        } catch (error) {
+          console.error('Auto-save failed:', error);
+          setSaveStatus('error');
+
+          // Reset error state after 5 seconds
+          setTimeout(() => {
+            setSaveStatus('saved');
+          }, 5000);
+        }
+      }, 1000); // Reduced from 2000ms to 1000ms for faster saves
+    }
+  }, [isStorybook, saveAllUnsavedChanges]);
+
   const updateLocalPostContent = useCallback(
     (newContent: PartialBlock[]) => {
       setLocalPosts((prev) => {
@@ -732,37 +887,37 @@ export default function BlogPage() {
           p.id === activePostId ? updatedPost : p
         ) as Post[];
       });
+
+      triggerAutoSave();
     },
-    [activePostId, findPostById]
+    [activePostId, findPostById, triggerAutoSave]
   );
 
   const updateLocalPostTitle = useCallback(
     async (postId: string, newTitle: string) => {
       setLocalPosts((prev) => {
-        const post = findPostById(prev, postId);
-        if (!post) return prev;
-
-        const updatedPost = { ...post, title: newTitle };
-        const newUnsavedChanges = new Map(unsavedChanges.current);
-        newUnsavedChanges.set(postId, updatedPost);
-        unsavedChanges.current = newUnsavedChanges;
-
-        return prev.map((p) => (p.id === postId ? updatedPost : p)) as Post[];
+        const updatePostRecursively = (posts: Post[]): Post[] => {
+          return posts.map((p) => {
+            if (p.id === postId) {
+              const updatedPost = { ...p, title: newTitle };
+              const newUnsavedChanges = new Map(unsavedChanges.current);
+              newUnsavedChanges.set(postId, updatedPost);
+              unsavedChanges.current = newUnsavedChanges;
+              return updatedPost;
+            }
+            if (p.children && p.children.length > 0) {
+              return { ...p, children: updatePostRecursively(p.children) };
+            }
+            return p;
+          });
+        };
+        return updatePostRecursively(prev);
       });
 
-      // Skip database save operations in Storybook environment
-      if (isStorybook) {
-        console.log("Skipping database save in Storybook environment");
-        return;
-      }
-
-      try {
-        await updatePostTitle(postId, newTitle);
-      } catch (error) {
-        console.error("Failed to update post title:", error);
-      }
+      // Trigger auto-save for title changes
+      triggerAutoSave();
     },
-    [updatePostTitle, isStorybook, findPostById]
+    [findPostById, triggerAutoSave]
   );
 
   const addNewSubPost = useCallback(
@@ -823,6 +978,52 @@ export default function BlogPage() {
     [addNewSubPostHook, isStorybook]
   );
 
+  const handleCoverSelect = useCallback(async (cover: { type: "color" | "image"; value: string }) => {
+    if (!activePostId) return;
+    
+    console.log("🎨 Setting cover:", { activePostId, cover });
+    
+    try {
+      // Update local state immediately for instant feedback
+      setLocalPosts((prev) => {
+        const updatePostRecursively = (posts: Post[]): Post[] => {
+          return posts.map((post) => {
+            if (post.id === activePostId) {
+              console.log("✅ Found post to update:", post.id);
+              return { ...post, cover };
+            }
+            if (post.children && post.children.length > 0) {
+              return { ...post, children: updatePostRecursively(post.children) };
+            }
+            return post;
+          });
+        };
+        return updatePostRecursively(prev);
+      });
+      
+      // Then save to database
+      await setPostCover(activePostId, cover);
+      console.log("💾 Cover saved to database");
+    } catch (error) {
+      console.error("Failed to set cover:", error);
+    }
+  }, [activePostId, setPostCover]);
+
+  const handleCoverRemove = useCallback(async () => {
+    if (!activePostId) return;
+    
+    try {
+      await removePostCover(activePostId);
+      setLocalPosts((prev) =>
+        prev.map((post) =>
+          post.id === activePostId ? { ...post, cover: undefined } : post
+        )
+      );
+    } catch (error) {
+      console.error("Failed to remove cover:", error);
+    }
+  }, [activePostId, removePostCover]);
+
   const handleDeletePost = useCallback(async () => {
     if (!activePostId) return;
 
@@ -882,10 +1083,234 @@ export default function BlogPage() {
     }
   }, [activePostId, deletePost, localPosts, isStorybook]);
 
-  const handlePageModification = useCallback(async (mod: PageModification) => {
-    console.log("Handling page modification", mod);
-    return "Modification applied";
-  }, []);
+  const handlePageModification = useCallback(
+    async (mod: PageModification): Promise<string> => {
+      // Extract instruction from PageModification object
+      const instruction = typeof mod === 'string' ? mod : mod.content || mod.title || '';
+      try {
+        const currentPost = findPostById(localPosts, activePostId);
+        if (!currentPost) {
+          return "❌ Error: No active post found";
+        }
+
+        console.log("Requesting AI modification for post:", activePostId);
+        console.log("Instruction:", instruction);
+        console.log("Current content blocks:", currentPost.content?.length || 0);
+
+        // Validate instruction
+        if (!instruction || instruction.trim().length < 5) {
+          return "⚠️ Please provide a more detailed instruction (at least 5 characters).";
+        }
+
+        // Call AI modification API with timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+        try {
+          const response = await fetch('/api/blog/ai-modify', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              postId: activePostId,
+              currentContent: currentPost.content || [],
+              currentTitle: currentPost.title || 'Untitled',
+              instruction: instruction.trim(),
+            }),
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeoutId);
+
+          const data = await response.json();
+          console.log("AI response data:", data);
+
+          if (!response.ok) {
+            const errorMsg = data.error || 'Failed to get AI modifications';
+            const details = data.details || '';
+            return `❌ Error: ${errorMsg}${details ? '\n' + details : ''}\n\nTips:\n- Try a simpler request\n- Check your API quota\n- Wait a moment and try again`;
+          }
+
+          // Check if modifications were generated
+          if (!data.modifications || data.modifications.length === 0) {
+            const message = data.message || 'No modifications were generated.';
+            return `⚠️ ${message}\n\nSuggestions:\n- Be more specific (e.g., "Add a paragraph about...")\n- Try shorter instructions\n- Simplify your request\n- Make sure the article has some content`;
+          }
+
+          // Apply modifications
+          console.log("Applying modifications:", data.modifications);
+          let appliedCount = 0;
+          
+          for (const mod of data.modifications) {
+            try {
+              await applyModification(mod, data.explanation);
+              appliedCount++;
+            } catch (modError) {
+              console.error("Failed to apply modification:", modError);
+            }
+          }
+
+          if (appliedCount === 0) {
+            return "⚠️ Modifications were generated but failed to apply. Please try again.";
+          }
+
+          // Show success message with option to view history
+          return `✅ Successfully applied ${appliedCount} modification(s)!\n\n${data.explanation || ''}\n\n💡 AI-modified content is highlighted in yellow for 10 seconds.`;
+        } catch (fetchError) {
+          clearTimeout(timeoutId);
+          if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+            return "⏱️ Request timed out. The AI is taking too long to respond.\n\nTry:\n- Simplifying your request\n- Breaking it into smaller parts\n- Waiting a moment and trying again";
+          }
+          throw fetchError;
+        }
+      } catch (error) {
+        console.error("Error applying AI modification:", error);
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        return `❌ Error: ${errorMsg}\n\nPlease try again with a simpler request.`;
+      }
+    },
+    [activePostId, localPosts, findPostById]
+  );
+
+  // Track AI modifications for highlighting
+  const [aiModifications, setAiModifications] = useState<{
+    timestamp: number;
+    type: string;
+    blockIds: string[];
+    explanation?: string;
+  }[]>([]);
+  const [showAIHistory, setShowAIHistory] = useState(false);
+
+  const applyModification = useCallback(
+    async (mod: PageModification, explanation?: string) => {
+      const currentPost = findPostById(localPosts, activePostId);
+      if (!currentPost) return;
+
+      const timestamp = Date.now();
+      const newBlockIds: string[] = [];
+
+      // First, remove highlighting from all previous AI modifications
+      const removeOldHighlights = (blocks: PartialBlock[]) => {
+        return blocks.map(block => {
+          const props = block.props as Record<string, unknown>;
+          if (props?.['data-ai-modified']) {
+            // Remove AI highlighting from old modifications
+            const { 'data-ai-modified': _aiModified, 'data-block-id': _blockId, ...restProps } = props;
+            return {
+              ...block,
+              props: restProps,
+            };
+          }
+          return block;
+        });
+      };
+
+      // Helper to convert string content to PartialBlock array
+      const stringToBlocks = (content: string): PartialBlock[] => {
+        // Split content by lines and create paragraph blocks
+        const lines = content.split('\n').filter(line => line.trim());
+        return lines.map(line => ({
+          type: 'paragraph',
+          content: [{ type: 'text', text: line, styles: {} }],
+          props: {}
+        } as PartialBlock));
+      };
+
+      // Helper to mark blocks as AI-modified (only for new modifications)
+      const markBlocksAsAIModified = (blocks: PartialBlock[]): PartialBlock[] => {
+        return blocks.map(block => {
+          const blockId = `ai-${timestamp}-${Math.random().toString(36).substr(2, 9)}`;
+          newBlockIds.push(blockId);
+          return {
+            ...block,
+            props: {
+              ...block.props,
+              backgroundColor: 'yellow', // Highlight AI-modified content
+              'data-ai-modified': timestamp,
+              'data-block-id': blockId,
+            }
+          } as unknown as PartialBlock;
+        });
+      };
+
+      switch (mod.type) {
+        case 'replace':
+          // Replace entire content
+          if (mod.content) {
+            const blocks = stringToBlocks(mod.content);
+            const markedContent = markBlocksAsAIModified(blocks);
+            updateLocalPostContent(markedContent);
+          }
+          break;
+
+        case 'insert':
+          // Insert content at specific position
+          if (mod.content && typeof mod.position === 'number') {
+            // Remove old highlights first
+            const cleanedContent = removeOldHighlights(currentPost.content);
+            const blocks = stringToBlocks(mod.content);
+            const markedContent = markBlocksAsAIModified(blocks);
+            cleanedContent.splice(mod.position, 0, ...markedContent);
+            updateLocalPostContent(cleanedContent);
+          }
+          break;
+
+        case 'append':
+          // Append content to the end
+          if (mod.content) {
+            // Remove old highlights first
+            const cleanedContent = removeOldHighlights(currentPost.content);
+            const blocks = stringToBlocks(mod.content);
+            const markedContent = markBlocksAsAIModified(blocks);
+            const newContent = [...cleanedContent, ...markedContent];
+            updateLocalPostContent(newContent);
+          }
+          break;
+
+        case 'update_title':
+          // Update post title
+          if (mod.title) {
+            await updateLocalPostTitle(activePostId, mod.title);
+          }
+          break;
+
+        case 'add_section':
+          // Add a new section (heading + content)
+          if (mod.content) {
+            // Remove old highlights first
+            const cleanedContent = removeOldHighlights(currentPost.content);
+            const blocks = stringToBlocks(mod.content);
+            const markedContent = markBlocksAsAIModified(blocks);
+            const newContent = [...cleanedContent, ...markedContent];
+            updateLocalPostContent(newContent);
+          }
+          break;
+
+        default:
+          console.warn('Unknown modification type:', mod.type);
+      }
+
+      // Track this modification (replace old history with new one)
+      if (newBlockIds.length > 0) {
+        // Clear old modifications and only keep the new one
+        setAiModifications([{
+          timestamp,
+          type: mod.type,
+          blockIds: newBlockIds,
+          explanation: explanation || `AI ${mod.type} modification`,
+        }]);
+
+        // Auto-remove highlight after 10 seconds
+        setTimeout(() => {
+          setAiModifications(prev => 
+            prev.filter(m => m.timestamp !== timestamp)
+          );
+        }, 10000);
+      }
+    },
+    [activePostId, localPosts, findPostById, updateLocalPostContent, updateLocalPostTitle]
+  );
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -933,19 +1358,65 @@ export default function BlogPage() {
     };
   }, []);
 
+  // Auto-save on page unload (like Copilot Pages)
+  useEffect(() => {
+    const handleBeforeUnload = async (e: BeforeUnloadEvent) => {
+      if (unsavedChanges.current.size > 0) {
+        // Show warning if there are unsaved changes
+        e.preventDefault();
+        e.returnValue = '';
+
+        // Try to save before leaving
+        try {
+          await saveAllUnsavedChanges();
+        } catch (error) {
+          console.error('Failed to save before unload:', error);
+        }
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [saveAllUnsavedChanges]);
+
+  // Auto-save when switching posts
+  useEffect(() => {
+    return () => {
+      // Save current post when component unmounts or activePostId changes
+      if (unsavedChanges.current.size > 0) {
+        saveAllUnsavedChanges().catch(error => {
+          console.error('Failed to save on unmount:', error);
+        });
+      }
+    };
+  }, [activePostId, saveAllUnsavedChanges]);
+
   // Add a simple save function in Storybook environment
   const handleManualSave = useCallback(async () => {
     if (isStorybook) {
       console.log("Manual save triggered in Storybook environment");
-      // In Storybook, we just simulate the save operation
       setIsSaving(true);
+      setSaveStatus('saving');
       await new Promise((resolve) => setTimeout(resolve, 1000));
       setIsSaving(false);
+      setSaveStatus('saved');
       return;
     }
 
-    // Save all unsaved changes
-    await saveAllUnsavedChanges();
+    try {
+      setIsSaving(true);
+      setSaveStatus('saving');
+      await saveAllUnsavedChanges();
+      setSaveStatus('saved');
+    } catch (error) {
+      console.error('Save failed:', error);
+      setSaveStatus('error');
+    } finally {
+      setIsSaving(false);
+    }
   }, [saveAllUnsavedChanges, isStorybook]);
 
   // Icon selector functions
@@ -979,9 +1450,34 @@ export default function BlogPage() {
     "bg-gray-500",
   ];
 
-  const handleCoverFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverFileSelect = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (!file) return;
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("entityType", "blog_cover");
+      formData.append("entityId", activePostId);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        throw new Error("Upload failed");
+      }
+
+      const data = await res.json();
+      setPostCover(activePostId, {
+        type: "image",
+        value: data.publicUrl,
+      });
+    } catch (error) {
+      console.error("Cover upload failed:", error);
       const reader = new FileReader();
       reader.onload = (ev) => {
         const result = ev.target?.result as string;
@@ -1035,9 +1531,36 @@ export default function BlogPage() {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
+      {/* Sidebar Toggle Button - Shows when sidebar is collapsed */}
+      {sidebarCollapsed && (
+        <button
+          onClick={() => {
+            setSidebarCollapsed(false);
+            setSidebarOpen(true);
+          }}
+          className="fixed left-4 top-20 z-30 bg-white p-2 rounded-lg shadow-lg hover:bg-gray-50 transition-colors border border-gray-200"
+          title="Show Sidebar"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-6 w-6 text-gray-700"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 6h16M4 12h16M4 18h16"
+            />
+          </svg>
+        </button>
+      )}
+
       {/* Sidebar */}
       <div
-        className={`${sidebarCollapsed ? "w-0" : "w-64"} flex-shrink-0 transition-all duration-200`}
+        className={`${sidebarCollapsed ? "w-0 overflow-hidden" : "w-64"} flex-shrink-0 transition-all duration-300`}
       >
         <Sidebar
           title="Blog"
@@ -1051,13 +1574,20 @@ export default function BlogPage() {
           sidebarOpen={sidebarOpen}
           expandedPages={expandedPages}
           onToggleExpand={togglePageExpansion}
+          onCollapse={() => {
+            setSidebarCollapsed(true);
+            setSidebarOpen(false);
+          }}
           className="fixed top-0 left-0 h-full bg-white border-r border-gray-200 z-40"
         />
       </div>
 
       {/* Main Content */}
       <div
-        className={`flex-1 flex flex-col min-h-screen transition-all duration-200 ${sidebarCollapsed ? "ml-0" : "ml-64"}`}
+        className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${sidebarCollapsed ? "ml-0" : "ml-64"}`}
+        style={{
+          marginRight: isChatbotVisible ? `${chatbotWidth}px` : '0',
+        }}
       >
         {/* Add a spacer to push content below the fixed header */}
         <div className="h-16"></div>
@@ -1087,33 +1617,103 @@ export default function BlogPage() {
               showDeleteDropdown={showDeleteDropdown}
               dropdownRef={dropdownRef}
               handleDeletePost={handleDeletePost}
+              saveStatus={saveStatus}
             />
 
+            {/* AI Modification History Panel */}
+            {aiModifications.length > 0 && (
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <svg
+                      className="h-5 w-5 text-yellow-600"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 10V3L4 14h7v7l9-11h-7z"
+                      />
+                    </svg>
+                    <span className="text-sm font-medium text-yellow-800">
+                      AI Modified Content
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setShowAIHistory(!showAIHistory)}
+                    className="text-xs text-yellow-700 hover:text-yellow-900 underline"
+                  >
+                    {showAIHistory ? 'Hide' : 'Show'} History ({aiModifications.length})
+                  </button>
+                </div>
+                
+                {showAIHistory && (
+                  <div className="mt-2 space-y-2">
+                    {aiModifications.map((mod, index) => (
+                      <div
+                        key={mod.timestamp}
+                        className="text-xs bg-white p-2 rounded border border-yellow-100"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-gray-700">
+                            {mod.type.toUpperCase()}
+                          </span>
+                          <span className="text-gray-500">
+                            {new Date(mod.timestamp).toLocaleTimeString()}
+                          </span>
+                        </div>
+                        {mod.explanation && (
+                          <p className="mt-1 text-gray-600">{mod.explanation}</p>
+                        )}
+                        <p className="mt-1 text-gray-500">
+                          {mod.blockIds.length} block(s) modified
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                <p className="mt-2 text-xs text-yellow-700">
+                  💡 Modified content is highlighted in yellow and will fade after 10 seconds.
+                </p>
+              </div>
+            )}
+
             <BlogCover
+              key={`cover-${activePostId}-${activePost?.cover ? 'has' : 'no'}`}
               activePost={activePost}
               showCoverActions={showCoverActions}
               setShowCoverActions={setShowCoverActions}
-              setShowCoverOptions={setShowCoverOptions}
-              removePostCover={removePostCover}
+              setShowCoverOptions={setShowCoverPicker}
+              removePostCover={handleCoverRemove}
               activePostId={activePostId}
             />
 
-            <div className="flex-1 overflow-y-auto p-6">
-              <BlogContent
-                activePost={activePost}
-                activePostId={activePostId}
-                updatePostTitle={updateLocalPostTitle}
-                updatePostContent={updateLocalPostContent}
-                Editor={Editor}
-                isSaving={isSaving}
-                handleManualSave={handleManualSave}
-              />
+            <div className="flex-1 overflow-y-auto py-6">
+                <BlogContent
+                  activePost={activePost}
+                  activePostId={activePostId}
+                  updatePostTitle={updateLocalPostTitle}
+                  updatePostContent={updateLocalPostContent}
+                  Editor={Editor}
+                  isSaving={isSaving}
+                  handleManualSave={handleManualSave}
+                />
             </div>
 
-            <DeleteDropdown
-              dropdownRef={dropdownRef}
-              handleDeletePost={handleDeletePost}
-            />
+            {/* Cover Picker Modal */}
+            {showCoverPicker && (
+              <CoverPicker
+                currentCover={activePost.cover}
+                onSelect={handleCoverSelect}
+                onRemove={handleCoverRemove}
+                onClose={() => setShowCoverPicker(false)}
+              />
+            )}
           </>
         )}
 
@@ -1128,6 +1728,9 @@ export default function BlogPage() {
           handleMouseDown={handleMouseDown}
           handlePageModification={handlePageModification}
         />
+
+        {/* Debug Panel */}
+        <BlogDebugPanel />
       </div>
     </div>
   );

@@ -1,136 +1,227 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { getBlogSupabaseConfig } from "@/lib/environment";
+import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@/lib/auth-config';
+import { supabaseAdmin } from '@/lib/supabase/supabase-admin';
+import type { Database } from '@/lib/supabase/supabase-client';
 
-const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
-
-// Create Blog Supabase client
-const blogConfig = getBlogSupabaseConfig();
-const blogSupabase = blogConfig.url && blogConfig.serviceRoleKey
-  ? createClient(blogConfig.url, blogConfig.serviceRoleKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  })
-  : null;
-
-// Authentication helper function
-async function verifyAuth(request: NextRequest): Promise<boolean> {
-  try {
-    let token = request.cookies.get("adminToken")?.value;
-
-    if (!token) {
-      const authHeader = request.headers.get("Authorization");
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        token = authHeader.substring(7);
-      }
-    }
-
-    if (!token) {
-      return false;
-    }
-
-    const decoded = Buffer.from(token, "base64").toString().split(":");
-    const username = decoded[0];
-
-    return username === ADMIN_USERNAME;
-  } catch (error) {
-    console.error("Auth verification error:", error);
-    return false;
-  }
-}
-
+// GET - Fetch all user posts
 export async function GET(request: NextRequest) {
   try {
-    // Verify authentication
-    if (!(await verifyAuth(request))) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (!blogSupabase) {
+    const session = await auth();
+    if (!session?.user?.id) {
       return NextResponse.json(
-        { error: "Blog database not configured. Please check BLOG_SUPABASE_URL and BLOG_SUPABASE_SERVICE_ROLE_KEY" },
-        { status: 503 }
+        { error: 'Unauthorized' },
+        { status: 401 }
       );
     }
 
-    // Get userId from request, use default value if not present
-    const url = new URL(request.url);
-    const userId =
-      url.searchParams.get("userId") || "00000000-0000-0000-0000-000000000000";
+    if (!supabaseAdmin) {
+      return NextResponse.json(
+        { error: 'Supabase admin client not configured' },
+        { status: 500 }
+      );
+    }
 
-    const { data, error } = await blogSupabase
-      .from("posts")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
+    const { data, error } = await supabaseAdmin
+      .from('blog_posts')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error fetching posts:', error);
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
+    }
 
-    return NextResponse.json(data);
+    return NextResponse.json({
+      success: true,
+      data,
+    });
   } catch (error) {
-    console.error("Error fetching blog posts:", error);
+    console.error('Unexpected error:', error);
     return NextResponse.json(
-      { error: "Failed to fetch blog posts" },
+      { error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
 }
 
-// Create a new blog post
+// POST - Create new post
 export async function POST(request: NextRequest) {
   try {
-    // Verify authentication
-    if (!(await verifyAuth(request))) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (!blogSupabase) {
+    const session = await auth();
+    if (!session?.user?.id) {
       return NextResponse.json(
-        { error: "Blog database not configured. Please check BLOG_SUPABASE_URL and BLOG_SUPABASE_SERVICE_ROLE_KEY" },
-        { status: 503 }
+        { error: 'Unauthorized' },
+        { status: 401 }
       );
     }
 
-    const body = await request.json();
-
-    // Get userId from request body, use default value if not present
-    const userId = body.userId || "00000000-0000-0000-0000-000000000000";
-
-    const { data, error } = await blogSupabase
-      .from("posts")
-      .insert({
-        user_id: userId,
-        parent_id: body.parent_id || null,
-        title: body.title || "Untitled",
-        content: body.content || null,
-        icon: body.icon || null,
-        cover: body.cover || null,
-        published: body.published || false,
-        position: body.position || null,
-      })
-      .select();
-
-    if (error) throw error;
-
-    // Check if any rows were inserted
-    if (!data || data.length === 0) {
+    if (!supabaseAdmin) {
       return NextResponse.json(
-        { error: "Failed to create blog post" },
+        { error: 'Supabase admin client not configured' },
         { status: 500 }
       );
     }
 
-    // Return the first (and should be only) created post
-    const createdPost = data[0];
+    const body = await request.json();
+    const { title, content, icon, cover, parent_id } = body;
 
-    return NextResponse.json(createdPost);
+    const postId = crypto.randomUUID();
+    const now = new Date().toISOString();
+
+    const insertData: Database['public']['Tables']['blog_posts']['Insert'] = {
+      id: postId,
+      user_id: session.user.id,
+      title: title || 'Untitled',
+      content: content || null,
+      icon: icon || null,
+      cover: cover || null,
+      parent_id: parent_id || null,
+      published: false,
+      position: null,
+      created_at: now,
+      updated_at: now,
+    };
+
+    const { data, error } = await supabaseAdmin
+      .from('blog_posts')
+      .insert(insertData as unknown as never)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating post:', error);
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data,
+    });
   } catch (error) {
-    console.error("Error creating blog post:", error);
+    console.error('Unexpected error:', error);
     return NextResponse.json(
-      { error: "Failed to create blog post" },
+      { error: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT - Update post
+export async function PUT(request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    if (!supabaseAdmin) {
+      return NextResponse.json(
+        { error: 'Supabase admin client not configured' },
+        { status: 500 }
+      );
+    }
+
+    const body = await request.json();
+    const { id, ...updates } = body;
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Post ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('blog_posts')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      } as unknown as never)
+      .eq('id', id)
+      .eq('user_id', session.user.id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating post:', error);
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE - Delete post
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    if (!supabaseAdmin) {
+      return NextResponse.json(
+        { error: 'Supabase admin client not configured' },
+        { status: 500 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Post ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const { error } = await supabaseAdmin
+      .from('blog_posts')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', session.user.id);
+
+    if (error) {
+      console.error('Error deleting post:', error);
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+    });
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

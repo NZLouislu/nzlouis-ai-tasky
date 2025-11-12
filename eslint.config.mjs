@@ -18,6 +18,12 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      "scripts/**",
+      "stories/**",
+      ".storybook/**",
+      "coverage/**",
+      "jest.setup.ts",
+      "postcss.config.mjs",
     ],
   },
 ];

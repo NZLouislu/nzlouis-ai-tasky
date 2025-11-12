@@ -3,8 +3,8 @@ import "@testing-library/jest-dom";
 
 // Add TransformStream polyfill for AI SDK
 if (typeof global.TransformStream === 'undefined') {
-  const { TransformStream } = require('stream/web');
-  global.TransformStream = TransformStream;
+  const streamWeb = require('stream/web');
+  global.TransformStream = streamWeb.TransformStream;
 }
 
 // Mock fetch API for testing

@@ -7,6 +7,13 @@ import { useBlogDataReadonly } from "@/hooks/use-blog-data-readonly";
 import BlogCover from "./BlogCover";
 import ChatbotPanel from "./ChatbotPanel";
 
+interface PageModification {
+  type: string;
+  target?: string;
+  content?: string;
+  title?: string;
+}
+
 const Editor = dynamic(() => import("../Editor"), {
   ssr: false,
   loading: () => <div className="p-4 text-gray-500">Loading editor...</div>,
@@ -28,12 +35,7 @@ interface Post {
   [key: string]: unknown;
 }
 
-interface PageModification {
-  type: string;
-  target?: string;
-  content?: string;
-  title?: string;
-}
+
 
 export default function BlogPageFromDB() {
   const {
@@ -209,7 +211,8 @@ export default function BlogPageFromDB() {
   }, [posts, mapPosts, findFirstAvailablePost, activePostId]);
 
   const handlePageModification = useCallback(async (mod: PageModification) => {
-    console.log("Read-only mode: Page modification not allowed", mod);
+    const instruction = typeof mod === 'string' ? mod : mod.content || mod.title || '';
+    console.log("Read-only mode: Page modification not allowed", instruction);
     return "Read-only mode: Modifications not allowed";
   }, []);
 

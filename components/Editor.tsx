@@ -6,8 +6,7 @@ import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import { PartialBlock } from "@blocknote/core";
 import { useEffect, useRef, useCallback, useState } from "react";
-import AIContinuationPanel from "./AIContinuationPanel";
-import { Sparkles, Save } from "lucide-react";
+import { Save } from "lucide-react";
 
 interface EditorProps {
   initialContent?: PartialBlock[];
@@ -43,16 +42,32 @@ export default function Editor({
     initialContent,
     defaultStyles: true,
     trailingBlock: false,
+    uploadFile: async (file: File) => {
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("entityType", "blog_post");
+        formData.append("entityId", "current-post");
+
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) {
+          throw new Error("Upload failed");
+        }
+
+        const data = await res.json();
+        return data.publicUrl;
+      } catch (error) {
+        console.error("Image upload failed:", error);
+        return "";
+      }
+    },
   });
   const globalFileInputRef = useRef<HTMLInputElement | null>(null);
-  const [showAIPanel, setShowAIPanel] = useState(false);
-  const [aiPanelPosition, setAIPanelPosition] = useState({ x: 0, y: 0 });
-  const [selectedText, setSelectedText] = useState("");
-  const [contextBefore, setContextBefore] = useState("");
-  const [contextAfter, setContextAfter] = useState("");
   const lastContentRef = useRef<PartialBlock[]>(initialContent || []);
-  const selectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastSelectionRef = useRef<string>("");
   const contentChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -119,84 +134,7 @@ export default function Editor({
     [editor, handleContentChange]
   );
 
-  const handleTextSelection = useCallback(() => {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
-
-    const selectedText = selection.toString().trim();
-    if (!selectedText || selectedText.length < 3) return;
-
-    if (selectedText === lastSelectionRef.current) return;
-    lastSelectionRef.current = selectedText;
-
-    const range = selection.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
-
-    if (rect.width === 0 || rect.height === 0) return;
-
-    setSelectedText(selectedText);
-
-    const editorElement = document.querySelector(".bn-editor");
-    if (editorElement) {
-      const editorRect = editorElement.getBoundingClientRect();
-      const relativeX = Math.max(
-        20,
-        Math.min(
-          rect.left - editorRect.left + rect.width / 2,
-          editorRect.width - 420
-        )
-      );
-      const relativeY = Math.max(20, rect.top - editorRect.top - 60);
-
-      setAIPanelPosition({
-        x: relativeX,
-        y: relativeY,
-      });
-    } else {
-      setAIPanelPosition({
-        x: Math.max(
-          20,
-          Math.min(rect.left + rect.width / 2, window.innerWidth - 420)
-        ),
-        y: Math.max(20, rect.top - 60),
-      });
-    }
-
-    setContextBefore("Previous content context");
-    setContextAfter("Following content context");
-    setShowAIPanel(true);
-  }, []);
-
-  const handleAIAccept = useCallback(
-    (suggestion: string) => {
-      const pos = editor.getTextCursorPosition();
-      if (pos && pos.block) {
-        editor.insertBlocks(
-          [
-            {
-              type: "paragraph",
-              content: [
-                {
-                  type: "text",
-                  text: suggestion,
-                  styles: {},
-                },
-              ],
-            },
-          ],
-          pos.block,
-          "after"
-        );
-      }
-      setShowAIPanel(false);
-      handleContentChange();
-    },
-    [editor, handleContentChange]
-  );
-
-  const handleAIClose = useCallback(() => {
-    setShowAIPanel(false);
-  }, []);
+  // AI Writing Assistant removed - it was interfering with user input
 
   useEffect(() => {
     // Skip DOM operations in Storybook environment
@@ -310,50 +248,20 @@ export default function Editor({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey) {
-        if (e.key === "k" || e.key === "K") {
-          e.preventDefault();
-          handleTextSelection();
-        }
+        // AI Writing Assistant shortcut removed
       }
     };
 
-    const handleSelectionChange = () => {
-      if (selectionTimeoutRef.current) {
-        clearTimeout(selectionTimeoutRef.current);
-      }
-
-      selectionTimeoutRef.current = setTimeout(() => {
-        const selection = window.getSelection();
-        if (selection && selection.toString().trim()) {
-          const selectedText = selection.toString().trim();
-          if (
-            selectedText.length >= 3 &&
-            selectedText !== lastSelectionRef.current
-          ) {
-            const range = selection.getRangeAt(0);
-            const rect = range.getBoundingClientRect();
-            if (rect.width > 0 && rect.height > 0) {
-              handleTextSelection();
-            }
-          }
-        }
-      }, 1000);
-    };
+    // Selection change handler removed - AI Writing Assistant disabled
 
     document.addEventListener("paste", handlePaste, true);
     document.addEventListener("keydown", handleKeyDown);
-    document.addEventListener("selectionchange", handleSelectionChange);
 
     return () => {
       observer.disconnect();
       fileInput?.removeEventListener("change", onGlobalFileChange);
       document.removeEventListener("paste", handlePaste, true);
       document.removeEventListener("keydown", handleKeyDown);
-      document.removeEventListener("selectionchange", handleSelectionChange);
-
-      if (selectionTimeoutRef.current) {
-        clearTimeout(selectionTimeoutRef.current);
-      }
 
       // Clear the content change timer
       if (contentChangeTimeoutRef.current) {
@@ -367,30 +275,24 @@ export default function Editor({
         globalFileInputRef.current = null;
       }
     };
-  }, [editor, insertImageDataUrl, handleContentChange, handleTextSelection, isStorybook]);
+  }, [editor, insertImageDataUrl, handleContentChange, isStorybook]);
 
   return (
     <div className="w-full relative">
-      <div className="mb-2 flex items-center justify-between text-sm text-gray-500">
-        <div className="flex items-center space-x-2">
-          <Sparkles className="h-4 w-4" />
-          <span>AI Writing Assistant</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          {/* Save button */}
-          <button
-            onClick={handleImmediateSave}
-            disabled={isSaving}
-            className={`flex items-center px-3 py-1 rounded text-sm ${
-              isSaving
-                ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                : "bg-blue-100 text-blue-700 hover:bg-blue-200"
-            }`}
-          >
-            <Save className="h-4 w-4 mr-1" />
-            {isSaving ? "Saving..." : "Save"}
-          </button>
-        </div>
+      <div className="mb-2 flex items-center justify-end text-sm text-gray-500">
+        {/* Save button */}
+        <button
+          onClick={handleImmediateSave}
+          disabled={isSaving}
+          className={`flex items-center px-3 py-1 rounded text-sm ${
+            isSaving
+              ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+              : "bg-blue-100 text-blue-700 hover:bg-blue-200"
+          }`}
+        >
+          <Save className="h-4 w-4 mr-1" />
+          {isSaving ? "Saving..." : "Save"}
+        </button>
       </div>
 
       <div style={{ marginBottom: 12 }} className="no-wrap-editor">
@@ -402,16 +304,7 @@ export default function Editor({
         />
       </div>
 
-      {showAIPanel && (
-        <AIContinuationPanel
-          selectedText={selectedText}
-          contextBefore={contextBefore}
-          contextAfter={contextAfter}
-          onAccept={handleAIAccept}
-          onClose={handleAIClose}
-          position={aiPanelPosition}
-        />
-      )}
+      {/* AI Writing Assistant panel removed */}
     </div>
   );
 }

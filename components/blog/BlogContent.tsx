@@ -44,8 +44,8 @@ export default function BlogContent({
   handleManualSave,
 }: BlogContentProps) {
   return (
-    <>
-      <div className="flex items-center justify-center">
+    <div className="w-full max-w-[900px] mx-auto px-6">
+      <div className="flex items-center justify-center mb-8">
         {activePost && activePost.icon && (
           <div className="relative mr-4">
             <span
@@ -83,6 +83,6 @@ export default function BlogContent({
           isSaving={isSaving}
         />
       </div>
-    </>
+    </div>
   );
 }

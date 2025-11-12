@@ -118,6 +118,60 @@ export default function UnifiedChatbot({
     async (text: string) => {
       if (!text.trim()) return;
 
+      // Check if this is a Blog modification request
+      if (mode === "workspace" && onPageModification) {
+        // Detect if the user wants to modify the blog content
+        const modificationKeywords = [
+          '修改', '更改', '替换', '添加', '插入', '删除', '优化',
+          'modify', 'change', 'replace', 'add', 'insert', 'delete', 'improve',
+          '帮我', '请', '能否', 'can you', 'please', 'help me'
+        ];
+
+        const isModificationRequest = modificationKeywords.some(keyword =>
+          text.toLowerCase().includes(keyword.toLowerCase())
+        );
+
+        if (isModificationRequest) {
+          // This is a modification request, handle it specially
+          const userMessage: Message = {
+            id: uuidv4(),
+            content: text,
+            role: "user",
+            timestamp: new Date().toISOString(),
+          };
+          appendMessage(userMessage);
+          setInput("");
+          setPreviewImage(null);
+          setIsLoading(true);
+
+          try {
+            const result = await onPageModification({
+              type: 'add',
+              content: text
+            });
+            
+            const assistantMessage: Message = {
+              id: uuidv4(),
+              content: result,
+              role: "assistant",
+              timestamp: new Date().toISOString(),
+            };
+            appendMessage(assistantMessage);
+          } catch (error) {
+            const errorMessage: Message = {
+              id: uuidv4(),
+              content: `❌ Failed to apply modification: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              role: "assistant",
+              timestamp: new Date().toISOString(),
+            };
+            appendMessage(errorMessage);
+          } finally {
+            setIsLoading(false);
+          }
+          return;
+        }
+      }
+
       const userMessage: Message = {
         id: uuidv4(),
         content: previewImage ? { text, image: previewImage } : text,

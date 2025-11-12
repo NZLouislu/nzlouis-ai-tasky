@@ -51,7 +51,7 @@ export const useBlogDataReadonly = () => {
         } else {
           content = [parsed] as PartialBlock[];
         }
-      } catch (e) {
+      } catch {
         content = [
           {
             type: "paragraph",
@@ -95,16 +95,7 @@ export const useBlogDataReadonly = () => {
     };
   }, []);
 
-  function generateUUID() {
-    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
-      /[xy]/g,
-      function (c) {
-        const r = (Math.random() * 16) | 0,
-          v = c == "x" ? r : (r & 0x3) | 0x8;
-        return v.toString(16);
-      }
-    );
-  }
+
 
   useEffect(() => {
     let isMounted = true;
@@ -161,7 +152,7 @@ export const useBlogDataReadonly = () => {
     return () => {
       isMounted = false;
     };
-  }, [blogPosts, isInitialized]);
+  }, [blogPosts, isInitialized, convertPost]);
 
   return {
     posts: localPosts,

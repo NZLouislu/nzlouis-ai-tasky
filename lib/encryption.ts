@@ -2,35 +2,42 @@ import crypto from 'crypto';
 
 const ALGORITHM = 'aes-256-gcm';
 
-function getKey() {
-  const keyHex = process.env.AI_ENCRYPTION_KEY;
-  if (!keyHex || keyHex.length !== 64) {
-    throw new Error('AI_ENCRYPTION_KEY must be a 64-character hex string (32 bytes)');
+function getEncryptionKey(): Buffer {
+  const key = process.env.AI_ENCRYPTION_KEY;
+  if (!key) {
+    throw new Error('AI_ENCRYPTION_KEY is not set');
   }
-  return Buffer.from(keyHex, 'hex');
+  return Buffer.from(key, 'hex');
 }
 
-export function encryptAPIKey(apiKey: string) {
-  const KEY = getKey();
+export interface EncryptedData {
+  encrypted: string;
+  iv: string;
+  authTag: string;
+}
+
+export function encryptAPIKey(apiKey: string): EncryptedData {
+  const key = getEncryptionKey();
   const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv(ALGORITHM, KEY, iv);
+  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
   
   let encrypted = cipher.update(apiKey, 'utf8', 'hex');
   encrypted += cipher.final('hex');
+  
   const authTag = cipher.getAuthTag();
   
   return {
     encrypted,
     iv: iv.toString('hex'),
-    authTag: authTag.toString('hex')
+    authTag: authTag.toString('hex'),
   };
 }
 
-export function decryptAPIKey(encrypted: string, iv: string, authTag: string) {
-  const KEY = getKey();
+export function decryptAPIKey(encrypted: string, iv: string, authTag: string): string {
+  const key = getEncryptionKey();
   const decipher = crypto.createDecipheriv(
     ALGORITHM,
-    KEY,
+    key,
     Buffer.from(iv, 'hex')
   );
   

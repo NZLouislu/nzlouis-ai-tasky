@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { supabase } from "@/lib/supabase/supabase-client";
+import { supabaseAdmin } from "@/lib/supabase/supabase-admin";
 import type { Database as TaskyDatabase } from "@/lib/supabase/supabase-client";
 import { blogDb } from "@/lib/supabase/blog-client";
 import type { Database as BlogDatabase } from "@/lib/supabase/blog-client";
@@ -95,7 +96,7 @@ interface BlogState {
   removeComment: (id: string) => Promise<void>;
 }
 
-export const useBlogStore = create<BlogState>((set) => ({
+export const useBlogStore = create<BlogState>((set, get) => ({
   posts: [],
   currentPostId: null,
   comments: {},
@@ -158,36 +159,30 @@ export const useBlogStore = create<BlogState>((set) => ({
     console.log("fetchPosts called with userId:", userId);
     set({ isLoading: true, error: null });
     try {
-      if (!supabase) {
-        console.warn(
-          "Supabase client not initialized. Running in offline mode."
-        );
-        set({ posts: [], isLoading: false });
+      // Use API to fetch data (server-side uses admin client)
+      console.log("Fetching posts via API...");
+      
+      const response = await fetch('/api/blog/posts');
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.warn("API error:", errorData.error);
+        set({ posts: [], isLoading: false, error: errorData.error });
         return;
       }
 
-      // Fetch all posts for the current user only
-      const { data: userPosts, error } = await supabase
-        .from("blog_posts")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.warn("Database error, falling back to offline mode:", error);
-        set({ posts: [], isLoading: false });
-        return;
-      }
+      const result = await response.json();
+      const userPosts = result.data;
 
       console.log(`Found ${userPosts?.length || 0} posts for user ${userId}`);
 
       // Build hierarchical structure for posts
-      const rootPosts = userPosts.filter((post) => post.parent_id === null);
-      const childPosts = userPosts.filter((post) => post.parent_id !== null);
+      const rootPosts = userPosts.filter((post: BlogPost) => post.parent_id === null);
+      const childPosts = userPosts.filter((post: BlogPost) => post.parent_id !== null);
 
       // Group child posts by parent_id
       const childrenByParentId: Record<string, typeof userPosts> = {};
-      childPosts.forEach((child) => {
+      childPosts.forEach((child: BlogPost) => {
         const parentId = child.parent_id as string;
         if (!childrenByParentId[parentId]) {
           childrenByParentId[parentId] = [];
@@ -196,14 +191,14 @@ export const useBlogStore = create<BlogState>((set) => ({
       });
 
       // Build hierarchical structure
-      const postsWithChildren = rootPosts.map((post) => {
+      const postsWithChildren = rootPosts.map((post: BlogPost) => {
         const children = childrenByParentId[post.id] || [];
 
         // Recursively build children structure
         const buildChildrenStructure = (
           childPosts: typeof userPosts
         ): BlogPost[] => {
-          return childPosts.map((child) => {
+          return childPosts.map((child: BlogPost) => {
             const grandchildren = childrenByParentId[child.id] || [];
             return {
               ...child,
@@ -238,76 +233,32 @@ export const useBlogStore = create<BlogState>((set) => ({
   ): Promise<string> => {
     set({ isLoading: true, error: null });
 
-    // Generate a new ID
-    const postId = generateUuid();
-    const postWithId = {
-      ...postData,
-      id: postId,
-      parent_id: postData.parent_id ?? null,
-    };
-
     try {
-      if (!supabase) {
-        console.warn(
-          "Supabase client not initialized. Running in offline mode."
-        );
-        const tempPost = {
-          ...postWithId,
-          user_id:
-            ("user_id" in postWithId && postWithId.user_id) || "offline-user",
-          title: "title" in postWithId ? postWithId.title : "Untitled",
-          content: null,
-          published: false,
-          position: null,
-          icon: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          children: [],
-        } as unknown as BlogPost;
-        const updatePosts = (posts: BlogPost[]): BlogPost[] => {
-          return posts.map((post) => {
-            if (post.id === postWithId.parent_id) {
-              return {
-                ...post,
-                children: [
-                  ...(post.children || []),
-                  { ...tempPost, children: [] },
-                ],
-              };
-            }
-            if (post.children) {
-              return {
-                ...post,
-                children: updatePosts(post.children),
-              };
-            }
-            return post;
-          });
-        };
-        set((state) => ({ posts: updatePosts(state.posts) }));
-        return postId;
+      console.log("Creating post via API...");
+      
+      const response = await fetch('/api/blog/posts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(postData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create post');
       }
 
-      const { data, error } = await supabase
-        .from("blog_posts")
-        .insert(
-          postWithId as TaskyDatabase["public"]["Tables"]["blog_posts"]["Insert"]
-        )
-        .select();
+      const result = await response.json();
+      const createdPost = result.data as BlogPost;
 
-      if (error) throw error;
+      console.log("Post created successfully:", createdPost.id);
 
-      // Check if any rows were inserted
-      if (!data || data.length === 0) {
-        throw new Error("Failed to create post.");
-      }
-
-      // Use the first item since we're inserting one post
-      const createdPost = data[0] as BlogPost;
-
+      // Update local state
       const updatePosts = (posts: BlogPost[]): BlogPost[] => {
         return posts.map((post) => {
-          if (post.id === postWithId.parent_id) {
+          if (post.id === postData.parent_id) {
+            console.log(`✅ Found parent ${postData.parent_id}, adding child ${createdPost.id}`);
             return {
               ...post,
               children: [
@@ -316,7 +267,7 @@ export const useBlogStore = create<BlogState>((set) => ({
               ],
             };
           }
-          if (post.children) {
+          if (post.children && post.children.length > 0) {
             return {
               ...post,
               children: updatePosts(post.children),
@@ -326,59 +277,25 @@ export const useBlogStore = create<BlogState>((set) => ({
         });
       };
 
-      if (postWithId.parent_id) {
-        set((state) => ({ posts: updatePosts(state.posts) }));
+      if (postData.parent_id) {
+        // For child posts, refetch all posts to ensure proper nesting
+        console.log("🔄 Refetching posts after creating child post");
+        await get().fetchPosts(postData.user_id as string);
       } else {
-        set((state) => ({
-          posts: [...state.posts, { ...createdPost, children: [] }],
-        }));
+        set((state) => {
+          const updatedPosts = [...state.posts, { ...createdPost, children: [] }];
+          console.log("Updated posts in store (root):", updatedPosts.length);
+          return { posts: updatedPosts };
+        });
       }
-      return postId; // Return the generated ID
+      
+      return createdPost.id;
     } catch (error) {
       console.error("Error creating post:", error);
       set({
         error: error instanceof Error ? error.message : "Failed to create post",
       });
-      // Fallback to local addition in case of error
-      const tempPost = {
-        ...postWithId,
-        user_id:
-          ("user_id" in postWithId && postWithId.user_id) || "offline-user",
-        title: "title" in postWithId ? postWithId.title : "Untitled",
-        content: null,
-        published: false,
-        position: null,
-        icon: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        children: [],
-      } as unknown as BlogPost;
-      const updatePosts = (posts: BlogPost[]): BlogPost[] => {
-        return posts.map((post) => {
-          if (post.id === postWithId.parent_id) {
-            return {
-              ...post,
-              children: [
-                ...(post.children || []),
-                { ...tempPost, children: [] },
-              ],
-            };
-          }
-          if (post.children) {
-            return {
-              ...post,
-              children: updatePosts(post.children),
-            };
-          }
-          return post;
-        });
-      };
-      if (postWithId.parent_id) {
-        set((state) => ({ posts: updatePosts(state.posts) }));
-      } else {
-        set((state) => ({ posts: [...state.posts, tempPost] }));
-      }
-      return postId; // Return the generated ID even in error case
+      throw error;
     } finally {
       set({ isLoading: false });
     }
@@ -390,51 +307,27 @@ export const useBlogStore = create<BlogState>((set) => ({
   ) => {
     set({ isLoading: true, error: null });
     try {
-      if (!supabase) {
-        console.warn(
-          "Supabase client not initialized. Running in offline mode."
-        );
-        set((state) => ({
-          posts: state.posts.map((post) =>
-            post.id === id
-              ? {
-                  ...post,
-                  ...updates,
-                  updated_at: new Date().toISOString(),
-                  children: post.children,
-                }
-              : post
-          ),
-        }));
-        return;
+      console.log("Updating post via API:", id);
+      
+      const response = await fetch('/api/blog/posts', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id, ...updates }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update post');
       }
 
-      const updateData: Partial<BlogPost> & { updated_at: string } = {
-        ...updates,
-        updated_at: new Date().toISOString(),
-      };
-      if (Object.prototype.hasOwnProperty.call(updates, "parent_id")) {
-        updateData.parent_id = updates.parent_id ?? null;
-      }
+      const result = await response.json();
+      const updatedPost = result.data as BlogPost;
 
-      const { data, error } = await supabase
-        .from("blog_posts")
-        .update(
-          updateData as TaskyDatabase["public"]["Tables"]["blog_posts"]["Update"]
-        )
-        .eq("id", id)
-        .select();
+      console.log("Post updated successfully:", updatedPost.id);
 
-      if (error) throw error;
-
-      // Check if any rows were updated
-      if (!data || data.length === 0) {
-        throw new Error("No rows were updated. The post may not exist.");
-      }
-
-      // Use the first item since we're updating by ID which should be unique
-      const updatedPost = data[0] as BlogPost;
-
+      // Update local state
       set((state) => ({
         posts: state.posts.map((post) =>
           post.id === id
@@ -444,21 +337,10 @@ export const useBlogStore = create<BlogState>((set) => ({
       }));
     } catch (error) {
       console.error("Error updating post:", error);
-      set((state) => ({
-        posts: state.posts.map((post) =>
-          post.id === id
-            ? {
-                ...post,
-                ...updates,
-                updated_at: new Date().toISOString(),
-                children: post.children || [],
-              }
-            : post
-        ),
-      }));
       set({
         error: error instanceof Error ? error.message : "Failed to update post",
       });
+      throw error;
     } finally {
       set({ isLoading: false });
     }
@@ -477,50 +359,32 @@ export const useBlogStore = create<BlogState>((set) => ({
         throw error;
       }
 
-      if (!supabase) {
-        console.warn(
-          "Supabase client not initialized. Running in offline mode."
-        );
-        set((state) => ({
-          posts: state.posts.filter((post) => post.id !== id),
-        }));
-        return;
-      }
+      console.log("Deleting post via API:", id);
+      
+      const response = await fetch(`/api/blog/posts?id=${id}`, {
+        method: 'DELETE',
+      });
 
-      console.log("Checking if post exists in database:", id);
-      // First check if the post exists
-      const { data: existingPost, error: fetchError } = await supabase
-        .from("blog_posts")
-        .select("id")
-        .eq("id", id)
-        .single();
-
-      if (fetchError && fetchError.code !== "PGRST116") {
-        // PGRST116 means no rows returned, which is fine
-        console.warn("Error checking if post exists:", fetchError);
-        // Continue with deletion attempt for other errors
-      } else if (fetchError && fetchError.code === "PGRST116") {
-        console.log(
-          "Post does not exist in database, but continuing with deletion"
-        );
-      } else {
-        console.log("Post exists in database:", existingPost);
-      }
-
-      console.log("Attempting to delete post from database:", id);
-      // Delete the post (CASCADE will handle children)
-      const { error } = await supabase.from("blog_posts").delete().eq("id", id);
-
-      if (error) {
-        console.error("Error deleting post from database:", error);
-        throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete post');
       }
 
       console.log("Successfully deleted post from database:", id);
-      // If we got here, the deletion was successful
+      
+      // Update local state - remove the deleted post
       set((state) => {
-        const updatedPosts = state.posts.filter((post) => post.id !== id);
-        console.log("Updated posts after deletion:", updatedPosts);
+        const removePostRecursive = (posts: BlogPost[]): BlogPost[] => {
+          return posts
+            .filter((post) => post.id !== id)
+            .map((post) => ({
+              ...post,
+              children: post.children ? removePostRecursive(post.children) : [],
+            }));
+        };
+        
+        const updatedPosts = removePostRecursive(state.posts);
+        console.log("Updated posts after deletion:", updatedPosts.length);
         return {
           posts: updatedPosts,
         };

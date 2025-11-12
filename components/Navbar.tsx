@@ -4,6 +4,7 @@ import { FaBars as Menu, FaTimes as X } from "react-icons/fa";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
+import { useSession, signOut } from "next-auth/react";
 
 const parseToken = (token: string): { username: string } | null => {
   try {
@@ -19,12 +20,17 @@ const parseToken = (token: string): { username: string } | null => {
 export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
+  
+  // 获取 NextAuth 会话（Google 登录）
+  const { data: session, status } = useSession();
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
+        // 检查 admin token（用于 Blog 管理）
         let token = null;
         if (typeof document !== "undefined") {
           const cookie = document.cookie
@@ -42,21 +48,30 @@ export default function Navbar() {
         if (token) {
           const parsedToken = parseToken(token);
           if (parsedToken) {
-            setUsername(parsedToken.username);
-          } else {
-            setUsername(null);
+            setIsAdmin(true);
           }
         } else {
-          setUsername(null);
+          setIsAdmin(false);
         }
       } catch (error) {
         console.error("Auth check error:", error);
-        setUsername(null);
+        setIsAdmin(false);
       }
     };
 
     checkAuth();
   }, [pathname]);
+
+  // 更新用户名显示：优先显示 Google 登录用户，其次显示 admin
+  useEffect(() => {
+    if (session?.user?.name) {
+      setUsername(session.user.name);
+    } else if (isAdmin) {
+      setUsername("Admin");
+    } else {
+      setUsername(null);
+    }
+  }, [session, isAdmin]);
 
   const handleNavigation = (href: string) => {
     if (pathname === "/blog" && href !== "/blog") {
@@ -76,17 +91,26 @@ export default function Navbar() {
 
   const handleLogout = async () => {
     try {
-      if (typeof localStorage !== "undefined") {
-        localStorage.removeItem("adminToken");
-        localStorage.removeItem("adminTokenExpiry");
+      // 如果是 Google 登录用户，使用 NextAuth 登出
+      if (session?.user) {
+        await signOut({ redirect: false });
+        router.push("/");
+      } 
+      // 如果是 admin 用户，清除 admin token
+      else if (isAdmin) {
+        if (typeof localStorage !== "undefined") {
+          localStorage.removeItem("adminToken");
+          localStorage.removeItem("adminTokenExpiry");
+        }
+
+        document.cookie =
+          "adminToken=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+
+        setIsAdmin(false);
+        router.push("/blog/admin/login");
       }
 
-      document.cookie =
-        "adminToken=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
-
       setUsername(null);
-
-      router.push("/blog/admin/login");
     } catch (error) {
       console.error("Logout error:", error);
     }
@@ -145,12 +169,22 @@ export default function Navbar() {
 
           {username && (
             <div className="flex items-center gap-4 border-l border-gray-200 pl-6">
-              <Link
-                href="/blog/admin"
-                className="text-sm text-gray-700 hover:text-indigo-600 transition-colors"
-              >
-                Admin
-              </Link>
+              {/* 显示用户名 */}
+              <span className="text-sm text-gray-700 font-medium">
+                {username}
+              </span>
+              
+              {/* 如果是 admin，显示 Admin Panel 链接 */}
+              {isAdmin && (
+                <Link
+                  href="/blog/admin"
+                  className="text-sm text-gray-700 hover:text-indigo-600 transition-colors"
+                >
+                  Admin Panel
+                </Link>
+              )}
+              
+              {/* 登出按钮 */}
               <button
                 onClick={handleLogout}
                 className="text-sm text-gray-700 hover:text-indigo-600 transition-colors underline"
@@ -187,13 +221,23 @@ export default function Navbar() {
 
             {username ? (
               <div className="flex flex-col gap-1 pt-2 border-t border-gray-200 mt-2">
-                <Link
-                  href="/blog/admin"
-                  className="text-sm text-gray-700 hover:text-indigo-600 px-2 py-1 transition-colors"
-                  onClick={() => setOpen(false)}
-                >
-                  Admin Panel
-                </Link>
+                {/* 显示用户名 */}
+                <div className="text-sm text-gray-700 font-medium px-2 py-1">
+                  {username}
+                </div>
+                
+                {/* 如果是 admin，显示 Admin Panel 链接 */}
+                {isAdmin && (
+                  <Link
+                    href="/blog/admin"
+                    className="text-sm text-gray-700 hover:text-indigo-600 px-2 py-1 transition-colors"
+                    onClick={() => setOpen(false)}
+                  >
+                    Admin Panel
+                  </Link>
+                )}
+                
+                {/* 登出按钮 */}
                 <button
                   onClick={() => {
                     setOpen(false);

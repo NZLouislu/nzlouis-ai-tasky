@@ -89,18 +89,18 @@ Expanded version:`;
           error.message.includes("rate limit") ||
           error.message.includes("429")
         ) {
-          throw new Error("请求过于频繁，请稍后再试");
+          throw new Error("Too many requests, please try again later");
         } else if (
           error.message.includes("quota") ||
           error.message.includes("RESOURCE_EXHAUSTED")
         ) {
-          throw new Error("API配额已用完，请检查您的计划和计费");
+          throw new Error("API quota exhausted, please check your plan and billing");
         } else {
           throw error;
         }
       }
 
-      throw new Error("生成AI建议失败");
+      throw new Error("Failed to generate AI suggestions");
     }
   }
 
