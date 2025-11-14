@@ -2,14 +2,31 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  // For AI Tasky routes, check authentication via session cookie
-  if (request.nextUrl.pathname.startsWith('/ai-tasky')) {
-    const sessionToken = request.cookies.get('authjs.session-token') || 
-                        request.cookies.get('__Secure-authjs.session-token');
+  const pathname = request.nextUrl.pathname;
+  
+  if (pathname === '/') {
+    return NextResponse.next();
+  }
+  
+  if (pathname.startsWith('/admin')) {
+    const adminToken = request.cookies.get('admin-session');
     
-    if (!sessionToken) {
-      return NextResponse.redirect(new URL('/auth/signin', request.url));
+    if (pathname === '/admin/login') {
+      return NextResponse.next();
     }
+    
+    if (!adminToken) {
+      return NextResponse.redirect(new URL('/admin/login', request.url));
+    }
+    
+    return NextResponse.next();
+  }
+  
+  const sessionToken = request.cookies.get('authjs.session-token') || 
+                      request.cookies.get('__Secure-authjs.session-token');
+  
+  if (!sessionToken) {
+    return NextResponse.redirect(new URL('/auth/signin', request.url));
   }
   
   return NextResponse.next();
@@ -17,6 +34,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/ai-tasky/:path*",
+    "/((?!api|_next/static|_next/image|favicon.ico|auth).*)",
   ],
 };

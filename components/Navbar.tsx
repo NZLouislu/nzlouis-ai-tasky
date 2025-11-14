@@ -24,13 +24,11 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  // Get NextAuth session (Google login)
   const { data: session } = useSession();
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // Check admin token (for Blog management)
         let token = null;
         if (typeof document !== "undefined") {
           const cookie = document.cookie
@@ -62,7 +60,6 @@ export default function Navbar() {
     checkAuth();
   }, [pathname]);
 
-  // Update username display: prioritize Google login user, then admin
   useEffect(() => {
     if (session?.user?.name) {
       setUsername(session.user.name);
@@ -91,12 +88,10 @@ export default function Navbar() {
 
   const handleLogout = async () => {
     try {
-      // If Google login user, use NextAuth logout
       if (session?.user) {
         await signOut({ redirect: false });
         router.push("/");
       }
-      // If admin user, clear admin token
       else if (isAdmin) {
         if (typeof localStorage !== "undefined") {
           localStorage.removeItem("adminToken");
@@ -121,7 +116,7 @@ export default function Navbar() {
     { label: "Workspace", href: "/workspace" },
     { label: "Tasks", href: "/tasklist" },
     { label: "Blog", href: "/blog" },
-    { label: "Chatbot", href: "/ai-tasky" },
+    { label: "Chatbot", href: "/chatbot" },
   ];
 
   const linkCls = (isActive: boolean) =>
@@ -146,6 +141,7 @@ export default function Navbar() {
               width={100}
               height={30}
               priority
+              unoptimized
               className="w-[100px] h-[30px] object-contain"
             />
           </div>
@@ -168,12 +164,10 @@ export default function Navbar() {
 
           {username && (
             <div className="flex items-center gap-4 border-l border-gray-200 pl-6">
-              {/* Display username */}
               <span className="text-sm text-gray-700 font-medium">
                 {username}
               </span>
 
-              {/* If admin, show Admin Panel link */}
               {isAdmin && (
                 <Link
                   href="/blog/admin"
@@ -183,7 +177,6 @@ export default function Navbar() {
                 </Link>
               )}
 
-              {/* Logout button */}
               <button
                 onClick={handleLogout}
                 className="text-sm text-gray-700 hover:text-indigo-600 transition-colors underline"
@@ -220,12 +213,10 @@ export default function Navbar() {
 
             {username ? (
               <div className="flex flex-col gap-1 pt-2 border-t border-gray-200 mt-2">
-                {/* Display username */}
                 <div className="text-sm text-gray-700 font-medium px-2 py-1">
                   {username}
                 </div>
 
-                {/* If admin, show Admin Panel link */}
                 {isAdmin && (
                   <Link
                     href="/blog/admin"
@@ -236,7 +227,6 @@ export default function Navbar() {
                   </Link>
                 )}
 
-                {/* Logout button */}
                 <button
                   onClick={() => {
                     setOpen(false);

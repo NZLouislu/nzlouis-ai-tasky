@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "NZLouis AI Tasky",
+  title: "NZLouis Chatbot",
   description: "Smart Tasky with AI",
   icons: {
     icon: "/favicon.ico",

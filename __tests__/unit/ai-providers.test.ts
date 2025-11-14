@@ -1,3 +1,10 @@
+// Mock Supabase before importing anything else
+jest.mock('@/lib/supabase/tasky-db-client', () => ({
+  taskyDb: {
+    from: jest.fn(),
+  },
+}));
+
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { getFallbackAPIKey } from '@/lib/ai/providers';
 

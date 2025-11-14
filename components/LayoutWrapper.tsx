@@ -10,18 +10,17 @@ export default function LayoutWrapper({
 }) {
   const pathname = usePathname();
   const isHomePage = pathname === "/";
-  const isChatbotPage = pathname === "/chatbot";
   const isBlogPage = pathname === "/blog";
   const isWorkspacePage = pathname === "/workspace";
   const isTasksPage = pathname === "/tasklist";
-  const isAITaskyPage = pathname === "/ai-tasky" || pathname?.startsWith("/ai-tasky/");
+  const isChatbotPage = pathname === "/chatbot" || pathname?.startsWith("/chatbot/");
 
   return (
     <>
       <Navbar />
       <main
         className={`flex-1 ${
-          isChatbotPage || isBlogPage || isWorkspacePage || isTasksPage || isAITaskyPage
+          isChatbotPage || isBlogPage || isWorkspacePage || isTasksPage
             ? ""
             : "pt-12 pb-4"
         }`}

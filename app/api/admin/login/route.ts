@@ -30,10 +30,10 @@ export async function POST(request: NextRequest) {
 
     response.cookies.set("adminToken", token, {
       httpOnly: true,
-      secure: false, // Allow non-HTTPS for development
-      sameSite: "lax", // More permissive for embedded browsers
-      maxAge: 60 * 60 * 24, // 24 hours
-      path: "/", // Ensure cookie is available site-wide
+      secure: false,
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24,
+      path: "/",
     });
 
     return response;

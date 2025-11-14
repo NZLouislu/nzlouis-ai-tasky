@@ -109,6 +109,20 @@ jest.mock("@supabase/supabase-js", () => {
   };
 });
 
+// Mock tasky-db-client
+jest.mock("@/lib/supabase/tasky-db-client", () => ({
+  taskyDb: {
+    from: jest.fn(() => ({
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({ data: null, error: null }),
+      insert: jest.fn().mockReturnThis(),
+      update: jest.fn().mockReturnThis(),
+      delete: jest.fn().mockReturnThis(),
+    })),
+  },
+}));
+
 // Mock next-auth
 jest.mock("next-auth", () => ({
   default: jest.fn(),

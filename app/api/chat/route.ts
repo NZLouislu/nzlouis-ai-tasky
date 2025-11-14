@@ -73,11 +73,9 @@ interface ChatRequest {
 
 export async function POST(req: Request) {
   try {
-    // Get user session
     const session = await auth();
     const userId = session?.user?.id;
 
-    // Parse request body
     const body: ChatRequest = await req.json();
     const { messages, modelId } = body;
 
@@ -88,7 +86,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Get user AI settings (or defaults)
     const settings = userId
       ? await getUserAISettings(userId)
       : {
@@ -115,22 +112,18 @@ export async function POST(req: Request) {
 
     console.log(`Using provider: ${provider}, model: ${modelName}`);
 
-    // Log if any messages contain images
     const hasImages = messages.some(m => m.image);
     if (hasImages) {
       console.log('Messages contain images - using vision model');
     }
 
-    // Get the AI model using our existing helper
     const { getModel } = await import('@/lib/ai/models');
     const model = await getModel(userId, provider, modelName);
 
-    // Prepare prompt from messages
     const systemMessage = settings.systemPrompt && !messages.some(m => m.role === 'system')
       ? settings.systemPrompt
       : undefined;
 
-    // Convert messages to prompt format with provider-specific formatting
     type MessageContent =
       | { type: 'text'; text: string }
       | { type: 'image'; image: URL | string };
@@ -141,7 +134,6 @@ export async function POST(req: Request) {
     }> = [];
 
     if (provider === 'google') {
-      // Google Gemini format - uses content arrays
       const geminiMessages: Array<{
         role: 'user' | 'assistant';
         content: MessageContent[];
@@ -197,7 +189,6 @@ export async function POST(req: Request) {
       }
       promptMessages = geminiMessages;
     } else {
-      // OpenRouter and other providers - use simple string format
       const simpleMessages: Array<{
         role: 'user' | 'assistant' | 'system';
         content: string;
@@ -232,60 +223,101 @@ export async function POST(req: Request) {
     }
 
     console.log('Prompt messages count:', promptMessages.length);
-    console.log('Messages with images:', promptMessages.filter(m => Array.isArray(m.content) && m.content.some((c) => c.type === 'image')).length);
 
-    // Log detailed message structure
-    promptMessages.forEach((msg, idx) => {
-      console.log(`Message ${idx}:`, {
-        role: msg.role,
-        contentItems: Array.isArray(msg.content) ? msg.content.map((c) => c.type) : 'string'
+    // For OpenRouter, use direct fetch to avoid AI SDK message format conversion
+    if (provider === 'openrouter') {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+          'X-Title': 'AI Tasky',
+        },
+        body: JSON.stringify({
+          model: modelName,
+          messages: promptMessages,
+          temperature,
+          max_tokens: maxTokens,
+          stream: true,
+        }),
       });
-    });
 
-    // Use doStream directly for better control
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('OpenRouter API error:', response.status, errorText);
+        throw new Error(`OpenRouter API error: ${response.status}`);
+      }
+
+      console.log('OpenRouter stream started successfully');
+
+      // Transform OpenRouter SSE to our format
+      const encoder = new TextEncoder();
+      const transformStream = new TransformStream({
+        async transform(chunk, controller) {
+          const text = new TextDecoder().decode(chunk);
+          const lines = text.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              if (data === '[DONE]') continue;
+
+              try {
+                const json = JSON.parse(data);
+                const delta = json.choices?.[0]?.delta;
+
+                // Try content first, then reasoning (for reasoning models)
+                const textContent = delta?.content || delta?.reasoning || '';
+
+                if (textContent) {
+                  const formatted = `0:"${textContent.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"\n`;
+                  controller.enqueue(encoder.encode(formatted));
+                }
+              } catch {
+                // Skip invalid JSON
+              }
+            }
+          }
+        }
+      });
+
+      return new Response(response.body?.pipeThrough(transformStream), {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        },
+      });
+    }
+
+    // For other providers, use AI SDK
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
         try {
           console.log('Starting stream with model...', { provider, modelName });
 
-          // Call doStream with correct parameters
-          const result = await model.doStream({
-            inputFormat: 'messages' as const,
-            mode: { type: 'regular' as const },
-            // @ts-expect-error - Complex message types with images require type assertion
-            prompt: promptMessages,
+          // Use streamText from AI SDK for other providers
+          const { streamText } = await import('ai');
+
+          const result = await streamText({
+            model: model,
+            // @ts-expect-error - Type compatibility
+            messages: promptMessages,
             temperature,
             maxTokens,
           });
 
           console.log('Stream started successfully');
 
-          // Process stream using reader
-          const reader = result.stream.getReader();
-
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) {
-                console.log('Stream completed');
-                break;
-              }
-
-              // Only process text-delta chunks
-              if (value.type === 'text-delta') {
-                const delta = (value as { delta?: string; textDelta?: string }).delta || value.textDelta;
-                if (delta) {
-                  const data = `0:"${delta.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"\n`;
-                  controller.enqueue(encoder.encode(data));
-                }
-              }
-              // Silently ignore other chunk types
-            }
-          } finally {
-            reader.releaseLock();
+          // Process the text stream
+          for await (const textPart of result.textStream) {
+            const data = `0:"${textPart.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"\n`;
+            controller.enqueue(encoder.encode(data));
           }
 
+          console.log('Stream completed');
           controller.close();
         } catch (error) {
           console.error('Stream error:', error);

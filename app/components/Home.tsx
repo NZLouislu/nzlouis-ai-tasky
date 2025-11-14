@@ -47,7 +47,7 @@ export default function Home() {
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
           <div className="text-center">
             <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
-              AI Tasky
+              Chatbot
             </h1>
             <p className="text-xl md:text-2xl text-gray-600 mb-8 max-w-3xl mx-auto">
               Your intelligent task management assistant powered by AI
@@ -150,14 +150,14 @@ export default function Home() {
               Ready to boost your productivity?
             </h2>
             <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-              Join thousands of users who trust AI Tasky for their daily task
+              Join thousands of users who trust Chatbot for their daily task
               management
             </p>
             <Link
               href="/workspace"
               className="inline-flex items-center justify-center px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all transform hover:-translate-y-1 shadow-lg hover:shadow-xl"
             >
-              Start Using AI Tasky
+              Start Using Chatbot
               <svg
                 className="ml-2 h-5 w-5"
                 fill="none"

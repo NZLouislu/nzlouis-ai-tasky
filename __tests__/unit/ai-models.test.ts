@@ -1,9 +1,16 @@
-import { describe, it, expect } from '@jest/globals';
-import { 
-  isValidModel, 
-  getAvailableModels, 
+// Mock Supabase before importing anything else
+jest.mock('@/lib/supabase/tasky-db-client', () => ({
+  taskyDb: {
+    from: jest.fn(),
+  },
+}));
+
+import { describe, it, expect, jest } from '@jest/globals';
+import {
+  isValidModel,
+  getAvailableModels,
   getDefaultModel,
-  MODEL_MAPPINGS 
+  MODEL_MAPPINGS
 } from '@/lib/ai/models';
 
 describe('AI Models', () => {

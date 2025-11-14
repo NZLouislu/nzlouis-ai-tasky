@@ -19,6 +19,8 @@
 # next.js
 /.next/
 /out/
+.kiro/
+.codeflicker/
 
 # production
 /build

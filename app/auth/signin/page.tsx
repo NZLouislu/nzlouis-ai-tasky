@@ -8,7 +8,7 @@ export default function SignIn() {
       <div className="max-w-md w-full p-8 bg-white rounded-2xl shadow-xl">
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold text-gray-900 mb-2">
-            Welcome to AI Tasky
+            Welcome to Chatbot
           </h2>
           <p className="text-gray-600">
             Sign in to start creating user stories with AI
@@ -16,7 +16,7 @@ export default function SignIn() {
         </div>
         
         <button
-          onClick={() => signIn("google", { callbackUrl: "/ai-tasky" })}
+          onClick={() => signIn("google", { callbackUrl: "/chatbot" })}
           className="w-full flex items-center justify-center gap-3 px-6 py-4 border-2 border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all"
         >
           <FcGoogle size={28} />
