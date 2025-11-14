@@ -1,10 +1,8 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createAnthropic } from '@ai-sdk/anthropic';
-import { PrismaClient } from '@prisma/client';
+import { taskyDb } from '@/lib/supabase/tasky-db-client';
 import { decryptAPIKey } from '@/lib/encryption';
-
-const prisma = new PrismaClient();
 
 export type AIProvider = 'openai' | 'google' | 'anthropic' | 'openrouter' | 'kilo';
 
@@ -12,26 +10,28 @@ export type AIProvider = 'openai' | 'google' | 'anthropic' | 'openrouter' | 'kil
  * Get user's API key for a specific provider
  */
 async function getUserAPIKey(userId: string, provider: string): Promise<string | null> {
-  const apiKeyRecord = await prisma.userAPIKey.findUnique({
-    where: {
-      userId_provider: {
-        userId,
-        provider,
-      },
-    },
-  });
+  console.log(`[getUserAPIKey] Fetching API key for user: ${userId}, provider: ${provider}`);
 
-  if (!apiKeyRecord) {
+  const { data: apiKeyRecord, error } = await taskyDb
+    .from('user_api_keys')
+    .select('key_encrypted, iv, auth_tag')
+    .eq('user_id', userId)
+    .eq('provider', provider)
+    .single();
+
+  if (error || !apiKeyRecord) {
+    console.log(`[getUserAPIKey] No API key found for user ${userId}, provider ${provider}:`, error?.message);
     return null;
   }
 
   // Decrypt the API key
   const decrypted = decryptAPIKey(
-    apiKeyRecord.keyEncrypted,
+    apiKeyRecord.key_encrypted,
     apiKeyRecord.iv,
-    apiKeyRecord.authTag
+    apiKeyRecord.auth_tag
   );
 
+  console.log(`[getUserAPIKey] Successfully decrypted API key for ${provider}, key starts with: ${decrypted.substring(0, 10)}...`);
   return decrypted;
 }
 
@@ -48,27 +48,27 @@ export async function getAIProvider(userId: string, provider: AIProvider) {
   switch (provider) {
     case 'openai':
       return createOpenAI({ apiKey });
-    
+
     case 'google':
       return createGoogleGenerativeAI({ apiKey });
-    
+
     case 'anthropic':
       return createAnthropic({ apiKey });
-    
+
     case 'openrouter':
       // OpenRouter uses OpenAI-compatible API
       return createOpenAI({
         apiKey,
         baseURL: 'https://openrouter.ai/api/v1',
       });
-    
+
     case 'kilo':
       // Kilo uses OpenAI-compatible API
       return createOpenAI({
         apiKey,
         baseURL: process.env.KILO_BASE_URL || 'https://api.kilo.ai/v1',
       });
-    
+
     default:
       throw new Error(`Unsupported provider: ${provider}`);
   }
@@ -101,10 +101,15 @@ export async function getAIProviderWithFallback(userId: string | undefined, prov
   // Try to get user's API key first
   if (userId) {
     try {
-      return await getAIProvider(userId, provider);
-    } catch {
-      console.warn(`Failed to get user API key for ${provider}, falling back to env vars`);
+      console.log(`[getAIProviderWithFallback] Attempting to get user API key for ${provider}`);
+      const result = await getAIProvider(userId, provider);
+      console.log(`[getAIProviderWithFallback] Successfully got user API key for ${provider}`);
+      return result;
+    } catch (error) {
+      console.warn(`[getAIProviderWithFallback] Failed to get user API key for ${provider}, falling back to env vars. Error:`, error);
     }
+  } else {
+    console.log(`[getAIProviderWithFallback] No userId provided, using env vars for ${provider}`);
   }
 
   // Fallback to environment variables
@@ -113,28 +118,30 @@ export async function getAIProviderWithFallback(userId: string | undefined, prov
     throw new Error(`No API key available for provider: ${provider}`);
   }
 
+  console.log(`[getAIProviderWithFallback] Using fallback env API key for ${provider}, key starts with: ${apiKey.substring(0, 10)}...`);
+
   switch (provider) {
     case 'openai':
       return createOpenAI({ apiKey });
-    
+
     case 'google':
       return createGoogleGenerativeAI({ apiKey });
-    
+
     case 'anthropic':
       return createAnthropic({ apiKey });
-    
+
     case 'openrouter':
       return createOpenAI({
         apiKey,
         baseURL: 'https://openrouter.ai/api/v1',
       });
-    
+
     case 'kilo':
       return createOpenAI({
         apiKey,
         baseURL: process.env.KILO_BASE_URL || 'https://api.kilo.ai/v1',
       });
-    
+
     default:
       throw new Error(`Unsupported provider: ${provider}`);
   }

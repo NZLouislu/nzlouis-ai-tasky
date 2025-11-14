@@ -11,16 +11,20 @@ export interface ModelConfig {
  */
 export const MODEL_MAPPINGS: Record<AIProvider, Record<string, string>> = {
   google: {
-    // Stable production models (recommended)
+    // Stable production models (recommended) - Use these first as they have more quota
     'gemini-1.5-flash': 'gemini-1.5-flash',
     'gemini-1.5-pro': 'gemini-1.5-pro',
     'gemini-pro': 'gemini-1.5-pro',
-    // Gemini 2.5 models - use the exact model name from GEMINI_API_URL
-    'gemini-2.5-flash': 'models/gemini-2.5-flash-preview-05-20',
-    'gemini-2.5-flash-preview': 'models/gemini-2.5-flash-preview-05-20',
-    'gemini-2.5-pro': 'models/gemini-2.5-pro-preview-05-20',
-    // Experimental models
-    'gemini-2.0-flash-exp': 'gemini-2.0-flash-exp',
+    // Gemini 2.5 and 2.0 models - using OpenAI compatible model names
+    'gemini-2.5-flash': 'gemini-2.5-flash',
+    'gemini-2.5-flash-live': 'gemini-2.5-flash',
+    'gemini-2.0-flash-live': 'gemini-2.0-flash',
+    'gemini-2.0-flash-lite': 'gemini-2.0-flash',
+    'gemini-2.0-flash': 'gemini-2.0-flash',
+    'gemini-2.5-flash-lite': 'gemini-2.5-flash',
+    'gemini-2.5-pro': 'gemini-2.5-pro',
+    'gemini-2.5-flash-preview': 'gemini-2.5-flash',
+    'gemini-2.0-flash-exp': 'gemini-2.0-flash',
   },
   openai: {
     'gpt-4.1': 'gpt-4-turbo',
@@ -35,10 +39,12 @@ export const MODEL_MAPPINGS: Record<AIProvider, Record<string, string>> = {
     'claude-haiku': 'claude-3-5-haiku-20241022',
   },
   openrouter: {
-    'deepseek-r1-free': 'deepseek/deepseek-r1-0528:free',
-    'deepseek-v3-free': 'deepseek/deepseek-chat-v3-0324:free',
-    'deepseek-r1': 'deepseek/deepseek-r1',
-    'deepseek-v3': 'deepseek/deepseek-chat',
+    'openai/gpt-oss-20b:free': 'openai/gpt-oss-20b:free',
+    'tngtech/deepseek-r1t2-chimera:free': 'tngtech/deepseek-r1t2-chimera:free',
+    'tngtech/deepseek-r1t-chimera:free': 'tngtech/deepseek-r1t-chimera:free',
+    'deepseek/deepseek-chat-v3-0324:free': 'deepseek/deepseek-chat-v3-0324:free',
+    'deepseek/deepseek-r1-0528:free': 'deepseek/deepseek-r1-0528:free',
+    'qwen/qwen3-coder:free': 'qwen/qwen3-coder:free',
   },
   kilo: {
     'xai-grok-code-fast-1': 'xai/grok-beta',
@@ -62,12 +68,20 @@ export async function getModel(
   provider: AIProvider,
   modelName: string
 ): Promise<LanguageModel> {
+  console.log(`[getModel] Getting model for provider: ${provider}, modelName: ${modelName}, userId: ${userId}`);
+  
   const providerInstance = await getAIProviderWithFallback(userId, provider);
   const actualModelName = getActualModelName(provider, modelName);
+  
+  console.log(`[getModel] Mapped model name: ${modelName} -> ${actualModelName}`);
 
   // Create model instance based on provider
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (providerInstance as any)(actualModelName);
+  const model = (providerInstance as any)(actualModelName);
+  
+  console.log(`[getModel] Model instance created successfully for ${actualModelName}`);
+  
+  return model;
 }
 
 /**

@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot Diagnostic Tool</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .test-section h3 {
+            margin-top: 0;
+            color: #667eea;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin: 5px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-ok {
+            background: #28a745;
+        }
+
+        .status-error {
+            background: #dc3545;
+        }
+
+        .status-warning {
+            background: #ffc107;
+        }
+
+        .checklist {
+            list-style: none;
+            padding: 0;
+        }
+
+        .checklist li {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .checklist li:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔍 Chatbot Diagnostic Tool</h1>
+        <p class="subtitle">诊断 Blog AI Chatbot 功能是否正常工作</p>
+
+        <!-- Test 1: API Endpoint -->
+        <div class="test-section">
+            <h3>测试 1: API 端点可用性</h3>
+            <p>检查 /api/blog/ai-modify 端点是否可访问</p>
+            <button onclick="testAPIEndpoint()">运行测试</button>
+            <div id="test1-result"></div>
+        </div>
+
+        <!-- Test 2: Session -->
+        <div class="test-section">
+            <h3>测试 2: 用户认证</h3>
+            <p>检查用户是否已登录</p>
+            <button onclick="testSession()">运行测试</button>
+            <div id="test2-result"></div>
+        </div>
+
+        <!-- Test 3: Modification API -->
+        <div class="test-section">
+            <h3>测试 3: 修改 API</h3>
+            <p>测试实际的修改请求</p>
+            <button onclick="testModificationAPI()">运行测试</button>
+            <div id="test3-result"></div>
+        </div>
+
+        <!-- Test 4: Pattern Matching -->
+        <div class="test-section">
+            <h3>测试 4: 指令匹配</h3>
+            <p>测试不同的指令格式</p>
+            <button onclick="testPatternMatching()">运行测试</button>
+            <div id="test4-result"></div>
+        </div>
+
+        <!-- Checklist -->
+        <div class="test-section">
+            <h3>✅ 检查清单</h3>
+            <ul class="checklist" id="checklist">
+                <li><span class="status-indicator status-warning"></span> 等待测试...</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        async function testAPIEndpoint() {
+            const resultDiv = document.getElementById('test1-result');
+            resultDiv.innerHTML = '<div class="result info">测试中...</div>';
+
+            try {
+                const response = await fetch('/api/blog/ai-modify/test');
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="result success">
+                            <strong>✅ 成功!</strong><br>
+                            API 端点可访问<br>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                    updateChecklist(0, true);
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result error">
+                        <strong>❌ 失败!</strong><br>
+                        ${error.message}
+                    </div>
+                `;
+                updateChecklist(0, false);
+            }
+        }
+
+        async function testSession() {
+            const resultDiv = document.getElementById('test2-result');
+            resultDiv.innerHTML = '<div class="result info">测试中...</div>';
+
+            try {
+                const response = await fetch('/api/auth/session');
+                const data = await response.json();
+
+                if (data && data.user && data.user.id) {
+                    resultDiv.innerHTML = `
+                        <div class="result success">
+                            <strong>✅ 已登录!</strong><br>
+                            User ID: ${data.user.id}<br>
+                            Email: ${data.user.email || 'N/A'}
+                        </div>
+                    `;
+                    updateChecklist(1, true);
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="result error">
+                            <strong>❌ 未登录!</strong><br>
+                            请先登录到 /blog 页面
+                        </div>
+                    `;
+                    updateChecklist(1, false);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result error">
+                        <strong>❌ 错误!</strong><br>
+                        ${error.message}
+                    </div>
+                `;
+                updateChecklist(1, false);
+            }
+        }
+
+        async function testModificationAPI() {
+            const resultDiv = document.getElementById('test3-result');
+            resultDiv.innerHTML = '<div class="result info">测试中...</div>';
+
+            const testInstruction = '请帮我修改文章，title 改成"火星探索"，然后将内容改成"火星探索的历史"';
+
+            try {
+                const response = await fetch('/api/blog/ai-modify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        postId: 'test-post-id',
+                        currentContent: [],
+                        currentTitle: 'Test Article',
+                        instruction: testInstruction,
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.modifications) {
+                    resultDiv.innerHTML = `
+                        <div class="result success">
+                            <strong>✅ 成功!</strong><br>
+                            生成了 ${data.modifications.length} 个修改操作<br>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                    updateChecklist(2, true);
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="result error">
+                            <strong>❌ 失败!</strong><br>
+                            Status: ${response.status}<br>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                    updateChecklist(2, false);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result error">
+                        <strong>❌ 错误!</strong><br>
+                        ${error.message}
+                    </div>
+                `;
+                updateChecklist(2, false);
+            }
+        }
+
+        async function testPatternMatching() {
+            const resultDiv = document.getElementById('test4-result');
+            resultDiv.innerHTML = '<div class="result info">测试中...</div>';
+
+            const testCases = [
+                '请帮我修改文章，title 改成"火星探索"，然后将内容改成"火星探索的历史"',
+                '修改标题为"测试文章"',
+                'Change the title to "Mars Exploration"',
+                '将内容改成"新内容"',
+            ];
+
+            let results = [];
+
+            for (const instruction of testCases) {
+                try {
+                    const response = await fetch('/api/blog/ai-modify', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            postId: 'test-post-id',
+                            currentContent: [],
+                            currentTitle: 'Test',
+                            instruction,
+                        }),
+                    });
+
+                    const data = await response.json();
+                    results.push({
+                        instruction,
+                        success: response.ok && data.modifications && data.modifications.length > 0,
+                        modifications: data.modifications || [],
+                    });
+                } catch (error) {
+                    results.push({
+                        instruction,
+                        success: false,
+                        error: error.message,
+                    });
+                }
+            }
+
+            const allSuccess = results.every(r => r.success);
+            const successCount = results.filter(r => r.success).length;
+
+            resultDiv.innerHTML = `
+                <div class="result ${allSuccess ? 'success' : 'error'}">
+                    <strong>${allSuccess ? '✅' : '⚠️'} 测试完成!</strong><br>
+                    成功: ${successCount}/${testCases.length}<br>
+                    <pre>${JSON.stringify(results, null, 2)}</pre>
+                </div>
+            `;
+            updateChecklist(3, allSuccess);
+        }
+
+        function updateChecklist(index, success) {
+            const items = [
+                'API 端点可访问',
+                '用户已登录',
+                '修改 API 工作正常',
+                '指令匹配正常',
+            ];
+
+            const checklist = document.getElementById('checklist');
+            const html = items.map((item, i) => {
+                let status = 'status-warning';
+                let text = '等待测试...';
+
+                if (i < index) {
+                    status = 'status-ok';
+                    text = '已通过';
+                } else if (i === index) {
+                    status = success ? 'status-ok' : 'status-error';
+                    text = success ? '已通过' : '失败';
+                }
+
+                return `<li><span class="status-indicator ${status}"></span> ${item} - ${text}</li>`;
+            }).join('');
+
+            checklist.innerHTML = html;
+        }
+
+        // Auto-run tests on load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                testAPIEndpoint();
+                setTimeout(() => testSession(), 1000);
+            }, 500);
+        });
+    </script>
+</body>
+
+</html>

@@ -123,7 +123,7 @@ export default function UnifiedChatbot({
         // Detect if the user wants to modify the blog content
         const modificationKeywords = [
           'modify', 'change', 'replace', 'add', 'insert', 'delete', 'improve',
-          'can you', 'please', 'help me'
+          'can you', 'please', 'help me', '修改', '改成', '添加', '插入', '删除'
         ];
 
         const isModificationRequest = modificationKeywords.some(keyword =>
@@ -131,6 +131,8 @@ export default function UnifiedChatbot({
         );
 
         if (isModificationRequest) {
+          console.log('🔧 Detected modification request:', text);
+
           // This is a modification request, handle it specially
           const userMessage: Message = {
             id: uuidv4(),
@@ -144,11 +146,17 @@ export default function UnifiedChatbot({
           setIsLoading(true);
 
           try {
+            console.log('🔧 Calling onPageModification with instruction:', text);
+
+            // Pass the instruction text directly
             const result = await onPageModification({
-              type: 'add',
-              content: text
+              type: 'modify',
+              content: text,  // This is the instruction
+              title: text,    // Also pass as title for compatibility
             });
-            
+
+            console.log('🔧 Modification result:', result);
+
             const assistantMessage: Message = {
               id: uuidv4(),
               content: result,
@@ -157,6 +165,7 @@ export default function UnifiedChatbot({
             };
             appendMessage(assistantMessage);
           } catch (error) {
+            console.error('🔧 Modification error:', error);
             const errorMessage: Message = {
               id: uuidv4(),
               content: `❌ Failed to apply modification: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -258,7 +267,7 @@ export default function UnifiedChatbot({
                 // Parse format: 0:"text content"
                 const jsonStr = line.substring(2);
                 const text = JSON.parse(jsonStr);
-                
+
                 if (isFirstChunk) {
                   setIsLoading(false);
                   isFirstChunk = false;
@@ -357,24 +366,21 @@ export default function UnifiedChatbot({
 
   return (
     <div
-      className={`unified-chatbot flex flex-col bg-white ${
-        mode === "standalone" ? "h-full" : "h-full"
-      }`}
+      className={`unified-chatbot flex flex-col bg-white ${mode === "standalone" ? "h-full" : "h-full"
+        }`}
     >
       <div
-        className={`flex-1 chatbot-scrollbar ${
-          mode === "standalone"
+        className={`flex-1 chatbot-scrollbar ${mode === "standalone"
             ? "px-4 py-4 overflow-y-auto"
             : "px-6 py-4 overflow-y-auto"
-        }`}
+          }`}
         style={{
           paddingBottom: mode === "standalone" ? "160px" : "80px",
         }}
       >
         <div
-          className={`w-full space-y-6 ${
-            mode === "standalone" ? "max-w-[900px] mx-auto" : ""
-          }`}
+          className={`w-full space-y-6 ${mode === "standalone" ? "max-w-[900px] mx-auto" : ""
+            }`}
         >
           {messages.length === 0 && (
             <div className="text-center py-12 pt-16">
@@ -392,26 +398,23 @@ export default function UnifiedChatbot({
           {messages.map((message) => (
             <div
               key={message.id}
-              className={`flex ${
-                message.role === "user" ? "justify-end" : "justify-end"
-              }`}
+              className={`flex ${message.role === "user" ? "justify-end" : "justify-end"
+                }`}
             >
               <div
-                className={`px-4 py-3 rounded-2xl ${
-                  message.role === "user"
+                className={`px-4 py-3 rounded-2xl ${message.role === "user"
                     ? mode === "standalone"
                       ? "bg-blue-600 text-white max-w-[85%]"
                       : "bg-blue-600 text-white max-w-[80%] lg:max-w-[70%]"
                     : mode === "standalone"
                       ? "bg-gray-100 text-gray-900 w-full"
                       : "bg-gray-100 text-gray-900 w-full"
-                }`}
+                  }`}
               >
                 {renderMessageContent(message.content)}
                 <div
-                  className={`text-xs mt-2 opacity-70 ${
-                    message.role === "user" ? "text-blue-100" : "text-gray-500"
-                  }`}
+                  className={`text-xs mt-2 opacity-70 ${message.role === "user" ? "text-blue-100" : "text-gray-500"
+                    }`}
                 >
                   {new Date(message.timestamp).toLocaleTimeString()}
                 </div>
@@ -467,9 +470,8 @@ export default function UnifiedChatbot({
       </div>
       {mode === "standalone" ? (
         <div
-          className={`fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10 transition-all duration-200 ${
-            sidebarCollapsed ? "ml-0 md:ml-12" : "ml-0 md:ml-64"
-          }`}
+          className={`fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10 transition-all duration-200 ${sidebarCollapsed ? "ml-0 md:ml-12" : "ml-0 md:ml-64"
+            }`}
         >
           <div className="p-4">
             <div className="w-full max-w-[900px] mx-auto">

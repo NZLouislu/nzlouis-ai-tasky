@@ -2,7 +2,7 @@
 
 import { useSession } from 'next-auth/react';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Plus, MessageSquare, Settings, Paperclip, Edit2, Trash2, Search } from 'lucide-react';
+import { Send, Plus, MessageSquare, Settings, Paperclip, Edit2, Trash2, Search, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -22,11 +22,23 @@ interface Message {
   timestamp: Date;
 }
 
+interface AIModel {
+  id: string;
+  name: string;
+  provider: string;
+  description: string;
+  tested?: boolean;
+  working?: boolean;
+}
+
+
+
 export default function AITaskyPage() {
   const { data: session } = useSession();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [sidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -34,8 +46,31 @@ export default function AITaskyPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
+  const [availableModels, setAvailableModels] = useState<AIModel[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>('');
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const modelDropdownRef = useRef<HTMLDivElement>(null);
+
+  // 检测移动端/平板端
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 1024; // < 1024px 视为移动端/平板端
+      setIsMobile(mobile);
+      // 移动端默认隐藏侧边栏
+      if (mobile) {
+        setSidebarOpen(false);
+      }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
 
   const handleImageUpload = useCallback(async (file: File) => {
     if (file && file.type.startsWith('image/')) {
@@ -45,16 +80,16 @@ export default function AITaskyPage() {
         formData.append('file', file);
         formData.append('entityType', 'chat_message');
         formData.append('entityId', currentSessionId || 'temp');
-        
+
         const res = await fetch('/api/upload', {
           method: 'POST',
           body: formData,
         });
-        
+
         if (!res.ok) {
           throw new Error('Upload failed');
         }
-        
+
         const data = await res.json();
         setPreviewImage(data.publicUrl);
       } catch (error) {
@@ -77,7 +112,7 @@ export default function AITaskyPage() {
 
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
-        
+
         if (item.type.indexOf('image') !== -1) {
           e.preventDefault();
           const file = item.getAsFile();
@@ -91,7 +126,7 @@ export default function AITaskyPage() {
     };
 
     document.addEventListener('paste', handlePaste);
-    
+
     return () => {
       document.removeEventListener('paste', handlePaste);
     };
@@ -101,9 +136,51 @@ export default function AITaskyPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  useEffect(() => {
+    if (session?.user) {
+      loadAvailableModels();
+    }
+  }, [session]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target as Node)) {
+        setShowModelDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const loadAvailableModels = async () => {
+    try {
+      const res = await fetch('/api/ai-models');
+      const data = await res.json();
+
+      if (data.models && data.models.length > 0) {
+        const sortedModels = data.models.sort((a: AIModel, b: AIModel) => {
+          if (a.provider === 'google' && b.provider !== 'google') return -1;
+          if (a.provider !== 'google' && b.provider === 'google') return 1;
+          return 0;
+        });
+        
+        setAvailableModels(sortedModels);
+        setSelectedModel(sortedModels[0].id);
+      } else {
+        setAvailableModels([]);
+        setSelectedModel('');
+      }
+    } catch (error) {
+      console.error('Failed to load AI models:', error);
+      setAvailableModels([]);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() && !previewImage) return;
+    if (!selectedModel) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -133,12 +210,11 @@ export default function AITaskyPage() {
         ...(currentImage && { image: currentImage }),
       });
 
-      // Use vision API if any message has an image
       const hasImages = chatMessages.some(m => m.image);
       const apiEndpoint = hasImages ? '/api/chat-vision' : '/api/chat';
-      
-      console.log('Using API:', apiEndpoint, 'Has images:', hasImages);
-      
+
+      console.log('Using API:', apiEndpoint, 'Has images:', hasImages, 'Model:', selectedModel);
+
       const response = await fetch(apiEndpoint, {
         method: 'POST',
         headers: {
@@ -146,6 +222,7 @@ export default function AITaskyPage() {
         },
         body: JSON.stringify({
           messages: chatMessages,
+          modelId: selectedModel,
         }),
       });
 
@@ -224,7 +301,7 @@ export default function AITaskyPage() {
       const res = await fetch('/api/chat-sessions');
       const data = await res.json();
       setSessions(data.sessions || []);
-      
+
       if (data.sessions && data.sessions.length > 0 && !currentSessionId) {
         setCurrentSessionId(data.sessions[0].id);
       }
@@ -249,7 +326,7 @@ export default function AITaskyPage() {
     try {
       const res = await fetch(`/api/chat-sessions/${sessionId}`);
       const data = await res.json();
-      
+
       if (data.session && data.session.messages) {
         interface DbMessage {
           id: string;
@@ -324,7 +401,7 @@ export default function AITaskyPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: newTitle }),
       });
-      setSessions(sessions.map(s => 
+      setSessions(sessions.map(s =>
         s.id === sessionId ? { ...s, title: newTitle } : s
       ));
       setEditingSessionId(null);
@@ -359,10 +436,46 @@ export default function AITaskyPage() {
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden pt-16">
+      {/* 移动端侧边栏切换按钮 */}
+      {isMobile && !sidebarOpen && (
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="fixed left-4 top-20 z-30 bg-white p-2 rounded-lg shadow-lg hover:bg-gray-50 transition-colors border border-gray-200"
+          title="Show Sidebar"
+        >
+          <MessageSquare size={24} className="text-gray-700" />
+        </button>
+      )}
+
+      {/* 移动端侧边栏遮罩 */}
+      {isMobile && sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-40"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       {sidebarOpen && (
-        <div className="w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+        <div className={`bg-white border-r border-gray-200 flex flex-col flex-shrink-0 ${isMobile
+          ? 'fixed left-0 top-16 bottom-0 w-64 z-50'
+          : 'w-64'
+          }`}>
           <div className="p-4 border-b border-gray-200 flex-shrink-0">
+            {/* 移动端关闭按钮 */}
+            {isMobile && (
+              <div className="flex justify-end mb-2">
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="p-1 text-gray-500 hover:text-gray-700 rounded hover:bg-gray-100"
+                  title="Close Sidebar"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            )}
             <button
               onClick={createNewSession}
               className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 mb-2"
@@ -399,11 +512,10 @@ export default function AITaskyPage() {
             {filteredSessions.map((sess) => (
               <div
                 key={sess.id}
-                className={`group relative rounded-lg mb-1 ${
-                  currentSessionId === sess.id
-                    ? 'bg-blue-50'
-                    : 'hover:bg-gray-100'
-                }`}
+                className={`group relative rounded-lg mb-1 ${currentSessionId === sess.id
+                  ? 'bg-blue-50'
+                  : 'hover:bg-gray-100'
+                  }`}
               >
                 {editingSessionId === sess.id ? (
                   <div className="px-3 py-2">
@@ -466,13 +578,13 @@ export default function AITaskyPage() {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header - Fixed at top */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
-          <h1 className="text-2xl font-bold text-gray-800">AI Tasky</h1>
+        <div className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex-shrink-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-800">AI Tasky</h1>
         </div>
 
         {/* Messages - Scrollable area */}
         <div className="flex-1 overflow-y-auto chatbot-scrollbar">
-          <div className="max-w-[900px] mx-auto p-6">
+          <div className="max-w-[900px] mx-auto p-4 sm:p-6">
             {messages.length === 0 && (
               <div className="text-center text-gray-500 mt-20">
                 <h2 className="text-xl font-semibold mb-2">Welcome to AI Tasky</h2>
@@ -482,16 +594,14 @@ export default function AITaskyPage() {
             {messages.map((message) => (
               <div
                 key={message.id}
-                className={`flex mb-4 ${
-                  message.role === 'user' ? 'justify-end' : 'justify-start'
-                }`}
+                className={`flex mb-4 ${message.role === 'user' ? 'justify-end' : 'justify-start'
+                  }`}
               >
                 <div
-                  className={`rounded-2xl px-4 py-3 ${
-                    message.role === 'user'
-                      ? 'bg-blue-600 text-white max-w-[85%]'
-                      : 'bg-white border border-gray-200 w-full'
-                  }`}
+                  className={`rounded-2xl px-4 py-3 ${message.role === 'user'
+                    ? 'bg-blue-600 text-white max-w-[85%]'
+                    : 'bg-white border border-gray-200 w-full'
+                    }`}
                 >
                   {message.image && (
                     <div className="mb-2">
@@ -535,7 +645,7 @@ export default function AITaskyPage() {
         </div>
 
         {/* Input - Fixed at bottom */}
-        <div className="bg-white border-t border-gray-200 p-4 flex-shrink-0">
+        <div className="bg-white border-t border-gray-200 p-3 sm:p-4 flex-shrink-0">
           <div className="max-w-[900px] mx-auto">
             {previewImage && (
               <div className="mb-3 relative inline-block">
@@ -554,49 +664,141 @@ export default function AITaskyPage() {
                 </button>
               </div>
             )}
+            {availableModels.length === 0 && (
+              <div className="mb-3 px-4 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+                No AI models configured. Please{' '}
+                <Link href="/ai-tasky/settings" className="font-semibold underline hover:text-yellow-900">
+                  configure your API keys
+                </Link>
+                {' '}in settings.
+              </div>
+            )}
+
             <form onSubmit={handleSubmit}>
-              <div className="relative border-2 border-blue-500 rounded-xl overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 z-10"
-                >
-                  <Paperclip size={20} />
-                </button>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={(e) => {
-                    if (e.target.files?.length) {
-                      handleImageUpload(e.target.files[0]);
-                    }
-                  }}
-                  accept="image/*"
-                  className="hidden"
-                />
-                <textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Type your message... (Ctrl+V to paste screenshot)"
-                  className="w-full resize-none border-0 pl-12 pr-16 py-3 focus:outline-none focus:ring-0"
-                  rows={1}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      if (input.trim() || previewImage) {
-                        handleSubmit(e);
-                      }
-                    }
-                  }}
-                  style={{ minHeight: '52px', maxHeight: '200px' }}
-                />
-                <button
-                  type="submit"
-                  disabled={!input.trim() && !previewImage}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 bg-teal-500 text-white rounded-full p-2 hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Send size={18} />
-                </button>
+              <div className="relative border-2 border-blue-500 rounded-xl overflow-visible">
+                <div className="flex flex-col">
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="absolute left-3 top-3 text-gray-400 hover:text-gray-600 z-10"
+                    >
+                      <Paperclip size={20} />
+                    </button>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={(e) => {
+                        if (e.target.files?.length) {
+                          handleImageUpload(e.target.files[0]);
+                        }
+                      }}
+                      accept="image/*"
+                      className="hidden"
+                    />
+                    <textarea
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      placeholder={isMobile ? "Type message..." : "Type your message... (Ctrl+V to paste screenshot)"}
+                      className="w-full resize-none border-0 pl-12 pr-14 sm:pr-16 pt-3 pb-10 text-sm sm:text-base focus:outline-none focus:ring-0"
+                      rows={1}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          if ((input.trim() || previewImage) && selectedModel) {
+                            handleSubmit(e);
+                          }
+                        }
+                      }}
+                      style={{ minHeight: '80px', maxHeight: '200px' }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={(!input.trim() && !previewImage) || !selectedModel}
+                      className="absolute right-3 top-3 bg-teal-500 text-white rounded-full p-2 hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Send size={18} />
+                    </button>
+                  </div>
+
+                  {availableModels.length > 0 && (
+                    <div className="border-t border-gray-200 px-3 py-2 bg-gray-50/50" ref={modelDropdownRef}>
+                      <button
+                        type="button"
+                        onClick={() => setShowModelDropdown(!showModelDropdown)}
+                        className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 transition-colors"
+                      >
+                        {(() => {
+                          const currentModel = availableModels.find(m => m.id === selectedModel);
+                          return (
+                            <>
+                              {currentModel && (
+                                <div className="mr-1 flex-shrink-0">
+                                  {currentModel.tested === true && currentModel.working === true && (
+                                    <div className="flex items-center text-green-600">
+                                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                      </svg>
+                                    </div>
+                                  )}
+                                  {currentModel.tested === true && currentModel.working === false && (
+                                    <div className="flex items-center text-red-600">
+                                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                      </svg>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              <span className="font-medium">{currentModel?.name || 'Select Model'}</span>
+                            </>
+                          );
+                        })()}
+                        <ChevronDown size={12} className={`transition-transform ${showModelDropdown ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {showModelDropdown && (
+                        <div className="absolute bottom-full left-0 right-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto z-50">
+                          {availableModels.map((model) => (
+                            <button
+                              key={model.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedModel(model.id);
+                                setShowModelDropdown(false);
+                              }}
+                              className={`w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors ${selectedModel === model.id ? 'bg-blue-50' : ''
+                                }`}
+                            >
+                              <div className="flex items-center">
+                                <div className="mr-2 flex-shrink-0">
+                                  {model.tested === true && model.working === true && (
+                                    <div className="flex items-center text-green-600">
+                                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                      </svg>
+                                    </div>
+                                  )}
+                                  {model.tested === true && model.working === false && (
+                                    <div className="flex items-center text-red-600">
+                                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                      </svg>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex-1">
+                                  <div className="font-semibold text-sm text-gray-900">{model.name}</div>
+                                  <div className="text-xs text-gray-500 mt-1">{model.description}</div>
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </form>
           </div>

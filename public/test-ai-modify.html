@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test AI Modify API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        button {
+            background-color: #0070f3;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #0051cc;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            border-left: 4px solid #0070f3;
+        }
+
+        .result h3 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        .result pre {
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+
+        .error {
+            border-left-color: #f44336;
+        }
+
+        .success {
+            border-left-color: #4caf50;
+        }
+
+        .loading {
+            display: inline-block;
+            margin-left: 10px;
+        }
+
+        .examples {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e3f2fd;
+            border-radius: 4px;
+        }
+
+        .examples h4 {
+            margin-top: 0;
+            color: #1976d2;
+        }
+
+        .examples ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+
+        .examples li {
+            margin: 5px 0;
+            cursor: pointer;
+            color: #1976d2;
+        }
+
+        .examples li:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🧪 Test AI Modify API</h1>
+
+        <div class="examples">
+            <h4>📝 示例指令（点击使用）</h4>
+            <ul>
+                <li onclick="useExample(1)">请帮我修改文章，title 改成"火星探索"，然后将内容改成"火星探索的历史"</li>
+                <li onclick="useExample(2)">Change the title to "Mars Exploration" and update the content about Mars
+                    history</li>
+                <li onclick="useExample(3)">修改标题为"测试文章"</li>
+                <li onclick="useExample(4)">在文章末尾添加"这是新增的内容"</li>
+            </ul>
+        </div>
+
+        <form id="testForm">
+            <div class="form-group">
+                <label for="postId">Post ID:</label>
+                <input type="text" id="postId" value="test-post-id" required>
+            </div>
+
+            <div class="form-group">
+                <label for="currentTitle">Current Title:</label>
+                <input type="text" id="currentTitle" value="Test Article" required>
+            </div>
+
+            <div class="form-group">
+                <label for="currentContent">Current Content (JSON array):</label>
+                <textarea id="currentContent">[]</textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="instruction">Instruction:</label>
+                <textarea id="instruction" placeholder="请输入修改指令..." required></textarea>
+            </div>
+
+            <button type="submit" id="submitBtn">
+                🚀 Test API
+                <span class="loading" id="loading" style="display: none;">⏳</span>
+            </button>
+        </form>
+
+        <div id="result" style="display: none;"></div>
+    </div>
+
+    <script>
+        const form = document.getElementById('testForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const loading = document.getElementById('loading');
+        const resultDiv = document.getElementById('result');
+
+        const examples = [
+            '',
+            '请帮我修改文章，title 改成"火星探索"，然后将内容改成"火星探索的历史"',
+            'Change the title to "Mars Exploration" and update the content about Mars history',
+            '修改标题为"测试文章"',
+            '在文章末尾添加"这是新增的内容"'
+        ];
+
+        function useExample(index) {
+            document.getElementById('instruction').value = examples[index];
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const postId = document.getElementById('postId').value;
+            const currentTitle = document.getElementById('currentTitle').value;
+            const currentContentStr = document.getElementById('currentContent').value;
+            const instruction = document.getElementById('instruction').value;
+
+            let currentContent;
+            try {
+                currentContent = JSON.parse(currentContentStr);
+            } catch (error) {
+                alert('Current Content must be valid JSON array');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            loading.style.display = 'inline-block';
+            resultDiv.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/blog/ai-modify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        postId,
+                        currentContent,
+                        currentTitle,
+                        instruction,
+                    }),
+                });
+
+                const data = await response.json();
+
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'result ' + (response.ok ? 'success' : 'error');
+                resultDiv.innerHTML = `
+                    <h3>${response.ok ? '✅ Success' : '❌ Error'}</h3>
+                    <p><strong>Status:</strong> ${response.status}</p>
+                    <p><strong>Response:</strong></p>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+
+                if (response.ok && data.modifications) {
+                    console.log('Modifications:', data.modifications);
+                    console.log('Explanation:', data.explanation);
+                }
+            } catch (error) {
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `
+                    <h3>❌ Error</h3>
+                    <p>${error.message}</p>
+                `;
+            } finally {
+                submitBtn.disabled = false;
+                loading.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+
+</html>

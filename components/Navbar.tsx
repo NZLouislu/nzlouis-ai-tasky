@@ -23,7 +23,7 @@ export default function Navbar() {
   const [isAdmin, setIsAdmin] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  
+
   // Get NextAuth session (Google login)
   const { data: session } = useSession();
 
@@ -95,7 +95,7 @@ export default function Navbar() {
       if (session?.user) {
         await signOut({ redirect: false });
         router.push("/");
-      } 
+      }
       // If admin user, clear admin token
       else if (isAdmin) {
         if (typeof localStorage !== "undefined") {
@@ -121,14 +121,13 @@ export default function Navbar() {
     { label: "Workspace", href: "/workspace" },
     { label: "Tasks", href: "/tasklist" },
     { label: "Blog", href: "/blog" },
-    { label: "AI Tasky", href: "/ai-tasky" },
+    { label: "Chatbot", href: "/ai-tasky" },
   ];
 
   const linkCls = (isActive: boolean) =>
-    `relative text-sm md:text-base font-medium transition-colors hover:text-indigo-600 ${
-      isActive
-        ? "text-indigo-600 font-bold after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-0.5 after:w-full after:bg-indigo-600"
-        : "text-gray-700"
+    `relative text-sm md:text-base font-medium transition-colors hover:text-indigo-600 ${isActive
+      ? "text-indigo-600 font-bold after:content-[''] after:absolute after:left-0 after:bottom-0 after:h-0.5 after:w-full after:bg-indigo-600"
+      : "text-gray-700"
     }`;
 
   return (
@@ -173,7 +172,7 @@ export default function Navbar() {
               <span className="text-sm text-gray-700 font-medium">
                 {username}
               </span>
-              
+
               {/* If admin, show Admin Panel link */}
               {isAdmin && (
                 <Link
@@ -183,7 +182,7 @@ export default function Navbar() {
                   Admin Panel
                 </Link>
               )}
-              
+
               {/* Logout button */}
               <button
                 onClick={handleLogout}
@@ -225,7 +224,7 @@ export default function Navbar() {
                 <div className="text-sm text-gray-700 font-medium px-2 py-1">
                   {username}
                 </div>
-                
+
                 {/* If admin, show Admin Panel link */}
                 {isAdmin && (
                   <Link
@@ -236,7 +235,7 @@ export default function Navbar() {
                     Admin Panel
                   </Link>
                 )}
-                
+
                 {/* Logout button */}
                 <button
                   onClick={() => {

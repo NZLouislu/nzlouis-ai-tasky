@@ -157,7 +157,7 @@ describe('Blog Store', () => {
         updated_at: new Date().toISOString(),
       };
 
-      mockSupabase.from = jest.fn().mockReturnValue({
+      (mockSupabase as any).from = jest.fn().mockReturnValue({
         update: jest.fn().mockReturnValue({
           eq: jest.fn().mockReturnValue({
             select: jest.fn().mockResolvedValue({
@@ -176,7 +176,7 @@ describe('Blog Store', () => {
 
       await useBlogStore.getState().updatePostContent('post-1', {
         title: 'Updated',
-        content: { blocks: [] },
+        content: { blocks: [] } as any,
       });
 
       const state = useBlogStore.getState();

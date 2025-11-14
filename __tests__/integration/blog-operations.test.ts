@@ -147,7 +147,7 @@ describe('Blog Operations Integration', () => {
 
       await store.updatePostContent(postId, {
         title: 'Updated Title',
-        content: [{ type: 'paragraph', content: 'New content' }],
+        content: [{ type: 'paragraph', content: 'New content' }] as any,
       });
 
       const state = useBlogStore.getState();

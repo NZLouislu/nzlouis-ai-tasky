@@ -2,413 +2,478 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { PartialBlock } from '@blocknote/core';
 
-interface ModificationRequest {
-  postId: string;
-  currentContent: PartialBlock[];
-  currentTitle: string;
-  instruction: string;
-  context?: string;
-}
-
-interface ContentModification {
+interface PageModification {
   type: 'replace' | 'insert' | 'append' | 'update_title' | 'add_section';
   target?: string;
-  content?: PartialBlock[];
+  content?: string;
   title?: string;
   position?: number;
 }
 
-/**
- * AI Blog Content Modification API
- * 
- * This endpoint receives user instructions and current blog content,
- * then uses AI to generate content modifications.
- */
-export async function POST(req: NextRequest) {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+interface AIModifyRequest {
+  postId: string;
+  currentContent: PartialBlock[];
+  currentTitle: string;
+  instruction: string;
+}
+
+interface AIModifyResponse {
+  modifications: PageModification[];
+  explanation: string;
+}
+
+function detectLanguage(text: string): string {
+  if (/[\u4e00-\u9fa5]/.test(text)) return 'Chinese';
+  if (/[\u3040-\u309f\u30a0-\u30ff]/.test(text)) return 'Japanese';
+  if (/[\uac00-\ud7af]/.test(text)) return 'Korean';
+  if (/[\u0400-\u04FF]/.test(text)) return 'Russian';
+  return 'English';
+}
+function blocksToText(blocks: PartialBlock[]): string {
+  return blocks.map(block => {
+    if (typeof block.content === 'string') {
+      return block.content;
     }
+    if (Array.isArray(block.content)) {
+      return block.content.map(item => {
+        if (typeof item === 'string') return item;
+        if (typeof item === 'object' && 'text' in item) return item.text;
+        return '';
+      }).join('');
+    }
+    return '';
+  }).filter(text => text.trim()).join('\n\n');
+}
 
-    const body: ModificationRequest = await req.json();
-    const { postId, currentContent, currentTitle, instruction, context } = body;
 
-    console.log('AI Modification Request:', {
-      postId,
-      instruction,
-      contentLength: currentContent?.length || 0,
+async function generateModifications(params: {
+  currentContent: PartialBlock[];
+  currentTitle: string;
+  instruction: string;
+  language: string;
+}): Promise<AIModifyResponse> {
+  const { currentContent, currentTitle, instruction, language } = params;
+
+  const contentText = blocksToText(currentContent);
+  const systemPrompt = `You are a professional blog editor and content creation expert. Generate high-quality, detailed, professional content based on user instructions.
+
+**CRITICAL RULES:**
+1. **ONLY return valid JSON format with English field names**
+2. **DO NOT use Chinese field names like "修改操作" or "操作类型"**
+3. **MUST use exact field names: "modifications", "type", "content", "title", "explanation"**
+4. **Content must be detailed, professional, and in-depth**
+5. **Content language should match user's language (${language})**
+
+**REQUIRED JSON FORMAT:**
+{
+  "modifications": [
+    {
+      "type": "append",
+      "content": "Detailed content with multiple paragraphs.\\n\\nFirst paragraph...\\n\\nSecond paragraph...\\n\\nThird paragraph..."
+    }
+  ],
+  "explanation": "Added detailed content about xxx, containing xxx paragraphs"
+}
+
+**Modification Types:**
+- update_title: Modify article title
+- replace: Replace all content
+- append: Append content at the end (recommended for adding detailed content)
+- insert: Insert content at specific position
+- add_section: Add new section
+
+**Content Quality Requirements:**
+- If user requests "detailed", "more", "expand": generate at least 300-500 words
+- Split content into multiple paragraphs using \\n\\n
+- Include specific facts, data, examples
+- Clear logic and complete structure
+- Professional but easy to understand language
+- Use ${language} for content
+
+**Example (Mars Exploration):**
+If user requests "add detailed history of Mars exploration", generate like:
+
+"Human exploration of Mars began in the early 1960s. In 1960, the Soviet Union launched the first Mars probe, although the mission failed, it opened the prelude to human exploration of Mars.\\n\\n In 1964, the American Mariner 4 became the first probe to successfully fly by Mars, sending back 21 precious photos of the Martian surface. These photos showed that the Martian surface was covered with craters, similar to the Moon, which changed people's understanding of Mars.\\n\\nIn 1971, the Soviet Mars 3 became the first probe to successfully land on Mars, although it only worked for 20 seconds, it marked the first time humans achieved a soft landing on the Martian surface. In the same year, the American Mariner 9 became the first probe to enter Mars orbit, mapping the Martian surface in detail.\\n\\nIn 1976, the American Viking 1 and 2 successfully landed on Mars, conducting years of scientific research to search for signs of Martian life. Although no conclusive evidence of life was found, these two probes provided us with a wealth of valuable data about Martian geology, climate, and atmosphere."
+
+This is high-quality, detailed content.
+
+**IMPORTANT: Return ONLY the JSON object, no other text, no markdown code blocks, no explanations outside the JSON.**`;
+
+  const userPrompt = `Current Article Title: ${currentTitle}
+
+Current Article Content:
+${contentText || '(Content is empty)'}
+
+User Instruction: ${instruction}
+
+**Task Requirements:**
+Generate high-quality, detailed modification operations based on user instructions.
+
+If user requests:
+- "detailed", "more", "expand" → generate at least 300-500 words of detailed content
+- "add" → generate relevant, in-depth content
+- "modify" → improve existing content to be more professional and detailed
+
+**Content Requirements:**
+1. Split into multiple paragraphs (use \\n\\n to separate)
+2. Include specific facts, data, examples
+3. Clear logic and complete structure
+4. Use ${language} language for content
+5. Professional but easy to understand
+
+**CRITICAL: Return ONLY valid JSON with these exact field names:**
+- "modifications" (array)
+- "type" (string: "append", "replace", "update_title", etc.)
+- "content" (string: the actual content)
+- "explanation" (string: what you did)
+
+Now generate the JSON for modification operations.`;
+
+  try {
+    
+    const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.7,
+        maxTokens: 2000,
+      }),
     });
 
+    if (!response.ok) {
+      throw new Error(`AI API returned ${response.status}`);
+    }
+
+    
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('No reader available');
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullResponse = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+
+      for (let i = 0; i < lines.length - 1; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith('0:')) {
+          try {
+            const jsonStr = line.substring(2);
+            const text = JSON.parse(jsonStr);
+            fullResponse += text;
+          } catch (error) {
+            console.error('Error parsing line:', error);
+          }
+        }
+      }
+
+      buffer = lines[lines.length - 1];
+    }
+
+    console.log('AI Full Response:', fullResponse);
+
+    const cleanedResponse = fullResponse
+      .replace(/```json\s*/g, '')
+      .replace(/```\s*/g, '')
+      .trim();
+
+    console.log('Cleaned Response:', cleanedResponse.substring(0, 200) + '...');
+
+    const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.warn('No JSON found in AI response, generating default response');
+      console.log('Full response was:', cleanedResponse.substring(0, 500));
+      return generateDefaultModifications(instruction, currentTitle, language);
+    }
+
+    try {
+      
+      let jsonStr = jsonMatch[0];
+
+      if (jsonStr.includes('"修改操作"') || jsonStr.includes('"操作类型"')) {
+        console.warn('Detected Chinese field names, attempting to convert...');
+        jsonStr = jsonStr
+          .replace(/"修改操作"/g, '"modifications"')
+          .replace(/"操作类型"/g, '"type"')
+          .replace(/"目标"/g, '"target"')
+          .replace(/"新内容"/g, '"content"')
+          .replace(/"新标题"/g, '"title"');
+      }
+
+      console.log('Cleaning control characters from JSON...');
+      let result;
+      try {
+        
+        result = JSON.parse(jsonStr);
+      } catch {
+        console.log('First parse failed, cleaning control characters...');
+        const cleanedStr = jsonStr
+          .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g, '')
+          .replace(/\r\n/g, '\n')
+          .replace(/\r/g, '\n');
+
+        try {
+          result = JSON.parse(cleanedStr);
+        } catch {
+          console.log('Second parse failed, trying manual content field cleaning...');
+          const manualClean = cleanedStr.replace(
+            /"content"\s*:\s*"([^"]*)"/g,
+            (match, content) => {
+              const cleaned = content
+                .replace(/\n/g, '\\n\\n')
+                .replace(/\t/g, ' ')
+                .replace(/  +/g, ' ');
+              return `"content": "${cleaned}"`;
+            }
+          );
+
+          try {
+            result = JSON.parse(manualClean);
+          } catch (thirdError) {
+            console.error('All parse attempts failed:', thirdError);
+            console.log('Original JSON (first 500 chars):', jsonStr.substring(0, 500));
+            console.log('Cleaned JSON (first 500 chars):', cleanedStr.substring(0, 500));
+            return generateDefaultModifications(instruction, currentTitle, language);
+          }
+        }
+      }
+
+      console.log('JSON parsed successfully');
+
+      
+      if (!result.modifications || !Array.isArray(result.modifications)) {
+        console.warn('Invalid response format, generating default response');
+        console.log('Parsed result:', JSON.stringify(result).substring(0, 200));
+        return generateDefaultModifications(instruction, currentTitle, language);
+      }
+
+      
+      const validModifications = result.modifications.filter((mod: PageModification) => {
+        return mod.type && (mod.content || mod.title);
+      });
+
+      if (validModifications.length === 0) {
+        console.warn('No valid modifications found');
+        return generateDefaultModifications(instruction, currentTitle, language);
+      }
+
+      console.log(`✅ Successfully parsed ${validModifications.length} modifications`);
+
+      return {
+        modifications: validModifications,
+        explanation: result.explanation || `Modified based on your instruction.`,
+      };
+    } catch (parseError) {
+      console.error('Failed to parse JSON:', parseError);
+      console.log('Attempted to parse:', jsonMatch[0].substring(0, 500));
+      return generateDefaultModifications(instruction, currentTitle, language);
+    }
+  } catch (error) {
+    console.error('Error generating modifications:', error);
+    
+    return generateDefaultModifications(instruction, currentTitle, language);
+  }
+}
+
+
+function generateDefaultModifications(
+  instruction: string,
+  currentTitle: string,
+  language: string
+): AIModifyResponse {
+  const modifications: PageModification[] = [];
+  const lowerInstruction = instruction.toLowerCase();
+
+  console.log('Generating default modifications for instruction:', instruction);
+
+  const titlePatterns = [
+    /title.*?["'"](.*?)["'"]/i,
+    /标题.*?["'"](.*?)["'"]/i,
+    /タイトル.*?["'"](.*?)["'"]/i,
+    /title\s*改成\s*([^,，。内]+)/i,
+    /标题\s*改成\s*([^,，。内]+)/i,
+    /将\s*title\s*改成\s*([^,，。内]+)/i,
+    /将\s*标题\s*改成\s*([^,，。内]+)/i,
+  ];
+
+  for (const pattern of titlePatterns) {
+    const match = instruction.match(pattern);
+    if (match && match[1]) {
+      modifications.push({
+        type: 'update_title',
+        title: match[1],
+      });
+      console.log('Detected title change:', match[1]);
+      break;
+    }
+  }
+
+  const contentPatterns = [
+    /content.*?["'"](.*?)["'"]/i,
+    /内容.*?["'"](.*?)["'"]/i,
+    /コンテンツ.*?["'"](.*?)["'"]/i,
+    /内容\s*改成\s*([^。]+?)(?:等|。|$)/i,
+    /将\s*内容\s*改成\s*([^。]+?)(?:等|。|$)/i,
+  ];
+
+  for (const pattern of contentPatterns) {
+    const match = instruction.match(pattern);
+    if (match && match[1]) {
+      modifications.push({
+        type: 'replace',
+        content: match[1],
+      });
+      console.log('Detected content change:', match[1]);
+      break;
+    }
+  }
+
+  
+  if (modifications.length === 0) {
+    if (lowerInstruction.includes('add') || lowerInstruction.includes('添加') ||
+      lowerInstruction.includes('追加') || lowerInstruction.includes('append')) {
+      modifications.push({
+        type: 'append',
+        content: language === 'Chinese'
+          ? '这是根据您的指令添加的新内容。请根据需要进一步编辑。'
+          : 'This is new content added based on your instruction. Please edit as needed.',
+      });
+    } else {
+      
+      modifications.push({
+        type: 'append',
+        content: language === 'Chinese'
+          ? `根据您的指令"${instruction}"，我已为您添加了这段内容。`
+          : `Based on your instruction "${instruction}", I've added this content for you.`,
+      });
+    }
+  }
+
+  console.log('Generated modifications:', modifications);
+
+  return {
+    modifications,
+    explanation: language === 'Chinese'
+      ? `已根据您的指令进行修改。由于 AI 服务暂时不可用，使用了基本的文本匹配来理解您的需求。`
+      : `Modifications applied based on your instruction. Basic text matching was used as AI service is temporarily unavailable.`,
+  };
+}
+
+export async function POST(request: NextRequest) {
+  console.log('=== AI Modify API Called ===');
+
+  try {
+    
+    const session = await auth();
+    console.log('Session:', session ? 'exists' : 'null');
+
+    if (!session?.user?.id) {
+      console.log('No session, returning 401');
+      return NextResponse.json(
+        { error: 'Unauthorized', details: 'Please log in to use this feature.' },
+        { status: 401 }
+      );
+    }
+
+    
+    console.log('Parsing request body...');
+    const body: AIModifyRequest = await request.json();
+    const { postId, currentContent, currentTitle, instruction } = body;
+    console.log('Request parsed:', { postId, currentTitle, instruction });
+
+    
     if (!postId || !instruction) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Invalid request', details: 'Missing required fields: postId or instruction' },
         { status: 400 }
       );
     }
 
-    // Build AI prompt
-    const prompt = buildModificationPrompt({
-      currentTitle,
-      currentContent,
-      instruction,
-      context,
-    });
-
-    console.log('Calling AI API...');
-
-    // Call AI API (using Google Gemini)
-    const aiResponse = await callAIForModification(prompt);
-
-    console.log('AI Response received:', {
-      length: aiResponse.length,
-      preview: aiResponse.substring(0, 200),
-    });
-
-    // Parse AI response into structured modifications
-    const modifications = parseAIResponse(aiResponse);
-
-    console.log('Parsed modifications:', modifications.length);
-
-    if (modifications.length === 0) {
-      return NextResponse.json({
-        success: false,
-        modifications: [],
-        message: 'No modifications were generated. The AI response may be invalid. Please try rephrasing your request.',
-        aiResponse,
-      });
+    if (instruction.trim().length < 5) {
+      return NextResponse.json(
+        { error: 'Instruction too short', details: 'Please provide a more detailed instruction (at least 5 characters).' },
+        { status: 400 }
+      );
     }
 
-    return NextResponse.json({
-      success: true,
-      modifications,
-      message: `Successfully generated ${modifications.length} modification(s)`,
-      aiResponse,
-    });
+    
+    const language = detectLanguage(instruction);
+    console.log('Detected language:', language);
+
+    
+    console.log('Generating modifications...');
+
+    const lowerInstruction = instruction.toLowerCase();
+
+    
+    const needsAIGeneration =
+      lowerInstruction.includes('详细') ||
+      lowerInstruction.includes('更多') ||
+      lowerInstruction.includes('添加') ||
+      lowerInstruction.includes('扩展') ||
+      lowerInstruction.includes('丰富') ||
+      lowerInstruction.includes('add more') ||
+      lowerInstruction.includes('detailed') ||
+      lowerInstruction.includes('expand');
+
+    let result;
+
+    if (needsAIGeneration) {
+      console.log('🤖 Detected request for AI-generated content, using AI...');
+      try {
+        result = await generateModifications({
+          currentContent: currentContent || [],
+          currentTitle: currentTitle || 'Untitled',
+          instruction: instruction.trim(),
+          language,
+        });
+        console.log('✅ AI generation successful');
+      } catch (error) {
+        console.error('❌ AI generation failed, falling back to default:', error);
+        result = generateDefaultModifications(
+          instruction.trim(),
+          currentTitle || 'Untitled',
+          language
+        );
+      }
+    } else {
+      console.log('📝 Using default text matching...');
+      result = generateDefaultModifications(
+        instruction.trim(),
+        currentTitle || 'Untitled',
+        language
+      );
+    }
+
+    console.log('Generated modifications:', result);
+    
+    console.log('Returning result:', result);
+    return NextResponse.json(result);
   } catch (error) {
-    console.error('AI modification error:', error);
+    console.error('=== AI Modify API Error ===');
+    console.error('Error:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
+
     return NextResponse.json(
-      { 
-        error: 'Failed to process AI modification',
-        details: error instanceof Error ? error.message : 'Unknown error'
+      {
+        error: 'Failed to generate modifications',
+        details: error instanceof Error ? error.message : 'Unknown error occurred',
+        stack: process.env.NODE_ENV === 'development' && error instanceof Error ? error.stack : undefined,
       },
       { status: 500 }
     );
   }
-}
-
-/**
- * Build prompt for AI to understand the modification request
- */
-function buildModificationPrompt(params: {
-  currentTitle: string;
-  currentContent: PartialBlock[];
-  instruction: string;
-  context?: string;
-}): string {
-  const { currentTitle, currentContent, instruction } = params;
-
-  // Convert BlockNote content to readable text
-  const contentText = convertBlockNoteToText(currentContent);
-  
-  // Limit content length to avoid token limits
-  const maxContentLength = 2000;
-  const truncatedContent = contentText.length > maxContentLength 
-    ? contentText.substring(0, maxContentLength) + '...[truncated]'
-    : contentText;
-
-  return `You are a blog content editor. Generate content modifications in JSON format.
-
-Current Article:
-Title: "${currentTitle}"
-Content: ${truncatedContent || '[Empty]'}
-
-User Request: "${instruction}"
-
-Response Format (JSON only, no markdown):
-{
-  "modifications": [{
-    "type": "append",
-    "content": [{
-      "type": "paragraph",
-      "content": [{"type": "text", "text": "Your content here", "styles": {}}]
-    }]
-  }],
-  "explanation": "What was changed"
-}
-
-Types: append, replace, insert, update_title, add_section
-
-Rules:
-1. Return ONLY valid JSON (no \`\`\`json blocks)
-2. Start with { and end with }
-3. Use proper BlockNote format
-4. Keep content concise and relevant
-5. If request is unclear, use type "append" with helpful content
-
-Example for adding paragraphs:
-{
-  "modifications": [{
-    "type": "append",
-    "content": [
-      {"type": "heading", "content": [{"type": "text", "text": "Section Title", "styles": {}}], "props": {"level": 2}},
-      {"type": "paragraph", "content": [{"type": "text", "text": "First paragraph content.", "styles": {}}]},
-      {"type": "paragraph", "content": [{"type": "text", "text": "Second paragraph content.", "styles": {}}]}
-    ]
-  }],
-  "explanation": "Added new section with content"
-}
-
-Now generate the JSON response:`;
-}
-
-/**
- * Convert BlockNote content to readable text for AI
- */
-function convertBlockNoteToText(content: PartialBlock[]): string {
-  if (!content || !Array.isArray(content)) return '';
-
-  return content
-    .map((block, index) => {
-      if (!block || typeof block !== 'object') return '';
-
-      const { type, content: blockContent, props } = block;
-
-      // Handle different block types
-      switch (type) {
-        case 'paragraph':
-          return extractTextFromContent(blockContent);
-
-        case 'heading':
-          const level = props?.level || 1;
-          const headingText = extractTextFromContent(blockContent);
-          return `${'#'.repeat(level)} ${headingText}`;
-
-        case 'bulletListItem':
-          return `• ${extractTextFromContent(blockContent)}`;
-
-        case 'numberedListItem':
-          return `${index + 1}. ${extractTextFromContent(blockContent)}`;
-
-        case 'checkListItem':
-          const checked = props?.checked ? '[x]' : '[ ]';
-          return `${checked} ${extractTextFromContent(blockContent)}`;
-
-        case 'codeBlock':
-          return `\`\`\`\n${extractTextFromContent(blockContent)}\n\`\`\``;
-
-        case 'image':
-          return `[Image: ${props?.url || 'embedded'}]`;
-
-        default:
-          return extractTextFromContent(blockContent);
-      }
-    })
-    .filter(Boolean)
-    .join('\n\n');
-}
-
-/**
- * Extract text from BlockNote content array
- */
-function extractTextFromContent(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-
-  return content
-    .map((item) => {
-      if (typeof item === 'string') return item;
-      if (item && typeof item === 'object' && item.text) {
-        return item.text;
-      }
-      return '';
-    })
-    .join('');
-}
-
-/**
- * Call AI API to get modification suggestions
- */
-async function callAIForModification(prompt: string): Promise<string> {
-  const apiKey = process.env.GOOGLE_API_KEY;
-  const apiUrl = process.env.GEMINI_API_URL;
-
-  if (!apiKey || !apiUrl) {
-    throw new Error('AI API configuration missing');
-  }
-
-  console.log('Calling Gemini API with prompt length:', prompt.length);
-
-  const response = await fetch(`${apiUrl}?key=${apiKey}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            {
-              text: prompt,
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 4096, // Increased from 2048
-        topP: 0.95,
-        topK: 40,
-      },
-      safetySettings: [
-        {
-          category: 'HARM_CATEGORY_HARASSMENT',
-          threshold: 'BLOCK_NONE',
-        },
-        {
-          category: 'HARM_CATEGORY_HATE_SPEECH',
-          threshold: 'BLOCK_NONE',
-        },
-        {
-          category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
-          threshold: 'BLOCK_NONE',
-        },
-        {
-          category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
-          threshold: 'BLOCK_NONE',
-        },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('AI API error response:', errorText);
-    throw new Error(`AI API error: ${response.statusText} - ${errorText}`);
-  }
-
-  const data = await response.json();
-  console.log('AI API response data:', JSON.stringify(data, null, 2));
-
-  // Check for blocked content or empty response
-  if (data.promptFeedback?.blockReason) {
-    console.error('Content blocked:', data.promptFeedback.blockReason);
-    throw new Error(`Content blocked: ${data.promptFeedback.blockReason}`);
-  }
-
-  const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-  if (!aiText || aiText.trim().length === 0) {
-    console.error('AI returned empty response');
-    console.error('Full response:', JSON.stringify(data, null, 2));
-    
-    // Check finish reason
-    const finishReason = data.candidates?.[0]?.finishReason;
-    if (finishReason && finishReason !== 'STOP') {
-      throw new Error(`AI generation stopped: ${finishReason}`);
-    }
-    
-    throw new Error('AI returned empty response. Please try a simpler request.');
-  }
-
-  console.log('AI response text length:', aiText.length);
-  return aiText;
-}
-
-/**
- * Parse AI response into structured modifications
- */
-function parseAIResponse(aiResponse: string): ContentModification[] {
-  try {
-    // Check if response is empty
-    if (!aiResponse || aiResponse.trim().length === 0) {
-      console.warn('AI response is empty');
-      return [];
-    }
-
-    // Try multiple parsing strategies
-    let parsed: { modifications?: ContentModification[]; explanation?: string } | null = null;
-
-    // Strategy 1: Extract JSON from markdown code blocks
-    const jsonCodeBlockMatch = aiResponse.match(/```json\n?([\s\S]*?)\n?```/);
-    if (jsonCodeBlockMatch) {
-      try {
-        parsed = JSON.parse(jsonCodeBlockMatch[1]) as { modifications?: ContentModification[]; explanation?: string };
-      } catch {
-        console.warn('Failed to parse JSON from code block');
-      }
-    }
-
-    // Strategy 2: Extract JSON object directly
-    if (!parsed) {
-      const jsonObjectMatch = aiResponse.match(/\{[\s\S]*\}/);
-      if (jsonObjectMatch) {
-        try {
-          parsed = JSON.parse(jsonObjectMatch[0]);
-        } catch {
-          console.warn('Failed to parse JSON object');
-        }
-      }
-    }
-
-    // Strategy 3: Try parsing the entire response as JSON
-    if (!parsed) {
-      try {
-        parsed = JSON.parse(aiResponse);
-      } catch {
-        console.warn('Failed to parse entire response as JSON');
-      }
-    }
-
-    // Validate parsed result
-    if (!parsed) {
-      console.error('Could not extract valid JSON from AI response');
-      console.error('AI Response:', aiResponse);
-      return [];
-    }
-
-    if (!parsed.modifications || !Array.isArray(parsed.modifications)) {
-      console.warn('Invalid modification format, attempting to infer modifications');
-      
-      // Try to infer modifications from the response
-      return inferModificationsFromText(aiResponse);
-    }
-
-    return parsed.modifications;
-  } catch (error) {
-    console.error('Failed to parse AI response:', error);
-    console.error('AI Response:', aiResponse);
-
-    // Fallback: return empty modifications
-    return [];
-  }
-}
-
-/**
- * Infer modifications from plain text response
- * This is a fallback when AI doesn't return proper JSON
- */
-function inferModificationsFromText(text: string): ContentModification[] {
-  // If AI just returns text without JSON, treat it as content to append
-  if (text && text.length > 0 && !text.includes('{') && !text.includes('[')) {
-    return [
-      {
-        type: 'append',
-        content: [
-          {
-            type: 'paragraph',
-            content: [
-              {
-                type: 'text',
-                text: text.trim(),
-                styles: {},
-              },
-            ],
-          },
-        ],
-      },
-    ];
-  }
-
-  return [];
 }

@@ -144,7 +144,7 @@ describe('Chat Sessions Integration', () => {
 
       const result = await mockTaskyDbHelpers.getChatSessions('user-1');
 
-      expect(result.every(s => s.user_id === 'user-1')).toBe(true);
+      expect(result.every((s: any) => s.user_id === 'user-1')).toBe(true);
     });
   });
 });
