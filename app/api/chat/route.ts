@@ -311,10 +311,14 @@ export async function POST(req: Request) {
 
           console.log('Stream started successfully');
 
-          // Process the text stream
-          for await (const textPart of result.textStream) {
-            const data = `0:"${textPart.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"\n`;
-            controller.enqueue(encoder.encode(data));
+          // Process the full stream to handle all chunk types
+          for await (const chunk of result.fullStream) {
+            // Only process text-delta chunks
+            if (chunk.type === 'text-delta') {
+              const data = `0:"${chunk.textDelta.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"\n`;
+              controller.enqueue(encoder.encode(data));
+            }
+            // Ignore other chunk types like 'stream-start', 'finish', etc.
           }
 
           console.log('Stream completed');
