@@ -1,16 +1,19 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth-config";
 import { taskyDb } from "@/lib/supabase/tasky-db-client";
+import { getUserIdFromRequest } from "@/lib/admin-auth";
 
 const MODEL_CONFIGS = {
     google: [
+        // 2.5 系列优先，Flash > Pro > Flash Live > Flash Lite（Flash 速度快，成本低，适合日常使用）
         { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Latest Gemini model with fast responses' },
+        { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Advanced reasoning and coding' },
         { id: 'gemini-2.5-flash-live', name: 'Gemini 2.5 Flash Live', description: 'Real-time conversation model' },
+        { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', description: 'Lightweight version of 2.5 Flash' },
+        // 2.0 系列
+        { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Fast and efficient model' },
         { id: 'gemini-2.0-flash-live', name: 'Gemini 2.0 Flash Live', description: 'Real-time conversation model' },
         { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', description: 'Lightweight fast model' },
-        { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Fast and efficient model' },
-        { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', description: 'Lightweight version of 2.5 Flash' },
-        { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Advanced reasoning and coding' },
     ],
     openai: [
         { id: 'gpt-4o', name: 'GPT-4o', description: 'Most capable GPT-4 model' },
@@ -38,9 +41,11 @@ const MODEL_CONFIGS = {
     ],
 };
 
-export async function GET() {
+export async function GET(req: NextRequest) {
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = getUserIdFromRequest(session?.user?.id, req);
+    
+    if (!userId) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -48,7 +53,7 @@ export async function GET() {
         const { data: keys, error } = await taskyDb
             .from('user_api_keys')
             .select('provider')
-            .eq('user_id', session.user.id);
+            .eq('user_id', userId);
 
         if (error) throw error;
 
@@ -59,7 +64,7 @@ export async function GET() {
             const { data: testResults, error: testError } = await taskyDb
                 .from('model_test_results')
                 .select('model_id, success, tested_at')
-                .eq('user_id', session.user.id);
+                .eq('user_id', userId);
 
             if (testError) {
                 console.warn('Failed to fetch test results:', testError);

@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth-config";
 import { taskyDb } from "@/lib/supabase/tasky-db-client";
 import { AIProvider } from "@/lib/ai/providers";
+import { getUserIdFromRequest } from "@/lib/admin-auth";
 
 const MODEL_PROVIDER_MAP: Record<string, AIProvider> = {
     'gemini-2.5-flash': 'google',
@@ -31,9 +32,11 @@ const MODEL_PROVIDER_MAP: Record<string, AIProvider> = {
     'claude-sonnet-4': 'kilo',
 };
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = getUserIdFromRequest(session?.user?.id, req);
+    
+    if (!userId) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -64,7 +67,7 @@ export async function POST(req: Request) {
         const { data: keyData } = await taskyDb
             .from('user_api_keys')
             .select('provider')
-            .eq('user_id', session.user.id)
+            .eq('user_id', userId)
             .eq('provider', provider)
             .single();
 
@@ -145,7 +148,7 @@ export async function POST(req: Request) {
             const { data: apiKeyRecord } = await taskyDb
                 .from('user_api_keys')
                 .select('key_encrypted, iv, auth_tag')
-                .eq('user_id', session.user.id)
+                .eq('user_id', userId)
                 .eq('provider', 'google')
                 .single();
 
@@ -203,7 +206,7 @@ export async function POST(req: Request) {
 
             const { getModel } = await import('@/lib/ai/models');
             const { generateText } = await import('ai');
-            const model = await getModel(session.user.id, provider, modelId);
+            const model = await getModel(userId, provider, modelId);
 
             console.log(`[test-model] Model instance created successfully`);
 
@@ -234,7 +237,7 @@ export async function POST(req: Request) {
                 await taskyDb
                     .from('model_test_results')
                     .upsert({
-                        user_id: session.user.id,
+                        user_id: userId,
                         model_id: modelId,
                         success: false,
                         tested_at: new Date().toISOString(),
@@ -257,7 +260,7 @@ export async function POST(req: Request) {
             await taskyDb
                 .from('model_test_results')
                 .upsert({
-                    user_id: session.user.id,
+                    user_id: userId,
                     model_id: modelId,
                     success: true,
                     tested_at: new Date().toISOString(),
@@ -285,7 +288,7 @@ export async function POST(req: Request) {
                 await taskyDb
                     .from('model_test_results')
                     .upsert({
-                        user_id: session.user.id,
+                        user_id: userId,
                         model_id: modelId,
                         success: false,
                         tested_at: new Date().toISOString(),

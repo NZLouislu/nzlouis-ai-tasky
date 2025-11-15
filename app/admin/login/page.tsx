@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Lock, User } from 'lucide-react';
 
 export default function AdminLoginPage() {
@@ -9,7 +8,6 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,22 +15,31 @@ export default function AdminLoginPage() {
     setError('');
 
     try {
+      console.log('Attempting login with:', { username });
+      
       const response = await fetch('/api/admin/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ username, password }),
+        credentials: 'include',
       });
 
       const data = await response.json();
+      console.log('Login response:', { status: response.status, data });
 
       if (response.ok) {
-        router.push('/admin');
+        console.log('Login successful, cookie set by server (httpOnly)');
+        await new Promise(resolve => setTimeout(resolve, 300));
+        console.log('Redirecting to /admin');
+        window.location.href = '/admin';
       } else {
+        console.error('Login failed:', data.error);
         setError(data.error || 'Login failed');
       }
-    } catch {
+    } catch (error) {
+      console.error('Login error:', error);
       setError('Network error. Please try again.');
     } finally {
       setLoading(false);

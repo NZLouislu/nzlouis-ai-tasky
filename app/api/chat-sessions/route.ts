@@ -1,19 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { getUserIdFromRequest } from '@/lib/admin-auth';
 
 // GET /api/chat-sessions - Get all sessions for user
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = getUserIdFromRequest(session?.user?.id, req);
+    
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { data: sessions, error } = await taskyDb
       .from('chat_sessions')
       .select('*, messages:chat_messages(count)')
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .order('updated_at', { ascending: false });
 
     if (error) throw error;
@@ -32,7 +35,9 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = getUserIdFromRequest(session?.user?.id, req);
+    
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -43,7 +48,7 @@ export async function POST(req: NextRequest) {
       .from('chat_sessions')
       .insert({
         id: crypto.randomUUID(),
-        user_id: session.user.id,
+        user_id: userId,
         title: title || 'New Chat',
         provider: provider || 'google',
         model: model || 'gemini-2.5-flash',

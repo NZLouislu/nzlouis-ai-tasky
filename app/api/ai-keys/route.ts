@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth-config";
 import { taskyDb } from "@/lib/supabase/tasky-db-client";
 import { encryptAPIKey } from "@/lib/encryption";
+import { getUserIdFromRequest } from "@/lib/admin-auth";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) {
+  const userId = getUserIdFromRequest(session?.user?.id, req);
+  
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -33,7 +36,7 @@ export async function POST(req: NextRequest) {
       .from('user_api_keys')
       .upsert({
         id: crypto.randomUUID(),
-        user_id: session.user.id,
+        user_id: userId,
         provider,
         key_encrypted: encrypted,
         iv,
@@ -60,9 +63,11 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) {
+  const userId = getUserIdFromRequest(session?.user?.id, req);
+  
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -70,7 +75,7 @@ export async function GET() {
     const { data: keys, error } = await taskyDb
       .from('user_api_keys')
       .select('id, provider, created_at, updated_at')
-      .eq('user_id', session.user.id);
+      .eq('user_id', userId);
 
     if (error) throw error;
 
@@ -86,7 +91,9 @@ export async function GET() {
 
 export async function DELETE(req: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) {
+  const userId = getUserIdFromRequest(session?.user?.id, req);
+  
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -104,7 +111,7 @@ export async function DELETE(req: NextRequest) {
     const { error } = await taskyDb
       .from('user_api_keys')
       .delete()
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .eq('provider', provider);
 
     if (error) throw error;

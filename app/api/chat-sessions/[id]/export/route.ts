@@ -6,6 +6,7 @@ import {
   generateJiraMarkdown,
   generateTrelloMarkdown,
 } from '@/lib/markdown-generator';
+import { getUserIdFromRequest } from '@/lib/admin-auth';
 
 // GET /api/chat-sessions/[id]/export?format=markdown|jira|trello
 export async function GET(
@@ -15,7 +16,9 @@ export async function GET(
   const { id } = await params;
   try {
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = getUserIdFromRequest(session?.user?.id, req);
+    
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -24,7 +27,7 @@ export async function GET(
       .from('chat_sessions')
       .select('*, messages:chat_messages(*)')
       .eq('id', id)
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .single();
 
     if (error || !chatSession) {

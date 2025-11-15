@@ -22,6 +22,13 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
   
+  // Check for admin session first (allows admin to access all pages)
+  const adminToken = request.cookies.get('admin-session');
+  if (adminToken) {
+    return NextResponse.next();
+  }
+  
+  // Otherwise check for NextAuth session
   const sessionToken = request.cookies.get('authjs.session-token') || 
                       request.cookies.get('__Secure-authjs.session-token');
   
@@ -34,6 +41,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|auth).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|auth|images).*)",
   ],
 };

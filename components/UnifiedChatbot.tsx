@@ -5,7 +5,7 @@ import { useChat } from "@/lib/hooks/use-chat";
 import { v4 as uuidv4 } from "uuid";
 import { useAISettings } from "@/lib/useAISettings";
 import Image from "next/image";
-import { X, ArrowUp, Paperclip } from "lucide-react";
+import ChatInput from "./ChatInput";
 
 interface Message {
   id: string;
@@ -19,6 +19,15 @@ interface PageModification {
   target?: string;
   content?: string;
   title?: string;
+}
+
+interface AIModel {
+  id: string;
+  name: string;
+  provider: string;
+  description: string;
+  tested?: boolean;
+  working?: boolean;
 }
 
 interface UnifiedChatbotProps {
@@ -39,84 +48,130 @@ export default function UnifiedChatbot({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [availableModels, setAvailableModels] = useState<AIModel[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>('');
+  const [selectedProvider, setSelectedProvider] = useState<string>('');
+  const [isMobile, setIsMobile] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const { getCurrentModel, getApiKey, settings } = useAISettings();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const adjustTextareaHeight = useCallback(() => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      textarea.style.height = "auto";
-      const scrollHeight = textarea.scrollHeight;
-      const minHeight = 44;
-      const maxHeight = 120;
-      const newHeight = Math.max(minHeight, Math.min(scrollHeight, maxHeight));
-      textarea.style.height = `${newHeight}px`;
-    }
-  }, []);
-
-  const handleImageUpload = useCallback((file: File) => {
-    if (file && file.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setPreviewImage(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  }, []);
-
+  // Load available models
   useEffect(() => {
-    const textarea = textareaRef.current;
-    const handlePaste = (e: ClipboardEvent) => {
-      const items = Array.from(e.clipboardData?.items || []);
+    const loadAvailableModels = async () => {
+      try {
+        const res = await fetch('/api/ai-models');
+        const data = await res.json();
 
-      for (const item of items) {
-        if (item.type.startsWith("image/")) {
+        if (data.models && data.models.length > 0) {
+          const sortedModels = data.models.sort((a: AIModel, b: AIModel) => {
+            if (a.provider === 'google' && b.provider !== 'google') return -1;
+            if (a.provider !== 'google' && b.provider === 'google') return 1;
+            return 0;
+          });
+
+          setAvailableModels(sortedModels);
+          
+          // Set default provider and model
+          if (sortedModels.length > 0) {
+            const firstProvider = sortedModels[0].provider;
+            setSelectedProvider(firstProvider);
+            setSelectedModel(sortedModels[0].id);
+          }
+        } else {
+          setAvailableModels([]);
+          setSelectedModel('');
+          setSelectedProvider('');
+        }
+      } catch (error) {
+        console.error('Failed to load AI models:', error);
+        setAvailableModels([]);
+      }
+    };
+
+    loadAvailableModels();
+  }, []);
+
+  // Detect mobile
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const handleImageUpload = useCallback(async (file: File) => {
+    if (file && file.type.startsWith("image/")) {
+      try {
+        setIsLoading(true);
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('entityType', 'chat_message');
+        formData.append('entityId', 'temp');
+
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!res.ok) {
+          throw new Error('Upload failed');
+        }
+
+        const data = await res.json();
+        setPreviewImage(data.publicUrl);
+      } catch (error) {
+        console.error('Image upload failed:', error);
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setPreviewImage(e.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  }, []);
+
+  // Handle paste for image upload
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+
+        if (item.type.indexOf('image') !== -1) {
           e.preventDefault();
-          e.stopPropagation(); // Prevent event propagation
           const file = item.getAsFile();
           if (file) {
+            console.log('Screenshot pasted:', file.type, file.size);
             handleImageUpload(file);
-            console.log(
-              "Chatbot handlePaste: Image pasted and handled",
-              file.name || "pasted image"
-            );
           }
-          return;
-        }
-      }
-
-      if (e.clipboardData?.files.length) {
-        const file = e.clipboardData.files[0];
-        if (file.type.startsWith("image/")) {
-          e.preventDefault();
-          e.stopPropagation(); // Prevent event bubbling
-          handleImageUpload(file);
-          console.log(
-            "Chatbot handlePaste: Image pasted and handled",
-            file.name || "pasted image"
-          );
+          break;
         }
       }
     };
-    textarea?.addEventListener("paste", handlePaste as EventListener);
+
+    document.addEventListener('paste', handlePaste);
+
     return () => {
-      textarea?.removeEventListener("paste", handlePaste as EventListener);
+      document.removeEventListener('paste', handlePaste);
     };
   }, [handleImageUpload]);
 
-  useEffect(() => {
-    adjustTextareaHeight();
-  }, [input, adjustTextareaHeight]);
-
   const handleSubmit = useCallback(
-    async (text: string) => {
-      if (!text.trim()) return;
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!input.trim() && !previewImage) return;
+      if (!selectedModel) return;
+
+      const text = input;
 
       // Check if this is a Blog modification request
       if (mode === "workspace" && onPageModification) {
@@ -188,67 +243,60 @@ export default function UnifiedChatbot({
       };
 
       appendMessage(userMessage);
+      const currentInput = input;
+      const currentImage = previewImage;
       setInput("");
       setPreviewImage(null);
       setIsLoading(true);
 
       try {
-        const currentModel = getCurrentModel();
-        if (!currentModel) {
-          throw new Error("Please select a model in settings");
-        }
+        const chatMessages = messages.map((msg) => ({
+          role: msg.role,
+          content: typeof msg.content === 'string' ? msg.content : msg.content.text,
+          ...(typeof msg.content !== 'string' && msg.content.image && { image: msg.content.image }),
+        }));
 
-        const apiKey = getApiKey(currentModel.provider);
-        if (currentModel.provider !== "google" && !apiKey) {
-          throw new Error(
-            `Please set your ${currentModel.provider} API key in settings`
-          );
-        }
+        chatMessages.push({
+          role: 'user',
+          content: currentInput,
+          ...(currentImage && { image: currentImage }),
+        });
 
-        const chatMessages = [
-          { role: "system" as const, content: settings.systemPrompt },
-          {
-            role: "user" as const,
-            content: text,
-          },
-        ];
+        const hasImages = chatMessages.some(m => m.image);
+        const apiEndpoint = hasImages ? '/api/chat-vision' : '/api/chat';
 
-        const response = await fetch("/api/chat", {
-          method: "POST",
+        console.log('Using API:', apiEndpoint, 'Has images:', hasImages, 'Model:', selectedModel);
+
+        const response = await fetch(apiEndpoint, {
+          method: 'POST',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             messages: chatMessages,
-            provider: currentModel.provider,
-            model: currentModel.id,
-            temperature: settings.temperature,
-            maxTokens: settings.maxTokens,
+            modelId: selectedModel,
           }),
         });
 
         if (!response.ok) {
-          throw new Error("Failed to get response from AI");
+          throw new Error('Failed to get response from AI');
         }
 
         const reader = response.body?.getReader();
         if (!reader) {
-          throw new Error("No reader available");
+          throw new Error('No reader available');
         }
 
         const decoder = new TextDecoder();
-        let buffer = "";
-        let isFirstChunk = true;
-
-        const assistantMessageId = uuidv4();
-        let assistantMessage: Message = {
-          id: assistantMessageId,
-          content: "",
-          role: "assistant",
+        let buffer = '';
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          content: '',
+          role: 'assistant',
           timestamp: new Date().toISOString(),
         };
 
-        let currentDisplayText = "";
+        appendMessage(assistantMessage);
 
         while (true) {
           const { done, value } = await reader.read();
@@ -258,85 +306,37 @@ export default function UnifiedChatbot({
           }
 
           buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
+          const lines = buffer.split('\n');
 
           for (let i = 0; i < lines.length - 1; i++) {
             const line = lines[i].trim();
-            if (line.startsWith("0:")) {
+            if (line.startsWith('0:')) {
               try {
-                // Parse format: 0:"text content"
                 const jsonStr = line.substring(2);
                 const text = JSON.parse(jsonStr);
-
-                if (isFirstChunk) {
-                  setIsLoading(false);
-                  isFirstChunk = false;
-                  appendMessage(assistantMessage);
-                }
-
-                currentDisplayText += text;
-                assistantMessage = {
-                  ...assistantMessage,
-                  content: currentDisplayText,
-                };
-                appendMessage(assistantMessage);
+                assistantMessage.content += text;
+                appendMessage({ ...assistantMessage });
               } catch (error) {
-                console.log("Parsing error:", error, "Line:", line);
+                console.log('Parsing error:', error);
               }
             }
           }
 
           buffer = lines[lines.length - 1];
         }
-
-        if (!currentDisplayText) {
-          assistantMessage = {
-            ...assistantMessage,
-            content: "No response received",
-          };
-          appendMessage(assistantMessage);
-          setIsLoading(false);
-        }
       } catch (error) {
-        console.error("Error:", error);
+        console.error('Error:', error);
         setIsLoading(false);
-
-        const assistantMessage: Message = {
-          id: uuidv4(),
-          content: "Sorry, something went wrong. Please try again.",
-          role: "assistant",
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          content: 'Sorry, something went wrong. Please try again.',
+          role: 'assistant',
           timestamp: new Date().toISOString(),
         };
-        appendMessage(assistantMessage);
+        appendMessage(errorMessage);
       }
     },
-    [appendMessage, getCurrentModel, getApiKey, settings, previewImage, mode, onPageModification]
-  );
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "Enter") {
-        if (e.ctrlKey) {
-          e.preventDefault();
-          const textarea = e.currentTarget;
-          const start = textarea.selectionStart;
-          const end = textarea.selectionEnd;
-          setInput(
-            (prev) => prev.substring(0, start) + "\n" + prev.substring(end)
-          );
-          setTimeout(() => {
-            textarea.setSelectionRange(start + 1, start + 1);
-            textarea.focus();
-          }, 0);
-        } else {
-          e.preventDefault();
-          if (input.trim()) {
-            handleSubmit(input);
-          }
-        }
-      }
-    },
-    [input, handleSubmit]
+    [input, previewImage, selectedModel, messages, appendMessage, mode, onPageModification]
   );
 
   const renderMessageContent = useCallback(
@@ -470,161 +470,41 @@ export default function UnifiedChatbot({
       </div>
       {mode === "standalone" ? (
         <div
-          className={`fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10 transition-all duration-200 ${sidebarCollapsed ? "ml-0 md:ml-12" : "ml-0 md:ml-64"
+          className={`fixed bottom-0 left-0 right-0 z-10 transition-all duration-200 ${sidebarCollapsed ? "ml-0 md:ml-12" : "ml-0 md:ml-64"
             }`}
         >
-          <div className="p-4">
-            <div className="w-full max-w-[900px] mx-auto">
-              {previewImage && (
-                <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-700">
-                      Image Preview
-                    </span>
-                    <button
-                      onClick={() => setPreviewImage(null)}
-                      className="text-gray-500 hover:text-gray-700 p-1 rounded hover:bg-gray-200"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                  <div className="relative max-w-xs">
-                    <Image
-                      src={previewImage}
-                      alt="Preview"
-                      width={200}
-                      height={128}
-                      className="max-h-32 rounded-lg"
-                    />
-                  </div>
-                </div>
-              )}
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (input.trim()) {
-                    handleSubmit(input);
-                  }
-                }}
-                className="relative"
-              >
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700 z-10"
-                  >
-                    <Paperclip size={18} />
-                  </button>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={(e) => {
-                      if (e.target.files?.length) {
-                        handleImageUpload(e.target.files[0]);
-                      }
-                    }}
-                    accept="image/*"
-                    className="hidden"
-                  />
-                  <textarea
-                    ref={textareaRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Type your message..."
-                    className="w-full resize-none border border-gray-300 rounded-lg pl-12 pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent max-h-32"
-                    rows={3}
-                    style={{ minHeight: "80px" }}
-                  />
-                  <button
-                    type="submit"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-blue-500 disabled:opacity-50 z-10"
-                    disabled={!input.trim() && !previewImage}
-                  >
-                    <ArrowUp size={18} />
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
+          <ChatInput
+            input={input}
+            setInput={setInput}
+            onSubmit={handleSubmit}
+            isLoading={isLoading}
+            previewImage={previewImage}
+            setPreviewImage={setPreviewImage}
+            onImageUpload={handleImageUpload}
+            availableModels={availableModels}
+            selectedModel={selectedModel}
+            setSelectedModel={setSelectedModel}
+            selectedProvider={selectedProvider}
+            setSelectedProvider={setSelectedProvider}
+            isMobile={isMobile}
+          />
         </div>
       ) : (
-        <div className="flex-shrink-0 bg-white border-t border-gray-200 p-4">
-          <div className="w-full">
-            {previewImage && (
-              <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-700">
-                    Image Preview
-                  </span>
-                  <button
-                    onClick={() => setPreviewImage(null)}
-                    className="text-gray-500 hover:text-gray-700 p-1 rounded hover:bg-gray-200"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-                <div className="relative max-w-xs">
-                  <Image
-                    src={previewImage}
-                    alt="Preview"
-                    width={200}
-                    height={128}
-                    className="max-h-32 rounded-lg"
-                  />
-                </div>
-              </div>
-            )}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (input.trim()) {
-                  handleSubmit(input);
-                }
-              }}
-              className="relative"
-            >
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700 z-10"
-                >
-                  <Paperclip size={18} />
-                </button>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={(e) => {
-                    if (e.target.files?.length) {
-                      handleImageUpload(e.target.files[0]);
-                    }
-                  }}
-                  accept="image/*"
-                  className="hidden"
-                />
-                <textarea
-                  ref={textareaRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Type your message..."
-                  className="w-full resize-none border border-gray-300 rounded-lg pl-12 pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent max-h-32 overflow-y-auto"
-                  rows={3}
-                  style={{ minHeight: "80px" }}
-                />
-                <button
-                  type="submit"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-blue-500 disabled:opacity-50 z-10"
-                  disabled={!input.trim() && !previewImage}
-                >
-                  <ArrowUp size={18} />
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <ChatInput
+          input={input}
+          setInput={setInput}
+          onSubmit={handleSubmit}
+          isLoading={isLoading}
+          previewImage={previewImage}
+          setPreviewImage={setPreviewImage}
+          onImageUpload={handleImageUpload}
+          availableModels={availableModels}
+          selectedModel={selectedModel}
+          setSelectedModel={setSelectedModel}
+          selectedProvider={selectedProvider}
+          setSelectedProvider={setSelectedProvider}
+          isMobile={isMobile}
+        />
       )}
     </div>
   );

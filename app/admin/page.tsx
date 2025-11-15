@@ -1,13 +1,46 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { LogOut, Users, MessageSquare, Settings, BarChart3 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function AdminDashboard() {
   const [loading, setLoading] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [checking, setChecking] = useState(true);
   const router = useRouter();
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        console.log('[Admin Page] Verifying authentication...');
+        const response = await fetch('/api/admin/verify', {
+          credentials: 'include'
+        });
+        
+        console.log('[Admin Page] Verify response:', response.status);
+        
+        if (!response.ok) {
+          console.log('[Admin Page] Not authenticated, redirecting to login');
+          router.replace('/admin/login');
+          return;
+        }
+
+        console.log('[Admin Page] Authenticated successfully');
+        setAuthenticated(true);
+      } catch (error) {
+        console.error('[Admin Page] Auth check failed:', error);
+        router.replace('/admin/login');
+      } finally {
+        setChecking(false);
+      }
+    };
+
+    checkAuth();
+  }, [router]);
 
   const handleLogout = async () => {
     setLoading(true);
@@ -20,6 +53,14 @@ export default function AdminDashboard() {
       setLoading(false);
     }
   };
+
+  if (checking || !authenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-gray-600">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

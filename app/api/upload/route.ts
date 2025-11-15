@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/supabase-admin";
 import { auth } from "@/lib/auth-config";
+import { getUserIdFromRequest } from "@/lib/admin-auth";
 
 export async function POST(request: NextRequest) {
   try {
     // Check authentication
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = getUserIdFromRequest(session?.user?.id, request);
+    
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -35,7 +38,7 @@ export async function POST(request: NextRequest) {
 
     // Generate unique filename
     const fileExt = file.name.split(".").pop();
-    const fileName = `${session.user.id}/${Date.now()}.${fileExt}`;
+    const fileName = `${userId}/${Date.now()}.${fileExt}`;
 
     // Convert File to ArrayBuffer then to Buffer
     const arrayBuffer = await file.arrayBuffer();

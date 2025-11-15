@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { getUserIdFromRequest } from '@/lib/admin-auth';
 
 // GET /api/chat-sessions/[id] - Get session with messages
 export async function GET(
@@ -10,7 +11,9 @@ export async function GET(
   try {
     const { id } = await params;
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = getUserIdFromRequest(session?.user?.id, req);
+    
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -18,7 +21,7 @@ export async function GET(
       .from('chat_sessions')
       .select('*, messages:chat_messages(*)')
       .eq('id', id)
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .single();
 
     if (error || !chatSession) {
@@ -43,7 +46,9 @@ export async function PATCH(
   try {
     const { id } = await params;
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = getUserIdFromRequest(session?.user?.id, req);
+    
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -57,7 +62,7 @@ export async function PATCH(
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .select();
 
     if (error || !data || data.length === 0) {
@@ -82,7 +87,9 @@ export async function DELETE(
   try {
     const { id } = await params;
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = getUserIdFromRequest(session?.user?.id, req);
+    
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -90,7 +97,7 @@ export async function DELETE(
       .from('chat_sessions')
       .delete()
       .eq('id', id)
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .select();
 
     if (error || !data || data.length === 0) {

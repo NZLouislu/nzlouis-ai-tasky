@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth-config";
 import { taskyDb } from "@/lib/supabase/tasky-db-client";
+import { getUserIdFromRequest } from "@/lib/admin-auth";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) {
+  const userId = getUserIdFromRequest(session?.user?.id, req);
+  
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -12,7 +15,7 @@ export async function GET() {
     const { data: settings, error } = await taskyDb
       .from('user_ai_settings')
       .select('*')
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .single();
 
     if (error && error.code !== 'PGRST116') throw error;
@@ -22,7 +25,7 @@ export async function GET() {
         .from('user_ai_settings')
         .insert({
           id: crypto.randomUUID(),
-          user_id: session.user.id,
+          user_id: userId,
           default_provider: 'google',
           default_model: 'gemini-2.5-flash',
           temperature: 0.8,
@@ -50,7 +53,9 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) {
+  const userId = getUserIdFromRequest(session?.user?.id, req);
+  
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -79,7 +84,7 @@ export async function POST(req: NextRequest) {
       .from('user_ai_settings')
       .upsert({
         id: crypto.randomUUID(),
-        user_id: session.user.id,
+        user_id: userId,
         default_provider: data.defaultProvider || data.default_provider || 'google',
         default_model: data.defaultModel || data.default_model || 'gemini-2.5-flash',
         temperature: data.temperature ?? 0.8,

@@ -491,14 +491,41 @@ export default function BlogPage() {
 
   // Get NextAuth session to get real user ID
   const { data: session, status: sessionStatus } = useSession();
+  const [isCheckingAdmin, setIsCheckingAdmin] = useState(true);
+
+  // Check for admin session first
+  useEffect(() => {
+    const checkAdminSession = async () => {
+      try {
+        const response = await fetch('/api/admin/verify', {
+          credentials: 'include'
+        });
+        
+        if (response.ok) {
+          console.log("✅ Admin session detected, using admin-user-id");
+          setUserId('admin-user-id');
+          setIsCheckingAdmin(false);
+          return;
+        }
+      } catch (error) {
+        console.log("No admin session found");
+      }
+      setIsCheckingAdmin(false);
+    };
+
+    checkAdminSession();
+  }, [setUserId]);
 
   useEffect(() => {
+    // Skip if still checking admin session
+    if (isCheckingAdmin) return;
+
     console.log("Session status:", sessionStatus);
     console.log("Session data:", session);
     console.log("Current userId:", userId);
 
-    // Use NextAuth session user ID if available
-    if (session?.user?.id && userId !== session.user.id) {
+    // Use NextAuth session user ID if available and not admin
+    if (session?.user?.id && userId !== session.user.id && userId !== 'admin-user-id') {
       console.log("✅ Setting userId from NextAuth session:", session.user.id);
       setUserId(session.user.id);
     } else if (userId === "00000000-0000-0000-0000-000000000000") {
@@ -507,7 +534,7 @@ export default function BlogPage() {
     } else {
       console.log("✅ Using existing userId:", userId);
     }
-  }, [session, userId, setUserId, sessionStatus]);
+  }, [session, userId, setUserId, sessionStatus, isCheckingAdmin]);
 
   // Sync local UI state with data fetched by useBlogData
   const mapPosts = useCallback((posts: Post[]): Post[] => {

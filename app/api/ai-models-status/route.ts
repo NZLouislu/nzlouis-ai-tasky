@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth-config";
 import { taskyDb } from "@/lib/supabase/tasky-db-client";
+import { getUserIdFromRequest } from "@/lib/admin-auth";
 
 const MODEL_CONFIGS = {
     google: [
@@ -38,9 +39,11 @@ const MODEL_CONFIGS = {
     ],
 };
 
-export async function GET() {
+export async function GET(req: NextRequest) {
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = getUserIdFromRequest(session?.user?.id, req);
+    
+    if (!userId) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -48,7 +51,7 @@ export async function GET() {
         const { data: keys, error } = await taskyDb
             .from('user_api_keys')
             .select('provider')
-            .eq('user_id', session.user.id);
+            .eq('user_id', userId);
 
         if (error) throw error;
 
@@ -57,7 +60,7 @@ export async function GET() {
         const { data: testResults, error: testError } = await taskyDb
             .from('model_test_results')
             .select('model_id, success, tested_at')
-            .eq('user_id', session.user.id);
+            .eq('user_id', userId);
 
         if (testError) {
             console.warn('Failed to fetch test results:', testError);

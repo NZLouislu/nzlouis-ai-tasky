@@ -11,6 +11,16 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Optimize build speed
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production' ? {
+      exclude: ['error', 'warn'],
+    } : false,
+  },
+  // Experimental features to improve performance
+  experimental: {
+    optimizePackageImports: ['lucide-react', 'react-icons'],
+  },
 };
 
 export default nextConfig;

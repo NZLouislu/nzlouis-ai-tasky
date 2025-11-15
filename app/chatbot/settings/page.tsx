@@ -14,13 +14,15 @@ const PROVIDERS = [
 
 const MODELS: Record<string, Array<{ id: string; name: string }>> = {
   google: [
+    // 2.5 系列优先，Pro > Flash > Flash Live > Flash Lite
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
     { id: 'gemini-2.5-flash-live', name: 'Gemini 2.5 Flash Live' },
+    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite' },
+    // 2.0 系列
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
     { id: 'gemini-2.0-flash-live', name: 'Gemini 2.0 Flash Live' },
     { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite' },
-    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
-    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite' },
-    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
   ],
   openai: [
     { id: 'gpt-4o', name: 'GPT-4o' },
@@ -58,6 +60,8 @@ interface TestResult {
 
 export default function ChatbotSettingsPage() {
   const { data: session } = useSession();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
   const [configuredKeys, setConfiguredKeys] = useState<string[]>([]);
   const [settings, setSettings] = useState({
@@ -72,12 +76,34 @@ export default function ChatbotSettingsPage() {
   const [testResults, setTestResults] = useState<Record<string, TestResult>>({});
   const [testing, setTesting] = useState(false);
 
+  // Check for admin session
   useEffect(() => {
-    if (session?.user) {
+    const checkAdminSession = async () => {
+      try {
+        const response = await fetch('/api/admin/verify', {
+          credentials: 'include'
+        });
+        
+        if (response.ok) {
+          console.log('[Settings] Admin session detected');
+          setIsAdmin(true);
+        }
+      } catch (error) {
+        console.log('[Settings] No admin session');
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+
+    checkAdminSession();
+  }, []);
+
+  useEffect(() => {
+    if (!isCheckingAuth && (session?.user || isAdmin)) {
       loadSettings();
       loadConfiguredKeys();
     }
-  }, [session]);
+  }, [session, isAdmin, isCheckingAuth]);
 
   const loadSettings = async () => {
     try {

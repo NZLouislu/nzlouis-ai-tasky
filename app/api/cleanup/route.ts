@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { cleanupOrphanedFiles } from '@/lib/services/cleanup-service';
+import { getUserIdFromRequest } from '@/lib/admin-auth';
 
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = getUserIdFromRequest(session?.user?.id, req);
+    
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { dryRun = true } = await req.json();
 
-    const result = await cleanupOrphanedFiles(session.user.id, dryRun);
+    const result = await cleanupOrphanedFiles(userId, dryRun);
 
     return NextResponse.json({
       success: true,
@@ -29,14 +32,16 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = getUserIdFromRequest(session?.user?.id, req);
+    
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const result = await cleanupOrphanedFiles(session.user.id, true);
+    const result = await cleanupOrphanedFiles(userId, true);
 
     return NextResponse.json({
       success: true,

@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { supabaseAdmin } from '@/lib/supabase/supabase-admin';
 import type { Database } from '@/lib/supabase/supabase-client';
+import { getUserIdFromRequest } from '@/lib/admin-auth';
 
-// GET - Fetch all user posts
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = getUserIdFromRequest(session?.user?.id, req);
+    
+    if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -24,7 +26,7 @@ export async function GET() {
     const { data, error } = await supabaseAdmin
       .from('blog_posts')
       .select('*')
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -48,11 +50,12 @@ export async function GET() {
   }
 }
 
-// POST - Create new post
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = getUserIdFromRequest(session?.user?.id, request);
+    
+    if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -74,7 +77,7 @@ export async function POST(request: NextRequest) {
 
     const insertData: Database['public']['Tables']['blog_posts']['Insert'] = {
       id: postId,
-      user_id: session.user.id,
+      user_id: userId,
       title: title || 'Untitled',
       content: content || null,
       icon: icon || null,
@@ -113,11 +116,12 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PUT - Update post
 export async function PUT(request: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = getUserIdFromRequest(session?.user?.id, request);
+    
+    if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -148,7 +152,7 @@ export async function PUT(request: NextRequest) {
         updated_at: new Date().toISOString(),
       } as unknown as never)
       .eq('id', id)
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .select()
       .single();
 
@@ -173,11 +177,12 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// DELETE - Delete post
 export async function DELETE(request: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = getUserIdFromRequest(session?.user?.id, request);
+    
+    if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -205,7 +210,7 @@ export async function DELETE(request: NextRequest) {
       .from('blog_posts')
       .delete()
       .eq('id', id)
-      .eq('user_id', session.user.id);
+      .eq('user_id', userId);
 
     if (error) {
       console.error('Error deleting post:', error);

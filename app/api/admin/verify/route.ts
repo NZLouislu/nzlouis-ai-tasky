@@ -4,10 +4,12 @@ const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
 
 export async function GET(request: NextRequest) {
   try {
-    // Try multiple ways to get the token for better compatibility
-    let token = request.cookies.get("adminToken")?.value;
+    let token = request.cookies.get("admin-session")?.value;
 
-    // Fallback: check Authorization header
+    if (!token) {
+      token = request.cookies.get("adminToken")?.value;
+    }
+
     if (!token) {
       const authHeader = request.headers.get("Authorization");
       if (authHeader && authHeader.startsWith("Bearer ")) {

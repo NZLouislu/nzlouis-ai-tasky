@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Blog from "@/components/blog/Blog";
@@ -8,15 +8,32 @@ import Blog from "@/components/blog/Blog";
 export default function BlogPage() {
   const router = useRouter();
   const { status } = useSession();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    // Only redirect if we're sure there's no session
-    if (status === "unauthenticated") {
-      router.replace("/blog/admin/login");
-    }
-  }, [status, router]);
+    const checkAdmin = async () => {
+      try {
+        const response = await fetch('/api/admin/verify', {
+          credentials: 'include'
+        });
+        setIsAdmin(response.ok);
+      } catch {
+        setIsAdmin(false);
+      }
+      setChecking(false);
+    };
 
-  if (status === "loading") {
+    checkAdmin();
+  }, []);
+
+  useEffect(() => {
+    if (!checking && status === "unauthenticated" && !isAdmin) {
+      router.replace("/auth/signin");
+    }
+  }, [status, isAdmin, checking, router]);
+
+  if (status === "loading" || checking) {
     return (
       <div className="h-screen flex items-center justify-center">
         <div className="text-gray-500">Loading...</div>
@@ -24,7 +41,7 @@ export default function BlogPage() {
     );
   }
 
-  if (status === "unauthenticated") {
+  if (status === "unauthenticated" && !isAdmin) {
     return (
       <div className="h-screen flex items-center justify-center">
         <div className="text-gray-500">Redirecting to login...</div>

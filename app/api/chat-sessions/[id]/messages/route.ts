@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { getUserIdFromRequest } from '@/lib/admin-auth';
 
 // POST /api/chat-sessions/[id]/messages - Save messages
 export async function POST(
@@ -10,7 +11,9 @@ export async function POST(
   try {
     const { id } = await params;
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = getUserIdFromRequest(session?.user?.id, req);
+    
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -19,7 +22,7 @@ export async function POST(
       .from('chat_sessions')
       .select('id')
       .eq('id', id)
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .single();
 
     if (sessionError || !chatSession) {

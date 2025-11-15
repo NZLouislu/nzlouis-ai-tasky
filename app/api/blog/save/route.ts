@@ -4,7 +4,6 @@ import { getBlogSupabaseConfig } from "@/lib/environment";
 
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
 
-// Create Blog Supabase client
 const blogConfig = getBlogSupabaseConfig();
 const blogSupabase = blogConfig.url && blogConfig.serviceRoleKey
   ? createClient(blogConfig.url, blogConfig.serviceRoleKey, {
@@ -16,10 +15,13 @@ const blogSupabase = blogConfig.url && blogConfig.serviceRoleKey
   })
   : null;
 
-// Authentication helper function
 async function verifyAuth(request: NextRequest): Promise<boolean> {
   try {
-    let token = request.cookies.get("adminToken")?.value;
+    let token = request.cookies.get("admin-session")?.value;
+
+    if (!token) {
+      token = request.cookies.get("adminToken")?.value;
+    }
 
     if (!token) {
       const authHeader = request.headers.get("Authorization");
@@ -63,7 +65,6 @@ interface BlogPostNode {
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify authentication
     if (!(await verifyAuth(request))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -87,7 +88,6 @@ export async function POST(request: NextRequest) {
     // Extract userId from request body, use default value if not present
     const userIdToUse = userId || "00000000-0000-0000-0000-000000000000";
 
-    // flatten posts tree to flat array with parent_id
     function flattenPosts(
       nodes: BlogPostNode[],
       parent_id: string | null = null

@@ -2,11 +2,12 @@
 
 import { useSession } from 'next-auth/react';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Plus, MessageSquare, Settings, Paperclip, Edit2, Trash2, Search, ChevronDown } from 'lucide-react';
+import { Plus, MessageSquare, Settings, Edit2, Trash2, Search } from 'lucide-react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Image from 'next/image';
+import ChatInput from '@/components/ChatInput';
 
 interface ChatSession {
   id: string;
@@ -33,6 +34,8 @@ interface AIModel {
 
 export default function ChatbotPage() {
   const { data: session } = useSession();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -46,10 +49,30 @@ export default function ChatbotPage() {
   const [editingTitle, setEditingTitle] = useState('');
   const [availableModels, setAvailableModels] = useState<AIModel[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
-  const [showModelDropdown, setShowModelDropdown] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedProvider, setSelectedProvider] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const modelDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Check for admin session
+  useEffect(() => {
+    const checkAdminSession = async () => {
+      try {
+        const response = await fetch('/api/admin/verify', {
+          credentials: 'include'
+        });
+        
+        if (response.ok) {
+          console.log('[Chatbot] Admin session detected');
+          setIsAdmin(true);
+        }
+      } catch (error) {
+        console.log('[Chatbot] No admin session');
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+
+    checkAdminSession();
+  }, []);
 
   useEffect(() => {
     const handleResize = () => {
@@ -133,21 +156,12 @@ export default function ChatbotPage() {
   }, [messages]);
 
   useEffect(() => {
-    if (session?.user) {
+    if (!isCheckingAuth && (session?.user || isAdmin)) {
       loadAvailableModels();
     }
-  }, [session]);
+  }, [session, isAdmin, isCheckingAuth]);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target as Node)) {
-        setShowModelDropdown(false);
-      }
-    };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const loadAvailableModels = async () => {
     try {
@@ -162,15 +176,45 @@ export default function ChatbotPage() {
         });
 
         setAvailableModels(sortedModels);
-        setSelectedModel(sortedModels[0].id);
+        
+        // Set default provider and model
+        if (sortedModels.length > 0) {
+          const firstProvider = sortedModels[0].provider;
+          setSelectedProvider(firstProvider);
+          setSelectedModel(sortedModels[0].id);
+        }
       } else {
         setAvailableModels([]);
         setSelectedModel('');
+        setSelectedProvider('');
       }
     } catch (error) {
       console.error('Failed to load AI models:', error);
       setAvailableModels([]);
     }
+  };
+
+  // Get unique providers
+  const getAvailableProviders = () => {
+    const providers = new Set(availableModels.map(m => m.provider));
+    return Array.from(providers);
+  };
+
+  // Get models for selected provider
+  const getModelsForProvider = (provider: string) => {
+    return availableModels.filter(m => m.provider === provider);
+  };
+
+  // Provider display names
+  const getProviderName = (provider: string) => {
+    const names: Record<string, string> = {
+      'google': 'Google Gemini',
+      'openai': 'OpenAI',
+      'anthropic': 'Anthropic Claude',
+      'openrouter': 'OpenRouter',
+      'kilo': 'Kilo'
+    };
+    return names[provider] || provider;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -307,10 +351,10 @@ export default function ChatbotPage() {
   }, [currentSessionId]);
 
   useEffect(() => {
-    if (session?.user) {
+    if (!isCheckingAuth && (session?.user || isAdmin)) {
       loadSessions();
     }
-  }, [session, loadSessions]);
+  }, [session, isAdmin, isCheckingAuth, loadSessions]);
 
   useEffect(() => {
     if (currentSessionId) {
@@ -633,164 +677,21 @@ export default function ChatbotPage() {
           </div>
         </div>
 
-        <div className="bg-white border-t border-gray-200 p-3 sm:p-4 flex-shrink-0">
-          <div className="max-w-[900px] mx-auto">
-            {previewImage && (
-              <div className="mb-3 relative inline-block">
-                <Image
-                  src={previewImage}
-                  alt="Preview"
-                  width={120}
-                  height={120}
-                  className="rounded-lg"
-                />
-                <button
-                  onClick={() => setPreviewImage(null)}
-                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
-                >
-                  ×
-                </button>
-              </div>
-            )}
-            {availableModels.length === 0 && (
-              <div className="mb-3 px-4 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
-                No AI models configured. Please{' '}
-                <Link href="/chatbot/settings" className="font-semibold underline hover:text-yellow-900">
-                  configure your API keys
-                </Link>
-                {' '}in settings.
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit}>
-              <div className="relative border-2 border-blue-500 rounded-xl overflow-visible">
-                <div className="flex flex-col">
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="absolute left-3 top-3 text-gray-400 hover:text-gray-600 z-10"
-                    >
-                      <Paperclip size={20} />
-                    </button>
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={(e) => {
-                        if (e.target.files?.length) {
-                          handleImageUpload(e.target.files[0]);
-                        }
-                      }}
-                      accept="image/*"
-                      className="hidden"
-                    />
-                    <textarea
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      placeholder={isMobile ? "Type message..." : "Type your message... (Ctrl+V to paste screenshot)"}
-                      className="w-full resize-none border-0 pl-12 pr-14 sm:pr-16 pt-3 pb-10 text-sm sm:text-base focus:outline-none focus:ring-0"
-                      rows={1}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          if ((input.trim() || previewImage) && selectedModel) {
-                            handleSubmit(e);
-                          }
-                        }
-                      }}
-                      style={{ minHeight: '80px', maxHeight: '200px' }}
-                    />
-                    <button
-                      type="submit"
-                      disabled={(!input.trim() && !previewImage) || !selectedModel}
-                      className="absolute right-3 top-3 bg-teal-500 text-white rounded-full p-2 hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Send size={18} />
-                    </button>
-                  </div>
-
-                  {availableModels.length > 0 && (
-                    <div className="border-t border-gray-200 px-3 py-2 bg-gray-50/50" ref={modelDropdownRef}>
-                      <button
-                        type="button"
-                        onClick={() => setShowModelDropdown(!showModelDropdown)}
-                        className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 transition-colors"
-                      >
-                        {(() => {
-                          const currentModel = availableModels.find(m => m.id === selectedModel);
-                          return (
-                            <>
-                              {currentModel && (
-                                <div className="mr-1 flex-shrink-0">
-                                  {currentModel.tested === true && currentModel.working === true && (
-                                    <div className="flex items-center text-green-600">
-                                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                      </svg>
-                                    </div>
-                                  )}
-                                  {currentModel.tested === true && currentModel.working === false && (
-                                    <div className="flex items-center text-red-600">
-                                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                                      </svg>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                              <span className="font-medium">{currentModel?.name || 'Select Model'}</span>
-                            </>
-                          );
-                        })()}
-                        <ChevronDown size={12} className={`transition-transform ${showModelDropdown ? 'rotate-180' : ''}`} />
-                      </button>
-
-                      {showModelDropdown && (
-                        <div className="absolute bottom-full left-0 right-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-y-auto z-50">
-                          {availableModels.map((model) => (
-                            <button
-                              key={model.id}
-                              type="button"
-                              onClick={() => {
-                                setSelectedModel(model.id);
-                                setShowModelDropdown(false);
-                              }}
-                              className={`w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors ${selectedModel === model.id ? 'bg-blue-50' : ''
-                                }`}
-                            >
-                              <div className="flex items-center">
-                                <div className="mr-2 flex-shrink-0">
-                                  {model.tested === true && model.working === true && (
-                                    <div className="flex items-center text-green-600">
-                                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                      </svg>
-                                    </div>
-                                  )}
-                                  {model.tested === true && model.working === false && (
-                                    <div className="flex items-center text-red-600">
-                                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                                      </svg>
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="flex-1">
-                                  <div className="font-semibold text-sm text-gray-900">{model.name}</div>
-                                  <div className="text-xs text-gray-500 mt-1">{model.description}</div>
-                                </div>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
+        <ChatInput
+          input={input}
+          setInput={setInput}
+          onSubmit={handleSubmit}
+          isLoading={isLoading}
+          previewImage={previewImage}
+          setPreviewImage={setPreviewImage}
+          onImageUpload={handleImageUpload}
+          availableModels={availableModels}
+          selectedModel={selectedModel}
+          setSelectedModel={setSelectedModel}
+          selectedProvider={selectedProvider}
+          setSelectedProvider={setSelectedProvider}
+          isMobile={isMobile}
+        />
       </div>
     </div>
   );

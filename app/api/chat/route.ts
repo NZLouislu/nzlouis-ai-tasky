@@ -2,6 +2,8 @@ import { auth } from '@/lib/auth-config';
 import { getUserAISettings } from '@/lib/ai/settings';
 import { AIProvider } from '@/lib/ai/providers';
 import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { NextRequest } from 'next/server';
+import { getUserIdFromRequest } from '@/lib/admin-auth';
 
 const MODEL_PROVIDER_MAP: Record<string, AIProvider> = {
   'gemini-2.5-flash': 'google',
@@ -30,6 +32,8 @@ const MODEL_PROVIDER_MAP: Record<string, AIProvider> = {
   'xai-grok-code-fast-1': 'kilo',
   'claude-sonnet-4': 'kilo',
 };
+
+
 
 async function getModelConfigFromId(userId: string | undefined, modelId: string) {
   const provider = MODEL_PROVIDER_MAP[modelId];
@@ -71,10 +75,10 @@ interface ChatRequest {
   sessionId?: string;
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const session = await auth();
-    const userId = session?.user?.id;
+    const userId = getUserIdFromRequest(session?.user?.id, req);
 
     const body: ChatRequest = await req.json();
     const { messages, modelId } = body;

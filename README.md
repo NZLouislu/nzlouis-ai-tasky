@@ -82,6 +82,7 @@ Open [http://localhost:3000](http://localhost:3000)
 - [Setup Guide](docs/SETUP.md) - Complete setup instructions
 - [Performance Guide](docs/PERFORMANCE.md) - Performance optimization
 - [Security Guide](docs/SECURITY.md) - Security best practices
+- [Admin Authentication](docs/admin-auth/) - Admin认证系统文档
 - [Completion Report](jira/COMPLETION_REPORT.md) - Implementation details
 
 ## Project Structure

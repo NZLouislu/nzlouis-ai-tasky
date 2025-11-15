@@ -6,17 +6,6 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 
-const parseToken = (token: string): { username: string } | null => {
-  try {
-    const decodedString = atob(token);
-    const [username] = decodedString.split(":");
-    return { username };
-  } catch (error) {
-    console.error("Token parsing error:", error);
-    return null;
-  }
-};
-
 export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
@@ -29,30 +18,16 @@ export default function Navbar() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        let token = null;
-        if (typeof document !== "undefined") {
-          const cookie = document.cookie
-            .split("; ")
-            .find((row) => row.startsWith("adminToken="));
-          if (cookie) {
-            token = cookie.split("=")[1];
-          }
-        }
-
-        if (!token && typeof localStorage !== "undefined") {
-          token = localStorage.getItem("adminToken");
-        }
-
-        if (token) {
-          const parsedToken = parseToken(token);
-          if (parsedToken) {
-            setIsAdmin(true);
-          }
+        const response = await fetch('/api/admin/verify', {
+          credentials: 'include'
+        });
+        
+        if (response.ok) {
+          setIsAdmin(true);
         } else {
           setIsAdmin(false);
         }
       } catch (error) {
-        console.error("Auth check error:", error);
         setIsAdmin(false);
       }
     };
@@ -93,16 +68,27 @@ export default function Navbar() {
         router.push("/");
       }
       else if (isAdmin) {
+        // Clear admin session
         if (typeof localStorage !== "undefined") {
           localStorage.removeItem("adminToken");
           localStorage.removeItem("adminTokenExpiry");
         }
 
+        // Clear both old and new admin cookies
         document.cookie =
           "adminToken=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+        document.cookie =
+          "admin-session=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+
+        // Call logout API
+        try {
+          await fetch('/api/admin/logout', { method: 'POST' });
+        } catch (error) {
+          console.error('Logout API error:', error);
+        }
 
         setIsAdmin(false);
-        router.push("/blog/admin/login");
+        router.push("/admin/login");
       }
 
       setUsername(null);
