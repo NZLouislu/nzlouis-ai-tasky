@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Blog Modification - Full Test Suite</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+
+        .controls {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            padding: 30px;
+        }
+
+        .test-card {
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            transition: all 0.3s;
+        }
+
+        .test-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+        }
+
+        .test-card.running {
+            border-color: #ffc107;
+            background: #fff9e6;
+        }
+
+        .test-card.passed {
+            border-color: #28a745;
+            background: #f0f9f4;
+        }
+
+        .test-card.failed {
+            border-color: #dc3545;
+            background: #fef5f5;
+        }
+
+        .test-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 15px;
+        }
+
+        .test-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            flex: 1;
+        }
+
+        .test-status {
+            font-size: 24px;
+            margin-left: 10px;
+        }
+
+        .test-instruction {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            color: #495057;
+            border-left: 3px solid #667eea;
+        }
+
+        .test-result {
+            font-size: 13px;
+            color: #6c757d;
+            line-height: 1.6;
+        }
+
+        .test-result strong {
+            color: #333;
+        }
+
+        .summary {
+            padding: 30px;
+            background: #f8f9fa;
+            text-align: center;
+        }
+
+        .summary-stats {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-top: 20px;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 48px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 AI Blog Modification Test Suite</h1>
+            <p>Comprehensive testing for all blog modification operations</p>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-primary" onclick="runAllTests()">▶️ Run All Tests</button>
+            <button class="btn btn-success" onclick="runPassedTests()">✅ Run Passed Only</button>
+            <button class="btn btn-danger" onclick="clearResults()">🗑️ Clear Results</button>
+        </div>
+
+        <div class="test-grid" id="testGrid"></div>
+
+        <div class="summary" id="summary" style="display: none;">
+            <h2>Test Summary</h2>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="summary-stats">
+                <div class="stat">
+                    <div class="stat-value" id="passedCount">0</div>
+                    <div class="stat-label">Passed</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="failedCount">0</div>
+                    <div class="stat-label">Failed</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="totalCount">0</div>
+                    <div class="stat-label">Total</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const testCases = [
+            {
+                id: 1,
+                name: 'Modify Title (Chinese)',
+                instruction: '请修改 title 改成 人工智能的未来发展趋势',
+                currentTitle: 'Old Title',
+                currentContent: [
+                    { type: 'paragraph', content: [{ type: 'text', text: 'Content here', styles: {} }], props: {} }
+                ],
+                expectedType: 'update_title',
+            },
+            {
+                id: 2,
+                name: 'Modify Title (English)',
+                instruction: 'change title to The Future of Machine Learning',
+                currentTitle: 'Old Title',
+                currentContent: [
+                    { type: 'paragraph', content: [{ type: 'text', text: 'Content here', styles: {} }], props: {} }
+                ],
+                expectedType: 'update_title',
+            },
+            {
+                id: 3,
+                name: 'Replace All Content',
+                instruction: '修改内容为 这是全新的文章内容，包含了最新的研究成果。',
+                currentTitle: 'Test Article',
+                currentContent: [
+                    { type: 'paragraph', content: [{ type: 'text', text: 'Old content', styles: {} }], props: {} }
+                ],
+                expectedType: 'replace',
+            },
+            {
+                id: 4,
+                name: 'Append Content at End',
+                instruction: '在文章末尾添加一段关于量子计算的内容',
+                currentTitle: 'Test Article',
+                currentContent: [
+                    { type: 'paragraph', content: [{ type: 'text', text: 'Existing content', styles: {} }], props: {} }
+                ],
+                expectedType: 'append',
+            },
+            {
+                id: 5,
+                name: 'Insert Content at Position',
+                instruction: '在第2段插入一段关于深度学习的内容',
+                currentTitle: 'Test Article',
+                currentContent: [
+                    { type: 'paragraph', content: [{ type: 'text', text: 'First paragraph', styles: {} }], props: {} },
+                    { type: 'paragraph', content: [{ type: 'text', text: 'Second paragraph', styles: {} }], props: {} },
+                    { type: 'paragraph', content: [{ type: 'text', text: 'Third paragraph', styles: {} }], props: {} }
+                ],
+                expectedType: 'insert',
+            },
+            {
+                id: 6,
+                name: 'Add Section with Heading',
+                instruction: '添加一个新章节，标题是"技术实现"，内容是关于具体的技术细节',
+                currentTitle: 'Test Article',
+                currentContent: [
+                    { type: 'paragraph', content: [{ type: 'text', text: 'Existing content', styles: {} }], props: {} }
+                ],
+                expectedType: 'add_section',
+            },
+            {
+                id: 7,
+                name: 'Delete Paragraph',
+                instruction: '删除第2段内容',
+                currentTitle: 'Test Article',
+                currentContent: [
+                    { type: 'paragraph', content: [{ type: 'text', text: 'First paragraph', styles: {} }], props: {} },
+                    { type: 'paragraph', content: [{ type: 'text', text: 'Second paragraph to delete', styles: {} }], props: {} },
+                    { type: 'paragraph', content: [{ type: 'text', text: 'Third paragraph', styles: {} }], props: {} }
+                ],
+                expectedType: 'delete',
+            },
+            {
+                id: 8,
+                name: 'Replace Specific Paragraph',
+                instruction: '将第2段内容改为：这是修改后的新内容，更加详细和专业。',
+                currentTitle: 'Test Article',
+                currentContent: [
+                    { type: 'paragraph', content: [{ type: 'text', text: 'First paragraph', styles: {} }], props: {} },
+                    { type: 'paragraph', content: [{ type: 'text', text: 'Old second paragraph', styles: {} }], props: {} },
+                    { type: 'paragraph', content: [{ type: 'text', text: 'Third paragraph', styles: {} }], props: {} }
+                ],
+                expectedType: 'replace_paragraph',
+            },
+            {
+                id: 9,
+                name: 'Add Professional Section',
+                instruction: '添加一段专业的内容，包含小标题"核心优势"和详细说明',
+                currentTitle: 'Test Article',
+                currentContent: [
+                    { type: 'paragraph', content: [{ type: 'text', text: 'Existing content', styles: {} }], props: {} }
+                ],
+                expectedType: 'append',
+            },
+            {
+                id: 10,
+                name: 'Add Content About Topic',
+                instruction: '添加一段关于区块链技术的内容',
+                currentTitle: 'Test Article',
+                currentContent: [
+                    { type: 'paragraph', content: [{ type: 'text', text: 'Existing content', styles: {} }], props: {} }
+                ],
+                expectedType: 'append',
+            },
+        ];
+
+        function initTestCards() {
+            const grid = document.getElementById('testGrid');
+            grid.innerHTML = testCases.map(test => `
+                <div class="test-card" id="test-${test.id}">
+                    <div class="test-header">
+                        <div class="test-title">${test.name}</div>
+                        <div class="test-status" id="status-${test.id}">⏳</div>
+                    </div>
+                    <div class="test-instruction">${test.instruction}</div>
+                    <div class="test-result" id="result-${test.id}">
+                        <em>Waiting to run...</em>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function runTest(testCase) {
+            const card = document.getElementById(`test-${testCase.id}`);
+            const status = document.getElementById(`status-${testCase.id}`);
+            const result = document.getElementById(`result-${testCase.id}`);
+
+            card.className = 'test-card running';
+            status.innerHTML = '<div class="loading"></div>';
+            result.innerHTML = '<em>Running test...</em>';
+
+            try {
+                const response = await fetch('/api/blog/ai-modify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        postId: 'test-post-id',
+                        currentContent: testCase.currentContent,
+                        currentTitle: testCase.currentTitle,
+                        instruction: testCase.instruction,
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Request failed');
+                }
+
+                if (!data.modifications || data.modifications.length === 0) {
+                    throw new Error('No modifications generated');
+                }
+
+                const mod = data.modifications[0];
+                const typeMatch = mod.type === testCase.expectedType;
+
+                card.className = 'test-card passed';
+                status.textContent = '✅';
+                result.innerHTML = `
+                    <strong>Type:</strong> ${mod.type} ${typeMatch ? '✅' : '⚠️'}<br>
+                    ${mod.title ? `<strong>Title:</strong> ${mod.title}<br>` : ''}
+                    ${mod.content ? `<strong>Content:</strong> ${mod.content.substring(0, 80)}...<br>` : ''}
+                    ${mod.position !== undefined ? `<strong>Position:</strong> ${mod.position}<br>` : ''}
+                    ${mod.paragraphIndex !== undefined ? `<strong>Paragraph:</strong> ${mod.paragraphIndex + 1}<br>` : ''}
+                    <strong>Explanation:</strong> ${data.explanation}
+                `;
+
+                return true;
+            } catch (error) {
+                card.className = 'test-card failed';
+                status.textContent = '❌';
+                result.innerHTML = `<strong>Error:</strong> ${error.message}`;
+                return false;
+            }
+        }
+
+        async function runAllTests() {
+            let passed = 0;
+            let failed = 0;
+
+            for (const testCase of testCases) {
+                const success = await runTest(testCase);
+                if (success) passed++;
+                else failed++;
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+            showSummary(passed, failed);
+        }
+
+        async function runPassedTests() {
+            const passedTests = testCases.filter((_, index) => {
+                const card = document.getElementById(`test-${index + 1}`);
+                return card && card.classList.contains('passed');
+            });
+
+            if (passedTests.length === 0) {
+                alert('No passed tests to run. Please run all tests first.');
+                return;
+            }
+
+            for (const testCase of passedTests) {
+                await runTest(testCase);
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+
+        function clearResults() {
+            initTestCards();
+            document.getElementById('summary').style.display = 'none';
+        }
+
+        function showSummary(passed, failed) {
+            const total = passed + failed;
+            const percentage = Math.round((passed / total) * 100);
+
+            document.getElementById('summary').style.display = 'block';
+            document.getElementById('passedCount').textContent = passed;
+            document.getElementById('failedCount').textContent = failed;
+            document.getElementById('totalCount').textContent = total;
+            document.getElementById('progressFill').style.width = percentage + '%';
+        }
+
+        initTestCards();
+    </script>
+</body>
+</html>

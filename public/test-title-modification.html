@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Title Modification</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-case {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 3px;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Title Modification API</h1>
+    
+    <div class="test-case">
+        <h3>Test Case 1: Chinese Title Modification</h3>
+        <p><strong>Instruction:</strong> 请修改 文章的 title ，改成 宇宙的奥秘</p>
+        <button onclick="testModification('请修改 文章的 title ，改成 宇宙的奥秘', 'test1')">Run Test</button>
+        <div id="test1" class="result"></div>
+    </div>
+
+    <div class="test-case">
+        <h3>Test Case 2: Simple Title Change</h3>
+        <p><strong>Instruction:</strong> 修改标题为 人工智能的未来</p>
+        <button onclick="testModification('修改标题为 人工智能的未来', 'test2')">Run Test</button>
+        <div id="test2" class="result"></div>
+    </div>
+
+    <div class="test-case">
+        <h3>Test Case 3: English Title Change</h3>
+        <p><strong>Instruction:</strong> change title to Machine Learning Basics</p>
+        <button onclick="testModification('change title to Machine Learning Basics', 'test3')">Run Test</button>
+        <div id="test3" class="result"></div>
+    </div>
+
+    <div class="test-case">
+        <h3>Test Case 4: Content Addition</h3>
+        <p><strong>Instruction:</strong> 添加一段关于量子计算的内容</p>
+        <button onclick="testModification('添加一段关于量子计算的内容', 'test4')">Run Test</button>
+        <div id="test4" class="result"></div>
+    </div>
+
+    <script>
+        async function testModification(instruction, resultId) {
+            const resultDiv = document.getElementById(resultId);
+            resultDiv.innerHTML = 'Testing...';
+
+            try {
+                const response = await fetch('/api/blog/ai-modify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        postId: 'test-post-id',
+                        currentContent: [
+                            { type: 'paragraph', content: 'This is test content.' }
+                        ],
+                        currentTitle: 'Test Post',
+                        instruction: instruction,
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <strong>✅ Success!</strong><br>
+                            <strong>Modifications:</strong><br>
+                            ${JSON.stringify(data.modifications, null, 2)}<br>
+                            <strong>Explanation:</strong> ${data.explanation}
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="error">
+                            <strong>❌ Error:</strong> ${data.error}<br>
+                            ${data.details || ''}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <strong>❌ Error:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

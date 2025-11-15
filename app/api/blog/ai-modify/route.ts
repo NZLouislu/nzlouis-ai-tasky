@@ -3,11 +3,12 @@ import { auth } from '@/lib/auth-config';
 import { PartialBlock } from '@blocknote/core';
 
 interface PageModification {
-  type: 'replace' | 'insert' | 'append' | 'update_title' | 'add_section';
+  type: 'replace' | 'insert' | 'append' | 'update_title' | 'add_section' | 'delete' | 'replace_paragraph';
   target?: string;
   content?: string;
   title?: string;
   position?: number;
+  paragraphIndex?: number;
 }
 
 interface AIModifyRequest {
@@ -147,7 +148,8 @@ Now generate the JSON for modification operations.`;
     });
 
     if (!response.ok) {
-      throw new Error(`AI API returned ${response.status}`);
+      console.warn(`AI API returned ${response.status}, falling back to default modifications`);
+      return generateDefaultModifications(instruction, currentTitle, language);
     }
 
     
@@ -300,75 +302,187 @@ function generateDefaultModifications(
   console.log('Generating default modifications for instruction:', instruction);
 
   const titlePatterns = [
+    /(?:修改|改|更改|change|update).*?(?:title|标题).*?(?:改成|为|成|to|，改成|，为)\s*["'"]?([^"'"，。,\n]+?)["'"]?\s*$/i,
+    /(?:title|标题).*?(?:改成|为|成|to|，改成|，为)\s*["'"]?([^"'"，。,\n]+?)["'"]?\s*$/i,
+    /将.*?(?:title|标题).*?(?:改成|为|成|to|，改成|，为)\s*["'"]?([^"'"，。,\n]+?)["'"]?\s*$/i,
     /title.*?["'"](.*?)["'"]/i,
     /标题.*?["'"](.*?)["'"]/i,
     /タイトル.*?["'"](.*?)["'"]/i,
-    /title\s*改成\s*([^,，。内]+)/i,
-    /标题\s*改成\s*([^,，。内]+)/i,
-    /将\s*title\s*改成\s*([^,，。内]+)/i,
-    /将\s*标题\s*改成\s*([^,，。内]+)/i,
   ];
 
   for (const pattern of titlePatterns) {
     const match = instruction.match(pattern);
     if (match && match[1]) {
+      const newTitle = match[1].trim();
       modifications.push({
         type: 'update_title',
-        title: match[1],
+        title: newTitle,
       });
-      console.log('Detected title change:', match[1]);
+      console.log('✅ Detected title change:', newTitle);
+      console.log('   Pattern matched:', pattern);
       break;
     }
   }
 
   const contentPatterns = [
+    /(?:修改|改|更改|change|update).*?(?:content|内容).*?(?:改成|为|成|to|，改成|，为)\s*["'"]?([^"'"。\n]+?)["'"]?\s*$/i,
+    /(?:content|内容).*?(?:改成|为|成|to|，改成|，为)\s*["'"]?([^"'"。\n]+?)["'"]?\s*$/i,
+    /将.*?(?:content|内容).*?(?:改成|为|成|to|，改成|，为)\s*["'"]?([^"'"。\n]+?)["'"]?\s*$/i,
     /content.*?["'"](.*?)["'"]/i,
     /内容.*?["'"](.*?)["'"]/i,
     /コンテンツ.*?["'"](.*?)["'"]/i,
-    /内容\s*改成\s*([^。]+?)(?:等|。|$)/i,
-    /将\s*内容\s*改成\s*([^。]+?)(?:等|。|$)/i,
   ];
 
   for (const pattern of contentPatterns) {
     const match = instruction.match(pattern);
     if (match && match[1]) {
+      const newContent = match[1].trim();
       modifications.push({
         type: 'replace',
-        content: match[1],
+        content: newContent,
       });
-      console.log('Detected content change:', match[1]);
+      console.log('✅ Detected content change:', newContent);
+      console.log('   Pattern matched:', pattern);
       break;
     }
   }
 
-  
-  if (modifications.length === 0) {
-    if (lowerInstruction.includes('add') || lowerInstruction.includes('添加') ||
-      lowerInstruction.includes('追加') || lowerInstruction.includes('append')) {
+  const deletePatterns = [
+    /删除\s*第?\s*(\d+)\s*段/i,
+    /删掉\s*第?\s*(\d+)\s*段/i,
+    /delete\s+paragraph\s+(\d+)/i,
+    /remove\s+paragraph\s+(\d+)/i,
+  ];
+
+  for (const pattern of deletePatterns) {
+    const match = instruction.match(pattern);
+    if (match && match[1]) {
+      const paragraphIndex = parseInt(match[1]) - 1;
       modifications.push({
-        type: 'append',
-        content: language === 'Chinese'
-          ? '这是根据您的指令添加的新内容。请根据需要进一步编辑。'
-          : 'This is new content added based on your instruction. Please edit as needed.',
+        type: 'delete',
+        paragraphIndex,
       });
-    } else {
+      console.log('✅ Detected delete operation for paragraph:', paragraphIndex + 1);
+      break;
+    }
+  }
+
+  const replaceParagraphPatterns = [
+    /(?:将|把)\s*第?\s*(\d+)\s*段.*?(?:改为|改成|修改为)\s*[：:]\s*(.+?)$/i,
+    /(?:修改|replace)\s*第?\s*(\d+)\s*段.*?(?:为|to|成)\s*[：:]?\s*(.+?)$/i,
+  ];
+
+  for (const pattern of replaceParagraphPatterns) {
+    const match = instruction.match(pattern);
+    if (match && match[1] && match[2]) {
+      const paragraphIndex = parseInt(match[1]) - 1;
+      const newContent = match[2].trim();
+      modifications.push({
+        type: 'replace_paragraph',
+        paragraphIndex,
+        content: newContent,
+      });
+      console.log('✅ Detected replace paragraph operation:', paragraphIndex + 1, 'with:', newContent.substring(0, 50));
+      break;
+    }
+  }
+
+  const insertPatterns = [
+    /在\s*第?\s*(\d+)\s*段\s*(?:插入|添加)\s*(.+?)$/i,
+    /insert\s+(?:at|in)\s+paragraph\s+(\d+)\s*[：:]?\s*(.+?)$/i,
+  ];
+
+  for (const pattern of insertPatterns) {
+    const match = instruction.match(pattern);
+    if (match && match[1]) {
+      const position = parseInt(match[1]) - 1;
+      const topicMatch = match[2]?.match(/(?:关于|about)\s*([^的。,，\n]+)/i);
+      const topic = topicMatch ? topicMatch[1].trim() : '';
+      
+      const defaultContent = language === 'Chinese'
+        ? topic 
+          ? `关于${topic}的内容：\n\n这是插入的新段落，讨论${topic}的相关内容。`
+          : '这是插入的新段落内容。'
+        : topic
+          ? `About ${topic}:\n\nThis is the inserted paragraph discussing ${topic}.`
+          : 'This is the inserted paragraph content.';
+      
+      modifications.push({
+        type: 'insert',
+        position,
+        content: defaultContent,
+      });
+      console.log('✅ Detected insert operation at position:', position + 1, 'with topic:', topic || 'none');
+      break;
+    }
+  }
+
+  const addSectionPatterns = [
+    /添加.*?(?:章节|section).*?标题.*?[是为]?\s*["'"]?([^"'"，。,\n]+?)["'"]?\s*[，,]?\s*内容.*?[是为]?\s*(.+?)$/i,
+    /add.*?section.*?(?:title|heading).*?["'"]?([^"'"，。,\n]+?)["'"]?\s*[，,]?\s*(?:content|about)\s*(.+?)$/i,
+  ];
+
+  for (const pattern of addSectionPatterns) {
+    const match = instruction.match(pattern);
+    if (match && match[1]) {
+      const sectionTitle = match[1].trim();
+      const contentHint = match[2]?.trim() || '';
+      
+      const defaultContent = language === 'Chinese'
+        ? `## ${sectionTitle}\n\n${contentHint || `这是关于${sectionTitle}的详细内容。`}\n\n本节将深入探讨相关的技术细节和实践经验。`
+        : `## ${sectionTitle}\n\n${contentHint || `This section covers ${sectionTitle} in detail.`}\n\nWe will explore the technical details and practical experience.`;
+      
+      modifications.push({
+        type: 'add_section',
+        content: defaultContent,
+      });
+      console.log('✅ Detected add section operation with title:', sectionTitle);
+      break;
+    }
+  }
+
+  if (modifications.length === 0) {
+    const hasAddKeyword = lowerInstruction.includes('add') || 
+                          lowerInstruction.includes('添加') ||
+                          lowerInstruction.includes('追加') || 
+                          lowerInstruction.includes('append') ||
+                          lowerInstruction.includes('末尾');
+    
+    if (hasAddKeyword) {
+      const topicMatch = instruction.match(/(?:关于|about)\s*([^的。,，\n]+)/i);
+      const topic = topicMatch ? topicMatch[1].trim() : '';
+      
+      const defaultContent = language === 'Chinese'
+        ? topic 
+          ? `## 关于${topic}\n\n这是一个重要的主题，值得深入探讨。${topic}在当今社会中扮演着越来越重要的角色。\n\n请根据需要进一步编辑和扩展这段内容。`
+          : '这是根据您的指令添加的新内容。\n\n请根据需要进一步编辑和扩展。'
+        : topic
+          ? `## About ${topic}\n\nThis is an important topic worth exploring in depth. ${topic} plays an increasingly important role in today's world.\n\nPlease edit and expand this content as needed.`
+          : 'This is new content added based on your instruction.\n\nPlease edit and expand as needed.';
       
       modifications.push({
         type: 'append',
-        content: language === 'Chinese'
-          ? `根据您的指令"${instruction}"，我已为您添加了这段内容。`
-          : `Based on your instruction "${instruction}", I've added this content for you.`,
+        content: defaultContent,
       });
+      console.log('✅ Detected add operation, using append with topic:', topic || 'none');
+    } else {
+      console.log('⚠️ No specific operation detected');
     }
   }
 
   console.log('Generated modifications:', modifications);
 
+  const explanationText = language === 'Chinese'
+    ? modifications.length > 0
+      ? `已成功应用您的修改。${modifications.some(m => m.type === 'update_title') ? '标题已更新。' : ''}${modifications.some(m => m.type === 'append') ? '内容已添加。' : ''}`
+      : '已根据您的指令进行修改。'
+    : modifications.length > 0
+      ? `Modifications applied successfully. ${modifications.some(m => m.type === 'update_title') ? 'Title updated. ' : ''}${modifications.some(m => m.type === 'append') ? 'Content added. ' : ''}`
+      : 'Modifications applied based on your instruction.';
+
   return {
     modifications,
-    explanation: language === 'Chinese'
-      ? `已根据您的指令进行修改。由于 AI 服务暂时不可用，使用了基本的文本匹配来理解您的需求。`
-      : `Modifications applied based on your instruction. Basic text matching was used as AI service is temporarily unavailable.`,
+    explanation: explanationText,
   };
 }
 

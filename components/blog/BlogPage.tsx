@@ -20,6 +20,8 @@ interface PageModification {
   target?: string;
   content?: string;
   title?: string;
+  position?: number;
+  paragraphIndex?: number;
 }
 
 // Use different Editor imports in Storybook environment and other environments
@@ -75,14 +77,6 @@ interface Post {
   parent_id?: string | null;
   children?: Post[];
   [key: string]: unknown;
-}
-
-interface PageModification {
-  type: string;
-  target?: string;
-  content?: string;
-  title?: string;
-  position?: number;
 }
 
 // Mock data for Storybook - extended version
@@ -1363,6 +1357,36 @@ export default function BlogPage() {
             const markedContent = markBlocksAsAIModified(blocks);
             const newContent = [...cleanedContent, ...markedContent];
             updateLocalPostContent(newContent);
+          }
+          break;
+
+        case 'delete':
+          // Delete a specific paragraph
+          if (typeof mod.paragraphIndex === 'number') {
+            const cleanedContent = removeOldHighlights(currentPost.content);
+            if (mod.paragraphIndex >= 0 && mod.paragraphIndex < cleanedContent.length) {
+              cleanedContent.splice(mod.paragraphIndex, 1);
+              updateLocalPostContent(cleanedContent);
+              console.log('🗑️ Deleted paragraph at index:', mod.paragraphIndex);
+            } else {
+              console.warn('Invalid paragraph index:', mod.paragraphIndex);
+            }
+          }
+          break;
+
+        case 'replace_paragraph':
+          // Replace a specific paragraph
+          if (typeof mod.paragraphIndex === 'number' && mod.content) {
+            const cleanedContent = removeOldHighlights(currentPost.content);
+            if (mod.paragraphIndex >= 0 && mod.paragraphIndex < cleanedContent.length) {
+              const blocks = stringToBlocks(mod.content);
+              const markedContent = markBlocksAsAIModified(blocks);
+              cleanedContent.splice(mod.paragraphIndex, 1, ...markedContent);
+              updateLocalPostContent(cleanedContent);
+              console.log('✏️ Replaced paragraph at index:', mod.paragraphIndex);
+            } else {
+              console.warn('Invalid paragraph index:', mod.paragraphIndex);
+            }
           }
           break;
 
