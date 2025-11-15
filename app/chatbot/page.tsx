@@ -576,7 +576,7 @@ export default function ChatbotPage() {
           <div className="max-w-[900px] mx-auto p-4 sm:p-6">
             {messages.length === 0 && (
               <div className="text-center text-gray-500 mt-20">
-                <h2 className="text-xl font-semibold mb-2">Welcome to Chatbot</h2>
+                <h2 className="text-xl font-semibold mb-2">Welcome to AI Tasky</h2>
                 <p>Start a conversation by typing a message below.</p>
               </div>
             )}

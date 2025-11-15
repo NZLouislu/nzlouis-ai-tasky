@@ -224,7 +224,6 @@ export async function POST(req: Request) {
 
     console.log('Prompt messages count:', promptMessages.length);
 
-    // For OpenRouter, use direct fetch to avoid AI SDK message format conversion
     if (provider === 'openrouter') {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
@@ -251,7 +250,6 @@ export async function POST(req: Request) {
 
       console.log('OpenRouter stream started successfully');
 
-      // Transform OpenRouter SSE to our format
       const encoder = new TextEncoder();
       const transformStream = new TransformStream({
         async transform(chunk, controller) {
@@ -267,7 +265,6 @@ export async function POST(req: Request) {
                 const json = JSON.parse(data);
                 const delta = json.choices?.[0]?.delta;
 
-                // Try content first, then reasoning (for reasoning models)
                 const textContent = delta?.content || delta?.reasoning || '';
 
                 if (textContent) {
@@ -275,7 +272,6 @@ export async function POST(req: Request) {
                   controller.enqueue(encoder.encode(formatted));
                 }
               } catch {
-                // Skip invalid JSON
               }
             }
           }
@@ -291,34 +287,194 @@ export async function POST(req: Request) {
       });
     }
 
-    // For other providers, use AI SDK
+    if (provider === 'google') {
+      const { decryptAPIKey } = await import('@/lib/encryption');
+      
+      const { data: apiKeyRecord } = await taskyDb
+        .from('user_api_keys')
+        .select('key_encrypted, iv, auth_tag')
+        .eq('user_id', userId)
+        .eq('provider', 'google')
+        .single();
+
+      if (!apiKeyRecord) {
+        throw new Error('Google API key not found');
+      }
+
+      const apiKey = decryptAPIKey(
+        apiKeyRecord.key_encrypted,
+        apiKeyRecord.iv,
+        apiKeyRecord.auth_tag
+      );
+
+      const modelMap: Record<string, string> = {
+        'gemini-2.5-flash': 'gemini-2.5-flash',
+        'gemini-2.5-flash-live': 'gemini-2.5-flash',
+        'gemini-2.0-flash-live': 'gemini-2.0-flash',
+        'gemini-2.0-flash-lite': 'gemini-2.0-flash',
+        'gemini-2.0-flash': 'gemini-2.0-flash',
+        'gemini-2.5-flash-lite': 'gemini-2.5-flash',
+        'gemini-2.5-pro': 'gemini-2.5-pro',
+        'gemini-1.5-flash': 'gemini-1.5-flash',
+        'gemini-1.5-pro': 'gemini-1.5-pro',
+      };
+
+      const actualModel = modelMap[modelName] || modelName;
+
+      const geminiContents = promptMessages.map((msg: { role: string; content: MessageContent[] | string }) => {
+        const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
+        
+        if (Array.isArray(msg.content)) {
+          for (const item of msg.content) {
+            if (item.type === 'text') {
+              parts.push({ text: item.text });
+            } else if (item.type === 'image') {
+              const imageUrl = item.image.toString();
+              if (imageUrl.startsWith('data:')) {
+                const matches = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
+                if (matches) {
+                  parts.push({
+                    inlineData: {
+                      mimeType: matches[1],
+                      data: matches[2]
+                    }
+                  });
+                }
+              }
+            }
+          }
+        } else {
+          parts.push({ text: msg.content });
+        }
+
+        return {
+          role: msg.role === 'assistant' ? 'model' : 'user',
+          parts
+        };
+      });
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${actualModel}:streamGenerateContent?key=${apiKey}`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: geminiContents,
+          generationConfig: {
+            temperature,
+            maxOutputTokens: maxTokens,
+          }
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Gemini API error:', response.status, errorText);
+        throw new Error(`Gemini API error: ${response.status}`);
+      }
+
+      console.log('Gemini stream started successfully');
+
+      const encoder = new TextEncoder();
+      const decoder = new TextDecoder();
+      
+      let buffer = '';
+      
+      const transformStream = new TransformStream({
+        async transform(chunk, controller) {
+          buffer += decoder.decode(chunk, { stream: true });
+          
+          let text = buffer.trim();
+          if (text.startsWith('[')) {
+            text = text.slice(1);
+          }
+          
+          const parts = text.split(/\},\s*\{/);
+          
+          for (let i = 0; i < parts.length - 1; i++) {
+            let jsonStr = parts[i].trim();
+            
+            if (!jsonStr.startsWith('{')) jsonStr = '{' + jsonStr;
+            if (!jsonStr.endsWith('}')) jsonStr = jsonStr + '}';
+            
+            try {
+              const json = JSON.parse(jsonStr);
+              const textContent = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+              if (textContent) {
+                const formatted = `0:"${textContent.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"\n`;
+                controller.enqueue(encoder.encode(formatted));
+              }
+            } catch (e) {
+              console.error('Failed to parse JSON chunk:', e, jsonStr.substring(0, 100));
+            }
+          }
+          
+          if (parts.length > 0) {
+            let lastPart = parts[parts.length - 1];
+            if (!lastPart.startsWith('{')) lastPart = '{' + lastPart;
+            buffer = lastPart;
+          }
+        },
+        async flush(controller) {
+          let text = buffer.trim();
+          
+          if (text.endsWith(']')) {
+            text = text.slice(0, -1).trim();
+          }
+          
+          if (text && text !== '{') {
+            if (!text.endsWith('}')) text = text + '}';
+            
+            try {
+              const json = JSON.parse(text);
+              const textContent = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+              if (textContent) {
+                const formatted = `0:"${textContent.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"\n`;
+                controller.enqueue(encoder.encode(formatted));
+              }
+            } catch (e) {
+              console.error('Failed to parse final JSON chunk:', e);
+            }
+          }
+        }
+      });
+
+      return new Response(response.body?.pipeThrough(transformStream), {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        },
+      });
+    }
+
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
         try {
           console.log('Starting stream with model...', { provider, modelName });
 
-          // Use streamText from AI SDK for other providers
           const { streamText } = await import('ai');
 
           const result = await streamText({
             model: model,
-            // @ts-expect-error - Type compatibility
-            messages: promptMessages,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            messages: promptMessages as any,
             temperature,
             maxTokens,
           });
 
           console.log('Stream started successfully');
 
-          // Process the full stream to handle all chunk types
           for await (const chunk of result.fullStream) {
-            // Only process text-delta chunks
             if (chunk.type === 'text-delta') {
               const data = `0:"${chunk.textDelta.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"\n`;
               controller.enqueue(encoder.encode(data));
             }
-            // Ignore other chunk types like 'stream-start', 'finish', etc.
           }
 
           console.log('Stream completed');
