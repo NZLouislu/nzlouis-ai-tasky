@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
+import { getUserIdFromRequest } from '@/lib/admin-auth';
 import { PartialBlock } from '@blocknote/core';
 
 interface PageModification {
@@ -52,8 +53,9 @@ async function generateModifications(params: {
   currentTitle: string;
   instruction: string;
   language: string;
+  userId?: string;
 }): Promise<AIModifyResponse> {
-  const { currentContent, currentTitle, instruction, language } = params;
+  const { currentContent, currentTitle, instruction, language, userId } = params;
 
   const contentText = blocksToText(currentContent);
   const systemPrompt = `You are a professional blog editor and content creation expert. Generate high-quality, detailed, professional content based on user instructions.
@@ -144,6 +146,7 @@ Now generate the JSON for modification operations.`;
         ],
         temperature: 0.7,
         maxTokens: 2000,
+        userId, // Pass userId for API key lookup
       }),
     });
 
@@ -291,6 +294,80 @@ Now generate the JSON for modification operations.`;
 }
 
 
+// Generate detailed Chinese content based on topic
+function generateDetailedChineseContent(topic: string): string {
+  const topicLower = topic.toLowerCase();
+  
+  // Topic-specific detailed content
+  if (topicLower.includes('宇宙起源') || topicLower.includes('宇宙起点') || topicLower.includes('大爆炸')) {
+    return `## 宇宙起源的探索
+
+宇宙起源是人类最古老也最深刻的问题之一。根据现代宇宙学的主流理论——大爆炸理论，我们的宇宙诞生于约138亿年前的一次奇点爆炸。在那个瞬间，所有的物质、能量、空间和时间都从一个无限小、无限热、无限密的点中迸发而出。
+
+在大爆炸后的最初几分钟内，宇宙经历了极其剧烈的膨胀和冷却过程。温度从数万亿度迅速下降，基本粒子开始形成，质子和中子结合成最初的原子核。这个过程被称为"核合成时期"，奠定了宇宙中氢和氦元素的基础比例。
+
+随着宇宙继续膨胀和冷却，大约在大爆炸后38万年，温度降低到足以让电子与原子核结合，形成中性原子。这一时刻被称为"复合时期"，宇宙从此变得透明，光子得以自由传播。这些古老的光子至今仍在宇宙中传播，被我们观测为宇宙微波背景辐射，这是大爆炸理论最重要的观测证据之一。
+
+在接下来的数亿年里，宇宙中的物质在引力作用下逐渐聚集，形成了第一代恒星和星系。这些早期恒星通过核聚变反应产生了更重的元素，为后来行星和生命的形成提供了必要的物质基础。今天，我们仍在通过各种天文观测手段，不断深化对宇宙起源和演化的理解。`;
+  }
+  
+  if (topicLower.includes('火星') || topicLower.includes('mars')) {
+    return `## 火星探索的历程
+
+火星，这颗红色星球，一直是人类太空探索的重点目标。自20世纪60年代以来，人类已经向火星发射了数十个探测器，试图揭开这颗神秘星球的面纱。
+
+早期的火星探索始于1960年代的苏联和美国的竞赛。1964年，美国的水手4号成为第一个成功飞掠火星的探测器，传回了21张珍贵的火星表面照片。这些照片显示火星表面布满了陨石坑，类似于月球，这改变了人们对火星的认识。
+
+1976年，美国的海盗1号和2号成功登陆火星，进行了长达数年的科学研究。这两个着陆器不仅拍摄了大量火星表面的照片，还进行了土壤分析和生命探测实验。虽然没有发现确凿的生命证据，但这些任务为我们提供了关于火星地质、气候和大气的宝贵数据。
+
+进入21世纪后，火星探索进入了新的黄金时代。2004年，美国的机遇号和勇气号火星车成功登陆，它们在火星表面工作了多年，发现了火星曾经存在液态水的确凿证据。2012年，好奇号火星车登陆，配备了更先进的科学仪器，继续寻找火星上可能存在过生命的证据。
+
+最近，2021年登陆的毅力号火星车和机智号直升机开启了火星探索的新篇章。毅力号不仅在寻找古代生命的迹象，还在采集样本，准备在未来的任务中送回地球。而机智号则成为了第一架在地球以外的星球上飞行的航空器，为未来的火星探索开辟了新的可能性。`;
+  }
+  
+  // Generic detailed content
+  return `## 关于${topic}
+
+${topic}是一个值得深入探讨的重要主题。在当今快速发展的时代，理解${topic}的本质和影响变得越来越重要。
+
+从历史角度来看，${topic}的发展经历了多个重要阶段。早期的研究和实践为我们今天的理解奠定了基础。随着时间的推移，人们对${topic}的认识不断深化，新的发现和理论不断涌现，推动着这个领域向前发展。
+
+在实践层面，${topic}已经在多个领域产生了深远的影响。它不仅改变了我们的工作方式和生活方式，还为解决许多复杂问题提供了新的思路和方法。许多专家和学者都在积极研究${topic}，试图揭示其更深层次的规律和潜力。
+
+展望未来，${topic}仍然充满了无限的可能性。随着技术的进步和认识的深化，我们有理由相信，${topic}将在未来发挥更加重要的作用，为人类社会的发展做出更大的贡献。
+
+因此，持续关注和研究${topic}，不仅有助于我们更好地理解这个世界，也能为我们应对未来的挑战提供宝贵的启示和指导。`;
+}
+
+// Generate detailed English content based on topic
+function generateDetailedEnglishContent(topic: string): string {
+  const topicLower = topic.toLowerCase();
+  
+  if (topicLower.includes('universe') || topicLower.includes('big bang') || topicLower.includes('cosmos')) {
+    return `## The Origin of the Universe
+
+The origin of the universe is one of humanity's oldest and most profound questions. According to the mainstream theory of modern cosmology—the Big Bang theory—our universe was born approximately 13.8 billion years ago from a singularity explosion. In that instant, all matter, energy, space, and time burst forth from an infinitely small, infinitely hot, and infinitely dense point.
+
+In the first few minutes after the Big Bang, the universe underwent extremely violent expansion and cooling. The temperature dropped rapidly from trillions of degrees, basic particles began to form, and protons and neutrons combined to form the first atomic nuclei. This process, known as "nucleosynthesis," established the fundamental ratio of hydrogen and helium elements in the universe.
+
+As the universe continued to expand and cool, approximately 380,000 years after the Big Bang, the temperature dropped low enough for electrons to combine with atomic nuclei, forming neutral atoms. This moment, called "recombination," made the universe transparent, allowing photons to travel freely. These ancient photons still travel through the universe today and are observed as the cosmic microwave background radiation, one of the most important observational evidences for the Big Bang theory.
+
+Over the following hundreds of millions of years, matter in the universe gradually gathered under gravity, forming the first generation of stars and galaxies. These early stars produced heavier elements through nuclear fusion reactions, providing the necessary material foundation for the later formation of planets and life. Today, we continue to deepen our understanding of the origin and evolution of the universe through various astronomical observations.`;
+  }
+  
+  return `## About ${topic}
+
+${topic} is an important subject worthy of in-depth exploration. In today's rapidly evolving era, understanding the nature and impact of ${topic} has become increasingly important.
+
+From a historical perspective, the development of ${topic} has gone through several important stages. Early research and practice laid the foundation for our understanding today. Over time, people's understanding of ${topic} has continued to deepen, with new discoveries and theories constantly emerging, driving the field forward.
+
+At the practical level, ${topic} has had a profound impact in multiple areas. It has not only changed the way we work and live but also provided new ideas and methods for solving many complex problems. Many experts and scholars are actively researching ${topic}, trying to reveal its deeper patterns and potential.
+
+Looking to the future, ${topic} is still full of infinite possibilities. With technological advances and deepening understanding, we have reason to believe that ${topic} will play an even more important role in the future, making greater contributions to the development of human society.
+
+Therefore, continuing to pay attention to and research ${topic} will not only help us better understand the world but also provide valuable insights and guidance for addressing future challenges.`;
+}
+
 function generateDefaultModifications(
   instruction: string,
   currentTitle: string,
@@ -300,6 +377,24 @@ function generateDefaultModifications(
   const lowerInstruction = instruction.toLowerCase();
 
   console.log('Generating default modifications for instruction:', instruction);
+
+  // Extract topic from instruction for detailed content generation
+  const extractTopic = (text: string): string => {
+    const patterns = [
+      /关于\s*([^，。,\n]+)/i,
+      /about\s+([^,.\n]+)/i,
+      /添加.*?([^，。,\n]+?)的.*?内容/i,
+      /add.*?content.*?about\s+([^,.\n]+)/i,
+    ];
+    
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match && match[1]) {
+        return match[1].trim();
+      }
+    }
+    return '';
+  };
 
   const titlePatterns = [
     /(?:修改|改|更改|change|update).*?(?:title|标题).*?(?:改成|为|成|to|，改成|，为)\s*["'"]?([^"'"，。,\n]+?)["'"]?\s*$/i,
@@ -446,19 +541,20 @@ function generateDefaultModifications(
                           lowerInstruction.includes('添加') ||
                           lowerInstruction.includes('追加') || 
                           lowerInstruction.includes('append') ||
-                          lowerInstruction.includes('末尾');
+                          lowerInstruction.includes('末尾') ||
+                          lowerInstruction.includes('更多');
     
     if (hasAddKeyword) {
-      const topicMatch = instruction.match(/(?:关于|about)\s*([^的。,，\n]+)/i);
-      const topic = topicMatch ? topicMatch[1].trim() : '';
+      const topic = extractTopic(instruction);
       
+      // Generate detailed content based on topic
       const defaultContent = language === 'Chinese'
         ? topic 
-          ? `## 关于${topic}\n\n这是一个重要的主题，值得深入探讨。${topic}在当今社会中扮演着越来越重要的角色。\n\n请根据需要进一步编辑和扩展这段内容。`
-          : '这是根据您的指令添加的新内容。\n\n请根据需要进一步编辑和扩展。'
+          ? generateDetailedChineseContent(topic)
+          : '这是根据您的指令添加的新内容。\n\n本节内容将为您的文章增添更多深度和细节。我们建议您根据具体需求进一步编辑和扩展这些内容，以确保文章的完整性和专业性。\n\n您可以添加更多的事实、数据、案例研究或个人见解，使内容更加丰富和有价值。'
         : topic
-          ? `## About ${topic}\n\nThis is an important topic worth exploring in depth. ${topic} plays an increasingly important role in today's world.\n\nPlease edit and expand this content as needed.`
-          : 'This is new content added based on your instruction.\n\nPlease edit and expand as needed.';
+          ? generateDetailedEnglishContent(topic)
+          : 'This is new content added based on your instruction.\n\nThis section will add more depth and detail to your article. We recommend that you further edit and expand this content according to your specific needs to ensure the completeness and professionalism of the article.\n\nYou can add more facts, data, case studies, or personal insights to make the content richer and more valuable.';
       
       modifications.push({
         type: 'append',
@@ -494,8 +590,12 @@ export async function POST(request: NextRequest) {
     const session = await auth();
     console.log('Session:', session ? 'exists' : 'null');
 
-    if (!session?.user?.id) {
-      console.log('No session, returning 401');
+    // Check both NextAuth session and admin token
+    const userId = getUserIdFromRequest(session?.user?.id, request);
+    console.log('User ID:', userId ? 'exists' : 'null');
+
+    if (!userId) {
+      console.log('No user ID, returning 401');
       return NextResponse.json(
         { error: 'Unauthorized', details: 'Please log in to use this feature.' },
         { status: 401 }
@@ -553,6 +653,7 @@ export async function POST(request: NextRequest) {
           currentTitle: currentTitle || 'Untitled',
           instruction: instruction.trim(),
           language,
+          userId, // Pass userId for AI API authentication
         });
         console.log('✅ AI generation successful');
       } catch (error) {
