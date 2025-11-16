@@ -1,4 +1,4 @@
--- 创建 model_test_results 表来保存模型测试结果
+-- Create model_test_results table to save model test results
 CREATE TABLE IF NOT EXISTS model_test_results (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL,
@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS model_test_results (
   CONSTRAINT unique_user_model UNIQUE (user_id, model_id)
 );
 
--- 创建索引
+-- Create indexes
 CREATE INDEX IF NOT EXISTS idx_model_test_results_user 
   ON model_test_results(user_id);
 

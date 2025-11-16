@@ -101,6 +101,7 @@ export default function Navbar() {
     { label: "Home", href: "/" },
     { label: "Workspace", href: "/workspace" },
     { label: "Tasks", href: "/tasklist" },
+    { label: "Stories", href: "/stories" },
     { label: "Blog", href: "/blog" },
     { label: "Chatbot", href: "/chatbot" },
   ];

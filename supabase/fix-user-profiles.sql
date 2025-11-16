@@ -1,15 +1,15 @@
 -- ============================================
--- 修复用户记录问题
--- 为当前登录的用户创建 user_profiles 记录
+-- Fix user record issues
+-- Create user_profiles record for currently logged in user
 -- ============================================
 
--- 步骤 1: 检查 user_profiles 表是否存在
+-- Step 1: Check if user_profiles table exists
 SELECT table_name 
 FROM information_schema.tables 
 WHERE table_schema = 'public' 
 AND table_name = 'user_profiles';
 
--- 步骤 2: 如果表不存在，创建它
+-- Step 2: If table doesn't exist, create it
 CREATE TABLE IF NOT EXISTS user_profiles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   username VARCHAR(255) UNIQUE,
@@ -24,24 +24,24 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
--- 步骤 3: 为你的用户 ID 创建记录
--- 替换下面的 UUID 为你的实际用户 ID: 2a1d747b-303a-4e2b-8894-1f010e5e2773
+-- Step 3: Create record for your user ID
+-- Replace the UUID below with your actual user ID: 2a1d747b-303a-4e2b-8894-1f010e5e2773
 INSERT INTO user_profiles (id, email, name, created_at, updated_at)
 VALUES (
   '2a1d747b-303a-4e2b-8894-1f010e5e2773',
-  'your-email@example.com',  -- 替换为你的邮箱
-  'Your Name',                -- 替换为你的名字
+  'your-email@example.com',  -- Replace with your email
+  'Your Name',                -- Replace with your name
   NOW(),
   NOW()
 )
 ON CONFLICT (id) DO NOTHING;
 
--- 步骤 4: 验证用户记录已创建
+-- Step 4: Verify user record has been created
 SELECT id, email, name, created_at 
 FROM user_profiles 
 WHERE id = '2a1d747b-303a-4e2b-8894-1f010e5e2773';
 
--- 步骤 5: 启用 RLS 并创建策略
+-- Step 5: Enable RLS and create policies
 ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view their own profile" ON user_profiles;
@@ -58,5 +58,5 @@ FOR UPDATE
 TO authenticated
 USING (id = auth.uid()::text);
 
--- 步骤 6: 授予权限
+-- Step 6: Grant permissions
 GRANT ALL ON user_profiles TO anon, authenticated, service_role;

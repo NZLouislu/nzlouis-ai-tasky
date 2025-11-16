@@ -1,9 +1,9 @@
 -- ============================================
--- AI Tasky 数据库表创建脚本
--- 基于 Prisma Schema 生成
+-- AI Tasky database table creation script
+-- Generated based on Prisma Schema
 -- ============================================
 
--- 1. 创建 user_ai_settings 表
+-- 1. Create user_ai_settings table
 CREATE TABLE IF NOT EXISTS user_ai_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL UNIQUE,
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS user_ai_settings (
     REFERENCES user_profiles(id) ON DELETE CASCADE
 );
 
--- 2. 创建 user_api_keys 表
+-- 2. Create user_api_keys table
 CREATE TABLE IF NOT EXISTS user_api_keys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL,
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS user_api_keys (
   CONSTRAINT unique_user_provider UNIQUE (user_id, provider)
 );
 
--- 3. 创建 chat_sessions 表
+-- 3. Create chat_sessions table
 CREATE TABLE IF NOT EXISTS chat_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL,
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
     REFERENCES user_profiles(id) ON DELETE CASCADE
 );
 
--- 4. 创建 chat_messages 表
+-- 4. Create chat_messages table
 CREATE TABLE IF NOT EXISTS chat_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id UUID NOT NULL,
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     REFERENCES chat_sessions(id) ON DELETE CASCADE
 );
 
--- 5. 创建 documents 表
+-- 5. Create documents table
 CREATE TABLE IF NOT EXISTS documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL,
@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS documents (
     REFERENCES chat_sessions(id) ON DELETE SET NULL
 );
 
--- 6. 创建 stories 表
+-- 6. Create stories table
 CREATE TABLE IF NOT EXISTS stories (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   document_id UUID NOT NULL,
@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS stories (
     REFERENCES documents(id) ON DELETE CASCADE
 );
 
--- 7. 创建 storage_files 表
+-- 7. Create storage_files table
 CREATE TABLE IF NOT EXISTS storage_files (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL,
@@ -115,30 +115,30 @@ CREATE TABLE IF NOT EXISTS storage_files (
 );
 
 -- ============================================
--- 创建索引以优化查询性能
+-- Create indexes to optimize query performance
 -- ============================================
 
--- user_api_keys 索引
+-- user_api_keys indexes
 CREATE INDEX IF NOT EXISTS idx_user_api_keys_user 
   ON user_api_keys(user_id);
 
--- chat_sessions 索引
+-- chat_sessions indexes
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_created 
   ON chat_sessions(user_id, created_at DESC);
 
--- chat_messages 索引
+-- chat_messages indexes
 CREATE INDEX IF NOT EXISTS idx_chat_messages_session_created 
   ON chat_messages(session_id, created_at);
 
--- documents 索引
+-- documents indexes
 CREATE INDEX IF NOT EXISTS idx_documents_user_created 
   ON documents(user_id, created_at DESC);
 
--- stories 索引
+-- stories indexes
 CREATE INDEX IF NOT EXISTS idx_stories_document_position 
   ON stories(document_id, position);
 
--- storage_files 索引
+-- storage_files indexes
 CREATE INDEX IF NOT EXISTS idx_storage_files_user 
   ON storage_files(user_id);
 
@@ -146,7 +146,7 @@ CREATE INDEX IF NOT EXISTS idx_storage_files_entity
   ON storage_files(entity_type, entity_id);
 
 -- ============================================
--- 验证表创建
+-- Verify table creation
 -- ============================================
 
 SELECT 

@@ -1,8 +1,8 @@
 -- ============================================
--- 添加 Admin 用户到数据库
+-- Add Admin user to database
 -- ============================================
 
--- 步骤 1: 在 user_profiles 表中创建 admin 用户记录
+-- Step 1: Create admin user record in user_profiles table
 INSERT INTO user_profiles (
   id,
   email,
@@ -24,7 +24,7 @@ VALUES (
 ON CONFLICT (id) DO UPDATE SET
   updated_at = NOW();
 
--- 步骤 2: 为 admin 用户创建默认 AI 设置
+-- Step 2: Create default AI settings for admin user
 INSERT INTO user_ai_settings (
   id,
   user_id,
@@ -50,7 +50,7 @@ VALUES (
 ON CONFLICT (user_id) DO UPDATE SET
   updated_at = NOW();
 
--- 步骤 3: 验证 admin 用户已创建
+-- Step 3: Verify admin user has been created
 SELECT 
   id,
   email,
@@ -60,7 +60,7 @@ SELECT
 FROM user_profiles
 WHERE id = 'admin-user-id';
 
--- 步骤 4: 验证 admin 用户的 AI 设置已创建
+-- Step 4: Verify admin user's AI settings have been created
 SELECT 
   id,
   user_id,

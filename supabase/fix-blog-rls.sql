@@ -1,10 +1,10 @@
 -- ============================================
--- 修复 Blog Posts 的 RLS 策略
--- 适配 NextAuth 而不是 Supabase Auth
+-- Fix Blog Posts RLS policies
+-- Adapt for NextAuth instead of Supabase Auth
 -- ============================================
 
--- 方案 1: 暂时允许所有认证用户访问（推荐用于开发环境）
--- 应用层通过 user_id 过滤确保安全性
+-- Option 1: Temporarily allow all authenticated users access (recommended for development environment)
+-- Application layer filters by user_id to ensure security
 
 DROP POLICY IF EXISTS "Users can access their own blog posts" ON blog_posts;
 
@@ -15,10 +15,10 @@ TO authenticated
 USING (true)
 WITH CHECK (true);
 
--- 方案 2: 如果你想要更严格的控制，可以使用 service_role
--- 但这需要在应用层使用 service_role key 而不是 anon key
+-- Option 2: If you want stricter control, you can use service_role
+-- But this requires using service_role key instead of anon key in application layer
 
--- 验证策略是否生效
+-- Verify if policies are effective
 SELECT 
   schemaname,
   tablename,
@@ -31,7 +31,7 @@ SELECT
 FROM pg_policies
 WHERE tablename = 'blog_posts';
 
--- 检查 RLS 是否启用
+-- Check if RLS is enabled
 SELECT 
   schemaname,
   tablename,
