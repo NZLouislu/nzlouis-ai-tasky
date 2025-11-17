@@ -1,7 +1,7 @@
 import { useBlogStore } from '@/lib/stores/blog-store';
+import { vi } from 'vitest';
 
-// Mock fetch for API calls
-global.fetch = jest.fn();
+global.fetch = vi.fn();
 
 describe('Blog Operations Integration', () => {
   beforeEach(() => {
@@ -11,14 +11,12 @@ describe('Blog Operations Integration', () => {
       error: null,
     });
     
-    // Reset fetch mock
-    (global.fetch as jest.Mock).mockClear();
+    (global.fetch as any).mockClear();
   });
 
   describe('Post Creation', () => {
     it('should create a root post', async () => {
-      // Mock fetch for API call
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
+      (global.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ 
           data: {
@@ -47,8 +45,7 @@ describe('Blog Operations Integration', () => {
     });
 
     it('should create a child post', async () => {
-      // Mock fetch for parent post creation
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
+      (global.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ 
           data: {
@@ -64,8 +61,7 @@ describe('Blog Operations Integration', () => {
         }),
       });
       
-      // Mock fetch for child post creation
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
+      (global.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ 
           data: {
@@ -103,8 +99,7 @@ describe('Blog Operations Integration', () => {
 
   describe('Post Updates', () => {
     it('should update post content', async () => {
-      // Mock fetch for post creation
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
+      (global.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ 
           data: {
@@ -120,8 +115,7 @@ describe('Blog Operations Integration', () => {
         }),
       });
       
-      // Mock fetch for post update
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
+      (global.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ 
           data: {
@@ -159,8 +153,7 @@ describe('Blog Operations Integration', () => {
 
   describe('Post Hierarchy', () => {
     it('should maintain parent-child relationships', async () => {
-      // Mock fetch for parent post creation
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
+      (global.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ 
           data: {
@@ -176,8 +169,7 @@ describe('Blog Operations Integration', () => {
         }),
       });
       
-      // Mock fetch for child 1 creation
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
+      (global.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ 
           data: {
@@ -193,8 +185,7 @@ describe('Blog Operations Integration', () => {
         }),
       });
       
-      // Mock fetch for child 2 creation
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
+      (global.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ 
           data: {

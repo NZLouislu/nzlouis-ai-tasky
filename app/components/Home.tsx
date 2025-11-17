@@ -3,39 +3,39 @@ import Link from "next/link";
 export default function Home() {
   const features = [
     {
-      icon: "🏠",
-      title: "Home",
-      description: "Welcome to your AI-powered workspace",
-      href: "/",
-      color: "from-blue-500 to-blue-600",
+      icon: "📖",
+      title: "Stories",
+      description: "AI-powered user story generation and sync to Jira/Trello",
+      href: "/stories",
+      color: "from-purple-500 to-purple-600",
     },
     {
-      icon: "📁",
-      title: "Workspace",
-      description: "Organize and manage your projects",
-      href: "/workspace",
-      color: "from-green-500 to-green-600",
+      icon: "💬",
+      title: "Blog",
+      description: "AI-assisted writing and content management",
+      href: "/blog",
+      color: "from-orange-500 to-orange-600",
+    },
+    {
+      icon: "🤖",
+      title: "AI Chatbot",
+      description: "Advanced AI assistants for task management",
+      href: "/chatbot",
+      color: "from-indigo-500 to-indigo-600",
     },
     {
       icon: "📝",
       title: "Tasks",
       description: "Track and manage your tasks efficiently",
       href: "/tasklist",
-      color: "from-purple-500 to-purple-600",
+      color: "from-green-500 to-green-600",
     },
     {
-      icon: "📖",
-      title: "Blog",
-      description: "Read and write articles",
-      href: "/blog",
-      color: "from-orange-500 to-orange-600",
-    },
-    {
-      icon: "💬",
-      title: "AI Chatbot",
-      description: "Chat with advanced AI assistants",
-      href: "/chatbot",
-      color: "from-indigo-500 to-indigo-600",
+      icon: "📁",
+      title: "Workspace",
+      description: "Organize and manage your projects",
+      href: "/workspace",
+      color: "from-gray-500 to-gray-600",
     },
   ];
 
@@ -47,7 +47,7 @@ export default function Home() {
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
           <div className="text-center">
             <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
-              Chatbot
+              AI Tasky
             </h1>
             <p className="text-xl md:text-2xl text-gray-600 mb-8 max-w-3xl mx-auto">
               Your intelligent task management assistant powered by AI

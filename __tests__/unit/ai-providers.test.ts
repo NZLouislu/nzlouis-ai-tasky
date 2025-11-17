@@ -1,37 +1,35 @@
-// Mock Supabase before importing anything else
-jest.mock('@/lib/supabase/tasky-db-client', () => ({
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('@/lib/supabase/tasky-db-client', () => ({
   taskyDb: {
-    from: jest.fn(),
+    from: vi.fn(),
   },
 }));
-
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { getFallbackAPIKey } from '@/lib/ai/providers';
 
-// Mock all external dependencies
-jest.mock('@prisma/client', () => ({
-  PrismaClient: jest.fn(),
+vi.mock('@prisma/client', () => ({
+  PrismaClient: vi.fn(),
 }));
 
-jest.mock('@/lib/encryption', () => ({
-  decryptAPIKey: jest.fn(),
+vi.mock('@/lib/encryption', () => ({
+  decryptAPIKey: vi.fn(),
 }));
 
-jest.mock('@ai-sdk/openai', () => ({
-  createOpenAI: jest.fn(),
+vi.mock('@ai-sdk/openai', () => ({
+  createOpenAI: vi.fn(),
 }));
 
-jest.mock('@ai-sdk/google', () => ({
-  createGoogleGenerativeAI: jest.fn(),
+vi.mock('@ai-sdk/google', () => ({
+  createGoogleGenerativeAI: vi.fn(),
 }));
 
-jest.mock('@ai-sdk/anthropic', () => ({
-  createAnthropic: jest.fn(),
+vi.mock('@ai-sdk/anthropic', () => ({
+  createAnthropic: vi.fn(),
 }));
 
 describe('AI Providers', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     process.env.OPENAI_API_KEY = 'test-openai-key';
     process.env.GOOGLE_API_KEY = 'test-google-key';
     process.env.ANTHROPIC_API_KEY = 'test-anthropic-key';

@@ -35,7 +35,10 @@ describe('ProjectCard Component', () => {
   it('renders project information correctly', () => {
     render(
       <ProjectCard 
-        project={mockProject}
+        project={{
+          ...mockProject,
+          projectKey: 'TEST-PROJECT'
+        }}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
       />
@@ -49,6 +52,7 @@ describe('ProjectCard Component', () => {
   it('shows connection status indicators', () => {
     const projectWithConnections = {
       ...mockProject,
+      projectKey: 'TEST-PROJECT',
       connections: [
         { platform: 'jira', status: 'connected' },
         { platform: 'trello', status: 'disconnected' }
@@ -73,7 +77,10 @@ describe('ProjectCard Component', () => {
 
     render(
       <ProjectCard 
-        project={mockProject}
+        project={{
+          ...mockProject,
+          projectKey: 'TEST-PROJECT'
+        }}
         onEdit={onEdit}
         onDelete={vi.fn()}
       />
@@ -82,7 +89,10 @@ describe('ProjectCard Component', () => {
     const editButton = screen.getByRole('button', { name: /edit/i });
     await user.click(editButton);
 
-    expect(onEdit).toHaveBeenCalledWith(mockProject);
+    expect(onEdit).toHaveBeenCalledWith({
+      ...mockProject,
+      projectKey: 'TEST-PROJECT'
+    });
   });
 
   it('calls onDelete when delete button is clicked', async () => {
@@ -91,7 +101,10 @@ describe('ProjectCard Component', () => {
 
     render(
       <ProjectCard 
-        project={mockProject}
+        project={{
+          ...mockProject,
+          projectKey: 'TEST-PROJECT'
+        }}
         onEdit={vi.fn()}
         onDelete={onDelete}
       />
@@ -106,6 +119,7 @@ describe('ProjectCard Component', () => {
   it('displays document count when provided', () => {
     const projectWithDocs = {
       ...mockProject,
+      projectKey: 'TEST-PROJECT',
       documentCount: 5
     };
 
@@ -123,6 +137,7 @@ describe('ProjectCard Component', () => {
   it('shows last sync information', () => {
     const projectWithSync = {
       ...mockProject,
+      projectKey: 'TEST-PROJECT',
       lastSyncAt: '2024-01-01T10:00:00Z',
       syncStatus: 'success'
     };
@@ -263,10 +278,15 @@ describe('Keyboard Shortcuts', () => {
   it('triggers save action on Cmd+S', () => {
     const onSave = vi.fn();
     
-    useStoriesShortcuts({
-      onSave,
-      enabled: true
-    });
+    const TestComponent = () => {
+      useStoriesShortcuts({
+        onSave,
+        enabled: true
+      });
+      return <div>Test</div>;
+    };
+    
+    render(<TestComponent />);
 
     fireEvent.keyDown(document, {
       key: 's',
@@ -279,10 +299,15 @@ describe('Keyboard Shortcuts', () => {
   it('triggers new story action on Cmd+N', () => {
     const onNewStory = vi.fn();
     
-    useStoriesShortcuts({
-      onNewStory,
-      enabled: true
-    });
+    const TestComponent = () => {
+      useStoriesShortcuts({
+        onNewStory,
+        enabled: true
+      });
+      return <div>Test</div>;
+    };
+    
+    render(<TestComponent />);
 
     fireEvent.keyDown(document, {
       key: 'n',
@@ -295,10 +320,15 @@ describe('Keyboard Shortcuts', () => {
   it('does not trigger shortcuts when disabled', () => {
     const onSave = vi.fn();
     
-    useStoriesShortcuts({
-      onSave,
-      enabled: false
-    });
+    const TestComponent = () => {
+      useStoriesShortcuts({
+        onSave,
+        enabled: false
+      });
+      return <div>Test</div>;
+    };
+    
+    render(<TestComponent />);
 
     fireEvent.keyDown(document, {
       key: 's',
@@ -338,8 +368,11 @@ Description of the story
     
     expect(trelloCard.name).toBe('Story Title');
     expect(trelloCard.desc).toContain('Description of the story');
-    expect(trelloCard.checklists).toHaveLength(1);
-    expect(trelloCard.checklists[0].items).toHaveLength(2);
+    expect(trelloCard.checklists).toBeDefined();
+    if (trelloCard.checklists) {
+      expect(trelloCard.checklists).toHaveLength(1);
+      expect(trelloCard.checklists[0].items).toHaveLength(2);
+    }
   });
 });
 

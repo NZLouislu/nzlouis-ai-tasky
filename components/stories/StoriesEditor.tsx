@@ -41,8 +41,15 @@ export default function StoriesEditor({
     ],
   });
 
+  
+
   // Handle content changes
   const handleContentChange = useCallback((newContent: PartialBlock[]) => {
+    // Prevent infinite loops by checking if content actually changed
+    if (JSON.stringify(newContent) === JSON.stringify(content)) {
+      return;
+    }
+    
     setContent(newContent);
     onContentChange?.(newContent);
 
@@ -110,9 +117,19 @@ export default function StoriesEditor({
   // Update content when initialContent changes
   useEffect(() => {
     if (initialContent.length > 0) {
-      setContent(initialContent);
+      const currentContentStr = JSON.stringify(content);
+      const newContentStr = JSON.stringify(initialContent);
+      
+      if (currentContentStr !== newContentStr) {
+        setContent(initialContent);
+        try {
+          editor.replaceBlocks(editor.document, initialContent);
+        } catch (error) {
+          console.warn('Failed to update editor content:', error);
+        }
+      }
     }
-  }, [initialContent]);
+  }, [JSON.stringify(initialContent), editor]);
 
   return (
     <div className="stories-editor-container">

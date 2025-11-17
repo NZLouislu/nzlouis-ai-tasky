@@ -49,7 +49,7 @@ Please provide improved content for this report. Focus on the specific instructi
 
     try {
       const { text } = await generateText({
-        model: google('gemini-2.0-flash-exp'),
+        model: google('gemini-2.0-flash-exp') as any,
         system: systemPrompt,
         prompt: userPrompt,
         maxTokens: 2000,

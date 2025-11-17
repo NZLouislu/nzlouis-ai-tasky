@@ -99,11 +99,11 @@ export default function Navbar() {
 
   const items = [
     { label: "Home", href: "/" },
-    { label: "Workspace", href: "/workspace" },
-    { label: "Tasks", href: "/tasklist" },
     { label: "Stories", href: "/stories" },
     { label: "Blog", href: "/blog" },
     { label: "Chatbot", href: "/chatbot" },
+    { label: "Tasks", href: "/tasklist" },
+    { label: "Workspace", href: "/workspace" },
   ];
 
   const linkCls = (isActive: boolean) =>

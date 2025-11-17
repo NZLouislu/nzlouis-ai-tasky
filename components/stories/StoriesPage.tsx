@@ -1,9 +1,19 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import StoriesSidebar from "./StoriesSidebar";
 import StoriesContent from "./StoriesContent";
+import StoriesChatbotPanel from "./StoriesChatbotPanel";
 import { useStoriesStore } from "@/lib/stores/stories-store";
+
+interface PageModification {
+  type: string;
+  target?: string;
+  content?: string;
+  title?: string;
+  position?: number;
+  paragraphIndex?: number;
+}
 
 export default function StoriesPage() {
   const { data: session, status: sessionStatus } = useSession();
@@ -12,8 +22,13 @@ export default function StoriesPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isChatbotVisible, setIsChatbotVisible] = useState(false);
+  const [chatbotWidth, setChatbotWidth] = useState(600);
+  const [isResizing, setIsResizing] = useState(false);
 
-  const { setUserId, userId } = useStoriesStore();
+  const { setUserId, userId, activeDocumentId, platforms, updateDocument } = useStoriesStore();
+  const resizeStartX = useRef<number>(0);
+  const resizeStartWidth = useRef<number>(600);
 
   useEffect(() => {
     const checkAdminSession = async () => {
@@ -66,6 +81,35 @@ export default function StoriesPage() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    resizeStartX.current = e.clientX;
+    resizeStartWidth.current = chatbotWidth;
+  }, [chatbotWidth]);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isResizing) return;
+    const deltaX = resizeStartX.current - e.clientX;
+    const newWidth = Math.max(300, Math.min(800, resizeStartWidth.current + deltaX));
+    setChatbotWidth(newWidth);
+  }, [isResizing]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isResizing, handleMouseMove, handleMouseUp]);
+
   const toggleSidebar = useCallback(() => {
     if (isMobile) {
       setSidebarOpen(!sidebarOpen);
@@ -73,6 +117,214 @@ export default function StoriesPage() {
       setSidebarCollapsed(!sidebarCollapsed);
     }
   }, [isMobile, sidebarOpen, sidebarCollapsed]);
+
+  const getActiveDocument = useCallback(() => {
+    for (const platform of platforms) {
+      for (const project of platform.projects) {
+        const document = project.documents.find(doc => doc.id === activeDocumentId);
+        if (document) {
+          return { document, project, platform };
+        }
+      }
+    }
+    return null;
+  }, [platforms, activeDocumentId]);
+
+  const handlePageModification = useCallback(
+    async (mod: PageModification): Promise<string> => {
+      const instruction = typeof mod === 'string' ? mod : mod.content || mod.title || '';
+      try {
+        const activeData = getActiveDocument();
+        if (!activeData) {
+          return "❌ Error: No active document found";
+        }
+
+        const { document } = activeData;
+        console.log("Requesting AI modification for document:", activeDocumentId);
+        console.log("Instruction:", instruction);
+
+        if (!instruction || instruction.trim().length < 5) {
+          return "⚠️ Please provide a more detailed instruction (at least 5 characters).";
+        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+        try {
+          console.log("Sending request to /api/stories/ai-modify");
+          
+          const currentContent = document.content || '';
+          const currentTitle = document.title || 'Untitled';
+
+          console.log("Request body:", {
+            documentId: activeDocumentId,
+            currentContent,
+            currentTitle,
+            instruction: instruction.trim(),
+          });
+
+          const response = await fetch('/api/stories/ai-modify', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              documentId: activeDocumentId,
+              currentContent,
+              currentTitle,
+              instruction: instruction.trim(),
+            }),
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeoutId);
+
+          console.log("Response status:", response.status);
+
+          const contentType = response.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            const text = await response.text();
+            console.error("Non-JSON response:", text);
+            throw new Error(`Expected JSON but got ${contentType}. Response: ${text.substring(0, 200)}`);
+          }
+
+          const data = await response.json();
+          console.log("AI response data:", data);
+
+          if (!response.ok) {
+            const errorMsg = data.error || 'Failed to get AI modifications';
+            const details = data.details || '';
+            return `❌ Error: ${errorMsg}${details ? '\n' + details : ''}\n\nTips:\n- Try a simpler request\n- Check your API quota\n- Wait a moment and try again`;
+          }
+
+          if (!data.modifications || data.modifications.length === 0) {
+            const message = data.message || 'No modifications were generated.';
+            return `⚠️ ${message}\n\nSuggestions:\n- Be more specific (e.g., "Add a paragraph about...")\n- Try shorter instructions\n- Simplify your request\n- Make sure the document has some content`;
+          }
+
+          console.log("Applying modifications:", data.modifications);
+          let appliedCount = 0;
+
+          for (const modification of data.modifications) {
+            try {
+              await applyModification(modification, data.explanation);
+              appliedCount++;
+            } catch (modError) {
+              console.error("Failed to apply modification:", modError);
+            }
+          }
+
+          if (appliedCount === 0) {
+            return "⚠️ Modifications were generated but failed to apply. Please try again.";
+          }
+
+          return `✅ Successfully applied ${appliedCount} modification(s)!\n\n${data.explanation || ''}\n\n💡 AI-modified content has been added to your document.`;
+        } catch (fetchError) {
+          clearTimeout(timeoutId);
+          if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+            return "⏱️ Request timed out. The AI is taking too long to respond.\n\nTry:\n- Simplifying your request\n- Breaking it into smaller parts\n- Waiting a moment and trying again";
+          }
+          throw fetchError;
+        }
+      } catch (error) {
+        console.error("Error applying AI modification:", error);
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        return `❌ Error: ${errorMsg}\n\nPlease try again with a simpler request.`;
+      }
+    },
+    [activeDocumentId, platforms, getActiveDocument]
+  );
+
+  // Helper function to replace a specific paragraph/section in content
+  const replaceParagraphInContent = useCallback((content: string, target: string, newContent: string): string => {
+    if (!content || !target) return content;
+    
+    const lines = content.split('\n');
+    let sectionStart = -1;
+    let sectionEnd = -1;
+    
+    // Find the target section
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line.toLowerCase().includes(target.toLowerCase()) && 
+          (line.startsWith('#') || line.startsWith('##') || line.startsWith('###'))) {
+        sectionStart = i;
+        break;
+      }
+    }
+    
+    if (sectionStart === -1) {
+      // If section not found, append the new content
+      return content ? `${content}\n\n${newContent}` : newContent;
+    }
+    
+    // Find the end of the section (next header or end of content)
+    for (let i = sectionStart + 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line.startsWith('#') && !line.startsWith('####')) {
+        sectionEnd = i;
+        break;
+      }
+    }
+    
+    if (sectionEnd === -1) {
+      sectionEnd = lines.length;
+    }
+    
+    // Replace the section
+    const beforeSection = lines.slice(0, sectionStart);
+    const afterSection = lines.slice(sectionEnd);
+    const newContentLines = newContent.split('\n');
+    
+    return [...beforeSection, ...newContentLines, ...afterSection].join('\n');
+  }, []);
+
+  const applyModification = useCallback(
+    async (mod: PageModification, explanation?: string) => {
+      const activeData = getActiveDocument();
+      if (!activeData) return;
+
+      const { document } = activeData;
+      let newContent = document.content || '';
+
+      switch (mod.type) {
+        case 'update_title':
+          if (mod.title && activeDocumentId) {
+            updateDocument(activeDocumentId, { title: mod.title });
+          }
+          break;
+        case 'replace':
+          if (mod.content) {
+            newContent = mod.content;
+          }
+          break;
+        case 'append':
+          if (mod.content) {
+            newContent = newContent ? `${newContent}\n\n${mod.content}` : mod.content;
+          }
+          break;
+        case 'add_section':
+          if (mod.content) {
+            newContent = newContent ? `${newContent}\n\n${mod.content}` : mod.content;
+          }
+          break;
+        case 'replace_paragraph':
+          if (mod.content && mod.target) {
+            // Find and replace the target section/paragraph
+            newContent = replaceParagraphInContent(newContent, mod.target, mod.content);
+          }
+          break;
+        default:
+          console.warn('Unknown modification type:', mod.type);
+          break;
+      }
+
+      if (newContent !== document.content && activeDocumentId) {
+        updateDocument(activeDocumentId, { content: newContent });
+      }
+    },
+    [activeDocumentId, getActiveDocument, updateDocument, replaceParagraphInContent]
+  );
 
   if (sessionStatus === "loading" || isCheckingAdmin) {
     return (
@@ -83,21 +335,100 @@ export default function StoriesPage() {
   }
 
   return (
-    <div className="h-screen flex bg-gray-50">
-      <StoriesSidebar
-        isOpen={sidebarOpen}
-        isCollapsed={sidebarCollapsed}
-        onToggle={toggleSidebar}
-        isMobile={isMobile}
-      />
-      
-      <div className={`flex-1 flex flex-col transition-all duration-300 ${
-        isMobile 
-          ? (sidebarOpen ? 'ml-0' : 'ml-0') 
-          : (sidebarCollapsed ? 'ml-16' : 'ml-80')
-      }`}>
+    <div className="h-screen flex bg-gray-50 overflow-hidden">
+      {(sidebarCollapsed || isMobile) && !sidebarOpen && (
+        <button
+          onClick={() => {
+            setSidebarCollapsed(false);
+            setSidebarOpen(true);
+          }}
+          className="fixed left-4 top-20 z-30 bg-white p-3 rounded-lg shadow-lg hover:bg-gray-50 transition-colors border border-gray-200"
+          title="Show Sidebar"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-6 w-6 text-gray-700"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 6h16M4 12h16M4 18h16"
+            />
+          </svg>
+        </button>
+      )}
+
+      <div
+        className={`${
+          sidebarCollapsed ? "w-0 overflow-hidden" : "w-80"
+        } flex-shrink-0 transition-all duration-300 ${
+          isChatbotVisible && !isMobile ? "hidden lg:block" : "hidden md:block"
+        }`}
+      >
+        <StoriesSidebar
+          isOpen={sidebarOpen}
+          isCollapsed={sidebarCollapsed}
+          onToggle={toggleSidebar}
+          isMobile={isMobile}
+        />
+      </div>
+
+      {sidebarOpen && !sidebarCollapsed && isMobile && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-30"
+          onClick={() => {
+            setSidebarOpen(false);
+            setSidebarCollapsed(true);
+          }}
+        >
+          <div
+            className="w-80 h-full bg-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <StoriesSidebar
+              isOpen={sidebarOpen}
+              isCollapsed={sidebarCollapsed}
+              onToggle={() => {
+                setSidebarOpen(false);
+                setSidebarCollapsed(true);
+              }}
+              isMobile={isMobile}
+            />
+          </div>
+        </div>
+      )}
+
+      <div
+        className={`flex-1 flex flex-col transition-all duration-300 ${
+          isMobile
+            ? "ml-0 w-full"
+            : sidebarCollapsed
+            ? "ml-0"
+            : isChatbotVisible
+            ? "ml-0 lg:ml-80"
+            : "ml-0 md:ml-80"
+        }`}
+        style={{
+          marginRight: isChatbotVisible && !isMobile ? `${chatbotWidth}px` : '0',
+        }}
+      >
         <StoriesContent />
       </div>
+
+      <StoriesChatbotPanel
+        isChatbotVisible={isChatbotVisible}
+        isMobile={isMobile}
+        chatbotWidth={chatbotWidth}
+        setIsChatbotVisible={setIsChatbotVisible}
+        setSidebarOpen={setSidebarOpen}
+        setSidebarCollapsed={setSidebarCollapsed}
+        handleMouseDown={handleMouseDown}
+        handlePageModification={handlePageModification}
+      />
     </div>
   );
 }

@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     const body: TrelloConnectionRequest = await request.json();
     const { trelloKey, trelloToken, trelloBoardId, configName = 'Default' } = body;
 
-    // 验证必需字段
+    // Validate required fields
     if (!trelloKey || !trelloToken || !trelloBoardId) {
       return NextResponse.json(
         { error: 'Missing required fields: trelloKey, trelloToken, trelloBoardId' },
@@ -32,11 +32,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 加密凭证
+    // Encrypt credentials
     const encryptedKey = encrypt(trelloKey);
     const encryptedToken = encrypt(trelloToken);
 
-    // 测试Trello连接
+    // Test Trello connection
     try {
       const testResponse = await fetch(
         `https://api.trello.com/1/boards/${trelloBoardId}?key=${trelloKey}&token=${trelloToken}`,
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
 
       const boardData = await testResponse.json();
       
-      // 保存配置到数据库
+      // Save configuration to database
       const { data, error } = await taskyDb
         .from('user_platform_configs')
         .upsert({
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // 更新平台连接状态
+      // Update platform connection status
       await taskyDb
         .from('stories_platform_connections')
         .upsert({
@@ -139,7 +139,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 获取用户的Trello配置
+    // Get user's Trello configuration
     const { data, error } = await taskyDb
       .from('user_platform_configs_safe')
       .select('*')
@@ -183,7 +183,7 @@ export async function DELETE(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const configName = searchParams.get('configName') || 'Default';
 
-    // 删除配置
+    // Delete configuration
     const { error } = await taskyDb
       .from('user_platform_configs')
       .delete()

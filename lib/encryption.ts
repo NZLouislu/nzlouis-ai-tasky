@@ -22,7 +22,7 @@ export function encrypt(text: string): string {
     const iv = crypto.randomBytes(IV_LENGTH);
     const derivedKey = crypto.pbkdf2Sync(key, salt, 100000, 32, 'sha256');
     
-    const cipher = crypto.createCipherGCM(ALGORITHM, derivedKey, iv);
+    const cipher = crypto.createCipheriv(ALGORITHM, derivedKey, iv);
     const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
     const tag = cipher.getAuthTag();
     
@@ -45,7 +45,7 @@ export function decrypt(encryptedData: string): string {
     
     const derivedKey = crypto.pbkdf2Sync(key, salt, 100000, 32, 'sha256');
     
-    const decipher = crypto.createDecipherGCM(ALGORITHM, derivedKey, iv);
+    const decipher = crypto.createDecipheriv(ALGORITHM, derivedKey, iv);
     decipher.setAuthTag(tag);
     
     const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
@@ -58,16 +58,6 @@ export function decrypt(encryptedData: string): string {
 
 export function generateEncryptionKey(): string {
   return crypto.randomBytes(32).toString('hex');
-}import crypto from 'crypto';
-
-const ALGORITHM = 'aes-256-gcm';
-
-function getEncryptionKey(): Buffer {
-  const key = process.env.AI_ENCRYPTION_KEY;
-  if (!key) {
-    throw new Error('AI_ENCRYPTION_KEY is not set');
-  }
-  return Buffer.from(key, 'hex');
 }
 
 export interface EncryptedData {
@@ -77,7 +67,7 @@ export interface EncryptedData {
 }
 
 export function encryptAPIKey(apiKey: string): EncryptedData {
-  const key = getEncryptionKey();
+  const key = Buffer.from(getEncryptionKey(), 'hex');
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
   
@@ -94,7 +84,7 @@ export function encryptAPIKey(apiKey: string): EncryptedData {
 }
 
 export function decryptAPIKey(encrypted: string, iv: string, authTag: string): string {
-  const key = getEncryptionKey();
+  const key = Buffer.from(getEncryptionKey(), 'hex');
   const decipher = crypto.createDecipheriv(
     ALGORITHM,
     key,

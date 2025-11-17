@@ -1,4 +1,4 @@
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 
 // Mock DOM APIs for Node.js environment
 Object.defineProperty(global, 'FileReader', {
@@ -35,7 +35,7 @@ Object.defineProperty(global, 'HTMLCanvasElement', {
     height = 0;
     getContext() {
       return {
-        drawImage: jest.fn()
+        drawImage: vi.fn()
       };
     }
     toBlob(callback: (blob: Blob | null) => void) {
@@ -65,38 +65,38 @@ Object.defineProperty(global, 'crypto', {
 });
 
 // Mock Supabase
-jest.mock('@supabase/supabase-js', () => ({
-  createClient: jest.fn(() => ({
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: vi.fn(() => ({
     storage: {
-      from: jest.fn(() => ({
-        upload: jest.fn().mockResolvedValue({ error: null }),
-        getPublicUrl: jest.fn(() => ({ data: { publicUrl: 'https://test.com/image.jpg' } })),
-        remove: jest.fn().mockResolvedValue({ error: null })
+      from: vi.fn(() => ({
+        upload: vi.fn().mockResolvedValue({ error: null }),
+        getPublicUrl: vi.fn(() => ({ data: { publicUrl: 'https://test.com/image.jpg' } })),
+        remove: vi.fn().mockResolvedValue({ error: null })
       }))
     },
-    from: jest.fn(() => ({
-      insert: jest.fn(() => ({
-        select: jest.fn(() => ({
-          single: jest.fn().mockResolvedValue({ 
+    from: vi.fn(() => ({
+      insert: vi.fn(() => ({
+        select: vi.fn(() => ({
+          single: vi.fn().mockResolvedValue({ 
             data: { id: 'test-file-id' }, 
             error: null 
           })
         }))
       })),
-      select: jest.fn(() => ({
-        eq: jest.fn(() => ({
-          eq: jest.fn(() => ({
-            single: jest.fn().mockResolvedValue({ data: null, error: null }),
-            eq: jest.fn(() => ({
-              single: jest.fn().mockResolvedValue({ data: null, error: null })
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            single: vi.fn().mockResolvedValue({ data: null, error: null }),
+            eq: vi.fn(() => ({
+              single: vi.fn().mockResolvedValue({ data: null, error: null })
             }))
           }))
         }))
       })),
-      delete: jest.fn(() => ({
-        eq: jest.fn(() => ({
-          eq: jest.fn(() => ({
-            eq: jest.fn().mockResolvedValue({ error: null })
+      delete: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            eq: vi.fn().mockResolvedValue({ error: null })
           }))
         }))
       }))
@@ -106,7 +106,7 @@ jest.mock('@supabase/supabase-js', () => ({
 
 describe('Upload Service', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('uploadImage', () => {

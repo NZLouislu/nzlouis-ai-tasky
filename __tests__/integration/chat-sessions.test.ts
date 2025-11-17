@@ -1,13 +1,15 @@
+import { vi } from 'vitest';
+
 const mockTaskyDbHelpers = {
-  createChatSession: jest.fn(),
-  getChatSessions: jest.fn(),
-  getChatSession: jest.fn(),
-  updateChatSession: jest.fn(),
-  deleteChatSession: jest.fn(),
-  getChatMessages: jest.fn(),
+  createChatSession: vi.fn(),
+  getChatSessions: vi.fn(),
+  getChatSession: vi.fn(),
+  updateChatSession: vi.fn(),
+  deleteChatSession: vi.fn(),
+  getChatMessages: vi.fn(),
 };
 
-jest.mock('@/lib/supabase/tasky-db-client', () => ({
+vi.mock('@/lib/supabase/tasky-db-client', () => ({
   taskyDbHelpers: mockTaskyDbHelpers,
 }));
 
@@ -16,7 +18,7 @@ describe('Chat Sessions Integration', () => {
   const mockSessionId = 'session-123';
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('Session CRUD Operations', () => {
@@ -31,7 +33,7 @@ describe('Chat Sessions Integration', () => {
         updated_at: new Date().toISOString(),
       };
 
-      mockTaskyDbHelpers.createChatSession = jest.fn().mockResolvedValue(mockSession);
+      mockTaskyDbHelpers.createChatSession = vi.fn().mockResolvedValue(mockSession);
 
       const result = await mockTaskyDbHelpers.createChatSession(mockUserId, {
         title: 'New Chat',
@@ -56,7 +58,7 @@ describe('Chat Sessions Integration', () => {
         { id: 'session-2', title: 'Chat 2', user_id: mockUserId },
       ];
 
-      mockTaskyDbHelpers.getChatSessions = jest.fn().mockResolvedValue(mockSessions);
+      mockTaskyDbHelpers.getChatSessions = vi.fn().mockResolvedValue(mockSessions);
 
       const result = await mockTaskyDbHelpers.getChatSessions(mockUserId);
 
@@ -71,7 +73,7 @@ describe('Chat Sessions Integration', () => {
         title: 'Test Chat',
       };
 
-      mockTaskyDbHelpers.getChatSession = jest.fn().mockResolvedValue(mockSession);
+      mockTaskyDbHelpers.getChatSession = vi.fn().mockResolvedValue(mockSession);
 
       const result = await mockTaskyDbHelpers.getChatSession(mockSessionId, mockUserId);
 
@@ -85,7 +87,7 @@ describe('Chat Sessions Integration', () => {
         title: 'Updated Title',
       };
 
-      mockTaskyDbHelpers.updateChatSession = jest.fn().mockResolvedValue(updatedSession);
+      mockTaskyDbHelpers.updateChatSession = vi.fn().mockResolvedValue(updatedSession);
 
       const result = await mockTaskyDbHelpers.updateChatSession(
         mockSessionId,
@@ -97,7 +99,7 @@ describe('Chat Sessions Integration', () => {
     });
 
     it('should delete a session', async () => {
-      mockTaskyDbHelpers.deleteChatSession = jest.fn().mockResolvedValue(undefined);
+      mockTaskyDbHelpers.deleteChatSession = vi.fn().mockResolvedValue(undefined);
 
       await mockTaskyDbHelpers.deleteChatSession(mockSessionId, mockUserId);
 
@@ -127,7 +129,7 @@ describe('Chat Sessions Integration', () => {
         },
       ];
 
-      mockTaskyDbHelpers.getChatMessages = jest.fn().mockResolvedValue(mockMessages);
+      mockTaskyDbHelpers.getChatMessages = vi.fn().mockResolvedValue(mockMessages);
 
       const result = await mockTaskyDbHelpers.getChatMessages(mockSessionId);
 
@@ -140,7 +142,7 @@ describe('Chat Sessions Integration', () => {
     it('should only return sessions for the specified user', async () => {
       const user1Sessions = [{ id: 'session-1', user_id: 'user-1' }];
 
-      mockTaskyDbHelpers.getChatSessions = jest.fn().mockResolvedValue(user1Sessions);
+      mockTaskyDbHelpers.getChatSessions = vi.fn().mockResolvedValue(user1Sessions);
 
       const result = await mockTaskyDbHelpers.getChatSessions('user-1');
 

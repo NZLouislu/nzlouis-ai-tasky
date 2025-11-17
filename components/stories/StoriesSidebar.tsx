@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { ChevronRight, ChevronDown, Search, Plus, X } from "lucide-react";
 import { useStoriesStore } from "@/lib/stores/stories-store";
+import { useSession } from "next-auth/react";
 
 interface StoriesSidebarProps {
   isOpen: boolean;
@@ -23,10 +24,15 @@ export default function StoriesSidebar({
     expandedProjects,
     toggleProjectExpansion,
     activeDocumentId,
-    setActiveDocument
+    setActiveDocument,
+    createNewDocument,
+    addProject,
+    updatePlatformStatus
   } = useStoriesStore();
 
+  const { data: session } = useSession();
   const [searchFocused, setSearchFocused] = useState(false);
+  const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -67,6 +73,102 @@ export default function StoriesSidebar({
 
   const handleDocumentClick = (documentId: string) => {
     setActiveDocument(documentId);
+  };
+
+  const handleNewProject = (platformId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    const platform = platforms.find(p => p.id === platformId);
+    if (!platform) {
+      console.error('Platform not found:', platformId);
+      return;
+    }
+    
+    let projectId: string;
+    
+    if (platform.projects.length === 0) {
+      const defaultProject = {
+        id: crypto.randomUUID(),
+        platformProjectId: 'local-' + crypto.randomUUID().substring(0, 8),
+        projectName: `My ${platform.displayName} Project`,
+        platform: platform.name,
+        connectionStatus: 'disconnected' as const,
+        googleAccountEmail: platform.googleAccountEmail || '',
+        documents: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      
+      addProject(defaultProject);
+      projectId = defaultProject.id;
+    } else {
+      projectId = platform.projects[0].id;
+    }
+    
+    createNewDocument(platformId, projectId, 'report');
+  };
+
+  const handleConnectPlatform = async (platformName: 'jira' | 'trello', e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!session?.user?.email) {
+      alert('Please log in first');
+      return;
+    }
+
+    setConnectingPlatform(platformName);
+    
+    try {
+      if (platformName === 'jira') {
+        const response = await fetch('/api/stories/jira/connect', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            jiraUrl: 'https://nzlouiscom.atlassian.net',
+            jiraEmail: 'nzlouis.com@gmail.com',
+            jiraApiToken: 'ATATT3xFfGF0JJuWG-5Ix48CcQDuiqQ9r2VpqPKmaVYzUHPcxJFIMUx0_p_kCjH4JLUNsRgbi5IjdMS2cmBVXNAHm6jzHi58_KFJh0SWgTAuDcjwNFwqbGxqltFS4tdq6P88dyA14q6-suzhU8jX7J84vyYqR6A5FPzElXLdcsP99O5JCbjVL10=04488D64',
+            jiraProjectKey: 'PAJF',
+          }),
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+          updatePlatformStatus(platformName, 'connected', session.user.email);
+        } else {
+          throw new Error(result.error || 'Failed to connect to Jira');
+        }
+      } else if (platformName === 'trello') {
+        const response = await fetch('/api/stories/trello/connect', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            trelloKey: '0d82362fa61811ac6840d22e41f14fc8',
+            trelloToken: 'ATTA4fbd4b8251baa3de7212d6cdc044426530ae533069a707247e9f5de0efd79575BECD8877',
+            trelloBoardId: '3LjHBq1w',
+          }),
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+          updatePlatformStatus(platformName, 'connected', session.user.email);
+        } else {
+          throw new Error(result.error || 'Failed to connect to Trello');
+        }
+      }
+      
+      setConnectingPlatform(null);
+      
+    } catch (error) {
+      console.error(`Failed to connect ${platformName}:`, error);
+      updatePlatformStatus(platformName, 'error', session.user.email);
+      setConnectingPlatform(null);
+    }
   };
 
   if (isMobile && !isOpen) {
@@ -192,9 +294,25 @@ export default function StoriesSidebar({
                     </div>
                   )}
 
+                  {platform.connectionStatus === 'disconnected' && (
+                    <div className="pl-8 pb-2 pt-2">
+                      <button 
+                        onClick={(e) => handleConnectPlatform(platform.name, e)}
+                        disabled={connectingPlatform === platform.name}
+                        className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-700 disabled:text-blue-400 transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>{connectingPlatform === platform.name ? 'Connecting...' : `Connect ${platform.displayName}`}</span>
+                      </button>
+                    </div>
+                  )}
+                  
                   {platform.connectionStatus === 'connected' && (
                     <div className="pl-8 pb-2">
-                      <button className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-700 transition-colors">
+                      <button 
+                        onClick={(e) => handleNewProject(platform.id, e)}
+                        className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-700 transition-colors"
+                      >
                         <Plus className="w-4 h-4" />
                         <span>New Project</span>
                       </button>

@@ -62,6 +62,26 @@ export function markdownToADF(markdown: string): ADFDocument {
       continue;
     }
     
+    // Blockquotes
+    if (line.startsWith('>')) {
+      const quoteLines: string[] = [];
+      
+      while (i < lines.length && lines[i].startsWith('>')) {
+        quoteLines.push(lines[i].substring(1).trim());
+        i++;
+      }
+      
+      content.push(createBlockquote(quoteLines.join(' ')));
+      continue;
+    }
+    
+    // Horizontal rules
+    if (line.match(/^[-*_]{3,}$/)) {
+      content.push({ type: 'rule' });
+      i++;
+      continue;
+    }
+    
     // Bullet lists
     if (line.match(/^\s*[-*+]\s/)) {
       const listItems: ADFNode[] = [];
@@ -211,6 +231,26 @@ function parseInlineText(text: string): ADFNode[] {
       }
     }
     
+    // Strikethrough (~~text~~)
+    if (char === '~' && nextChar === '~') {
+      if (currentText) {
+        nodes.push({ type: 'text', text: currentText });
+        currentText = '';
+      }
+      
+      const endIndex = text.indexOf('~~', i + 2);
+      if (endIndex !== -1) {
+        const strikeText = text.substring(i + 2, endIndex);
+        nodes.push({
+          type: 'text',
+          text: strikeText,
+          marks: [{ type: 'strike' }]
+        });
+        i = endIndex + 2;
+        continue;
+      }
+    }
+    
     currentText += char;
     i++;
   }
@@ -229,6 +269,8 @@ function isSpecialLine(line: string): boolean {
   return (
     line.startsWith('#') ||
     line.startsWith('```') ||
+    line.startsWith('>') ||
+    line.match(/^[-*_]{3,}$/) !== null ||
     line.match(/^\s*[-*+]\s/) !== null ||
     line.match(/^\s*\d+\.\s/) !== null
   );
@@ -298,6 +340,19 @@ function createListItem(content: ADFNode[]): ADFNode {
     content: [{
       type: 'paragraph',
       content
+    }]
+  };
+}
+
+/**
+ * Create ADF blockquote node
+ */
+function createBlockquote(text: string): ADFNode {
+  return {
+    type: 'blockquote',
+    content: [{
+      type: 'paragraph',
+      content: parseInlineText(text)
     }]
   };
 }

@@ -109,32 +109,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth-config';
-
-export async function POST(request: NextRequest) {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // TODO: Disconnect Jira account
-    // This would involve:
-    // 1. Remove/invalidate stored credentials
-    // 2. Update connection status in database
-    // 3. Clean up related data if needed
-
-    return NextResponse.json({
-      message: 'Jira disconnection successful',
-      status: 'disconnected'
-    });
-
-  } catch (error) {
-    console.error('Error disconnecting Jira:', error);
-    return NextResponse.json(
-      { error: 'Failed to disconnect from Jira' },
-      { status: 500 }
-    );
-  }
 }

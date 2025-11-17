@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import { taskyDb } from '../supabase/tasky-db-client';
 import { AIProvider } from './providers';
-
-const prisma = new PrismaClient();
 
 export interface UserAISettings {
   defaultProvider: AIProvider;
@@ -11,16 +9,14 @@ export interface UserAISettings {
   systemPrompt: string;
 }
 
-/**
- * Get user's AI settings from database
- */
 export async function getUserAISettings(userId: string): Promise<UserAISettings> {
-  const settings = await prisma.userAISettings.findUnique({
-    where: { userId },
-  });
+  const { data: settings, error } = await taskyDb
+    .from('user_ai_settings')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
 
-  if (!settings) {
-    // Return default settings if not found
+  if (error || !settings) {
     return {
       defaultProvider: 'google',
       defaultModel: 'gemini-2.5-flash',
@@ -31,78 +27,89 @@ export async function getUserAISettings(userId: string): Promise<UserAISettings>
   }
 
   return {
-    defaultProvider: settings.defaultProvider as AIProvider,
-    defaultModel: settings.defaultModel,
+    defaultProvider: settings.default_provider as AIProvider,
+    defaultModel: settings.default_model,
     temperature: settings.temperature,
-    maxTokens: settings.maxTokens,
-    systemPrompt: settings.systemPrompt,
+    maxTokens: settings.max_tokens,
+    systemPrompt: settings.system_prompt,
   };
 }
 
-/**
- * Update user's AI settings
- */
 export async function updateUserAISettings(
   userId: string,
   settings: Partial<UserAISettings>
 ): Promise<UserAISettings> {
-  const updated = await prisma.userAISettings.upsert({
-    where: { userId },
-    update: settings,
-    create: {
-      userId,
-      defaultProvider: settings.defaultProvider || 'google',
-      defaultModel: settings.defaultModel || 'gemini-2.5-flash',
+  const { data: updated, error } = await taskyDb
+    .from('user_ai_settings')
+    .upsert({
+      user_id: userId,
+      default_provider: settings.defaultProvider || 'google',
+      default_model: settings.defaultModel || 'gemini-2.5-flash',
       temperature: settings.temperature ?? 0.8,
-      maxTokens: settings.maxTokens ?? 1024,
-      systemPrompt: settings.systemPrompt || 'You are a helpful AI assistant.',
-    },
-  });
+      max_tokens: settings.maxTokens ?? 1024,
+      system_prompt: settings.systemPrompt || 'You are a helpful AI assistant.',
+    })
+    .select()
+    .single();
+
+  if (error || !updated) {
+    throw new Error('Failed to update AI settings');
+  }
 
   return {
-    defaultProvider: updated.defaultProvider as AIProvider,
-    defaultModel: updated.defaultModel,
+    defaultProvider: updated.default_provider as AIProvider,
+    defaultModel: updated.default_model,
     temperature: updated.temperature,
-    maxTokens: updated.maxTokens,
-    systemPrompt: updated.systemPrompt,
+    maxTokens: updated.max_tokens,
+    systemPrompt: updated.system_prompt,
   };
 }
 
-/**
- * Get or create default settings for a user
- */
 export async function ensureUserAISettings(userId: string): Promise<UserAISettings> {
-  const existing = await prisma.userAISettings.findUnique({
-    where: { userId },
-  });
+  const { data: existing, error: fetchError } = await taskyDb
+    .from('user_ai_settings')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
 
-  if (existing) {
+  if (existing && !fetchError) {
     return {
-      defaultProvider: existing.defaultProvider as AIProvider,
-      defaultModel: existing.defaultModel,
+      defaultProvider: existing.default_provider as AIProvider,
+      defaultModel: existing.default_model,
       temperature: existing.temperature,
-      maxTokens: existing.maxTokens,
-      systemPrompt: existing.systemPrompt,
+      maxTokens: existing.max_tokens,
+      systemPrompt: existing.system_prompt,
     };
   }
 
-  // Create default settings
-  const created = await prisma.userAISettings.create({
-    data: {
-      userId,
+  const { data: created, error: createError } = await taskyDb
+    .from('user_ai_settings')
+    .insert({
+      user_id: userId,
+      default_provider: 'google',
+      default_model: 'gemini-2.5-flash',
+      temperature: 0.8,
+      max_tokens: 1024,
+      system_prompt: 'You are a helpful AI assistant.',
+    })
+    .select()
+    .single();
+
+  if (createError || !created) {
+    return {
       defaultProvider: 'google',
       defaultModel: 'gemini-2.5-flash',
       temperature: 0.8,
       maxTokens: 1024,
       systemPrompt: 'You are a helpful AI assistant.',
-    },
-  });
+    };
+  }
 
   return {
-    defaultProvider: created.defaultProvider as AIProvider,
-    defaultModel: created.defaultModel,
+    defaultProvider: created.default_provider as AIProvider,
+    defaultModel: created.default_model,
     temperature: created.temperature,
-    maxTokens: created.maxTokens,
-    systemPrompt: created.systemPrompt,
+    maxTokens: created.max_tokens,
+    systemPrompt: created.system_prompt,
   };
 }

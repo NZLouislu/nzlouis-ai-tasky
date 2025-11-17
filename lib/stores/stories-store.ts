@@ -29,7 +29,7 @@ export interface Document {
   documentType: 'report' | 'stories';
   fileName: string;
   title: string;
-  content: any[];
+  content: string;
   lastSyncedAt?: string;
   createdAt: string;
   updatedAt: string;
@@ -61,6 +61,7 @@ interface StoriesActions {
   addDocument: (document: Document) => void;
   updateDocument: (documentId: string, updates: Partial<Document>) => void;
   removeDocument: (documentId: string) => void;
+  createNewDocument: (platformId: string, projectId: string, documentType: 'report' | 'stories') => Document;
   setActiveDocument: (documentId: string | null) => void;
   setSyncStatus: (status: Partial<SyncStatus>) => void;
   setSearchQuery: (query: string) => void;
@@ -193,6 +194,47 @@ export const useStoriesStore = create<StoriesStore>()(
             }))
           }))
         }));
+      },
+
+      createNewDocument: (platformId: string, projectId: string, documentType: 'report' | 'stories') => {
+        const newDocument: Document = {
+          id: crypto.randomUUID(),
+          projectId,
+          documentType,
+          fileName: `New ${documentType === 'report' ? 'Report' : 'Stories'} ${new Date().toLocaleDateString()}`,
+          title: `Untitled ${documentType === 'report' ? 'Report' : 'Stories'}`,
+          content: '',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        set((state) => ({
+          platforms: state.platforms.map(platform => 
+            platform.id === platformId
+              ? {
+                  ...platform,
+                  projects: platform.projects.map(project =>
+                    project.id === projectId
+                      ? { ...project, documents: [...project.documents, newDocument] }
+                      : project
+                  )
+                }
+              : platform
+          ),
+          activeDocumentId: newDocument.id,
+        }));
+
+        // Expand the project if not already expanded
+        const { expandedProjects } = get();
+        if (!expandedProjects.has(projectId)) {
+          set((state) => {
+            const newExpanded = new Set(state.expandedProjects);
+            newExpanded.add(projectId);
+            return { expandedProjects: newExpanded };
+          });
+        }
+
+        return newDocument;
       },
 
       setActiveDocument: (documentId: string | null) => {

@@ -1,11 +1,10 @@
 import ChatbotPanel from "../ChatbotPanel";
+import { vi } from 'vitest';
+import React from 'react';
 
-// Mock UnifiedChatbot component
-jest.mock("../../UnifiedChatbot", () => {
-  const actual = jest.requireActual("react");
+vi.mock("../../UnifiedChatbot", () => {
   return {
-    __esModule: true,
-    default: () => actual.createElement("div", null, "Mock Chatbot"),
+    default: () => React.createElement("div", null, "Mock Chatbot"),
   };
 });
 

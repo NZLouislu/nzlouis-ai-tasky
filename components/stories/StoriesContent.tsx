@@ -1,19 +1,17 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
 import { useStoriesStore } from "@/lib/stores/stories-store";
-import { signIn, useSession } from "next-auth/react";
 import StoriesEditor from "./StoriesEditor";
-import StoriesChatbot from "./StoriesChatbot";
 import { PartialBlock } from "@blocknote/core";
 
 export default function StoriesContent() {
-  const { activeDocumentId, platforms, updatePlatformStatus, updateDocument } = useStoriesStore();
-  const { data: session, status } = useSession();
-  const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
+  const { activeDocumentId, platforms, updateDocument } = useStoriesStore();
   const [documentData, setDocumentData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [generatingStories, setGeneratingStories] = useState(false);
   const [improvingDocument, setImprovingDocument] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleValue, setTitleValue] = useState('');
 
   const getActiveDocument = () => {
     for (const platform of platforms) {
@@ -32,7 +30,28 @@ export default function StoriesContent() {
   // Fetch document details when activeDocumentId changes
   useEffect(() => {
     if (activeDocumentId) {
-      fetchDocumentDetails(activeDocumentId);
+      // Check if this is a new local document (not yet saved to server)
+      const activeData = getActiveDocument();
+      if (activeData) {
+        const { document } = activeData;
+        // If document has no lastSyncedAt, it's a new local document
+        if (!document.lastSyncedAt) {
+          // Use local document data directly
+        setDocumentData({
+          id: document.id,
+          title: document.title,
+          content: document.content || '',
+          document_type: document.documentType,
+          file_name: document.fileName,
+          created_at: document.createdAt,
+          updated_at: document.updatedAt,
+        });
+          setLoading(false);
+        } else {
+          // Fetch from server for synced documents
+          fetchDocumentDetails(activeDocumentId);
+        }
+      }
     } else {
       setDocumentData(null);
     }
@@ -59,45 +78,141 @@ export default function StoriesContent() {
   // Handle document content changes
   const handleContentChange = useCallback((content: PartialBlock[]) => {
     if (activeDocumentId) {
-      updateDocument(activeDocumentId, { content });
+      // Convert BlockNote content to markdown string
+      const markdownContent = convertBlockNoteToMarkdown(content);
+      updateDocument(activeDocumentId, { content: markdownContent });
     }
   }, [activeDocumentId, updateDocument]);
+
+  // Convert BlockNote content to markdown
+  const convertBlockNoteToMarkdown = (blocks: PartialBlock[]): string => {
+    if (!blocks || !Array.isArray(blocks)) return '';
+    
+    return blocks.map(block => {
+      if (typeof block.content === 'string') {
+        return block.content;
+      }
+      if (Array.isArray(block.content)) {
+        return block.content.map(item => {
+          if (typeof item === 'string') return item;
+          if (typeof item === 'object' && item && 'text' in item) return item.text;
+          return '';
+        }).join('');
+      }
+      return '';
+    }).filter(text => text.trim()).join('\n\n');
+  };
+
+  // Convert markdown to BlockNote content
+  const convertMarkdownToBlockNote = (markdown: string | any): PartialBlock[] => {
+    // Handle case where markdown is not a string
+    if (!markdown) return [{
+      type: "paragraph",
+      content: "",
+    }];
+    
+    // If markdown is already an array (BlockNote format), return it
+    if (Array.isArray(markdown)) {
+      return markdown.length > 0 ? markdown : [{
+        type: "paragraph",
+        content: "",
+      }];
+    }
+    
+    // Convert to string if it's not already
+    const markdownString = typeof markdown === 'string' ? markdown : String(markdown);
+    
+    const lines = markdownString.split('\n');
+    const blocks: PartialBlock[] = [];
+    
+    for (const line of lines) {
+      if (line.trim()) {
+        blocks.push({
+          type: "paragraph",
+          content: line.trim(),
+        });
+      }
+    }
+    
+    return blocks.length > 0 ? blocks : [{
+      type: "paragraph",
+      content: "",
+    }];
+  };
 
   // Handle document save
   const handleDocumentSave = useCallback(async (content: PartialBlock[]) => {
     if (!activeDocumentId) return;
 
+    const activeData = getActiveDocument();
+    if (!activeData) return;
+
+    const { document, project, platform } = activeData;
+    const isNewDocument = !document.lastSyncedAt;
+    const markdownContent = convertBlockNoteToMarkdown(content);
+
     try {
-      const response = await fetch(`/api/stories/documents/${activeDocumentId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          content,
-          metadata: {
-            last_auto_save: new Date().toISOString(),
+      if (isNewDocument) {
+        // Create new document on server
+        const response = await fetch('/api/stories/documents', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
           },
-        }),
-      });
+          body: JSON.stringify({
+            project_id: project.id,
+            platform: platform.name,
+            document_type: document.documentType,
+            title: document.title,
+            file_name: document.fileName,
+            content: markdownContent,
+          }),
+        });
 
-      const result = await response.json();
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to save document');
+        const result = await response.json();
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to create document');
+        }
+
+        // Update local state with server ID and sync info
+        updateDocument(activeDocumentId, { 
+          content: markdownContent,
+          lastSyncedAt: new Date().toISOString(),
+          updatedAt: result.document.updated_at,
+        });
+      } else {
+        // Update existing document
+        const response = await fetch(`/api/stories/documents/${activeDocumentId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            content: markdownContent,
+            metadata: {
+              last_auto_save: new Date().toISOString(),
+            },
+          }),
+        });
+
+        const result = await response.json();
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to save document');
+        }
+
+        // Update local state
+        updateDocument(activeDocumentId, { 
+          content: markdownContent,
+          updatedAt: result.document.updated_at,
+        });
       }
-
-      // Update local state
-      updateDocument(activeDocumentId, { 
-        content,
-        updatedAt: result.document.updated_at,
-      });
-
     } catch (error) {
       console.error('Failed to save document:', error);
       throw error;
     }
-  }, [activeDocumentId, updateDocument]);
+  }, [activeDocumentId, updateDocument, platforms, convertBlockNoteToMarkdown]);
 
   // Handle AI story generation
   const handleGenerateStories = useCallback(async () => {
@@ -188,88 +303,58 @@ export default function StoriesContent() {
   }, [documentData, activeDocumentId, activeData?.platform, handleDocumentSave]);
 
   // Handle AI-generated content from chatbot
-  const handleAIContentGenerated = useCallback((content: any) => {
-    if (content && activeDocumentId) {
-      // Append or integrate the AI-generated content
-      console.log('AI content generated:', content);
-      // You can implement logic to insert this content into the editor
-    }
-  }, [activeDocumentId]);
+  const handleTitleChange = useCallback((newTitle: string) => {
+    setTitleValue(newTitle);
+  }, []);
 
-  const handleConnectGoogle = async () => {
-    try {
-      await signIn('google', {
-        callbackUrl: '/stories',
-        redirect: true 
-      });
-    } catch (error) {
-      console.error('Failed to connect Google:', error);
+  const handleTitleBlur = useCallback(() => {
+    setEditingTitle(false);
+    if (titleValue && activeDocumentId && titleValue !== documentData?.title) {
+      updateDocument(activeDocumentId, { title: titleValue });
+      setDocumentData((prev: any) => ({
+        ...prev,
+        title: titleValue
+      }));
     }
-  };
+  }, [titleValue, activeDocumentId, documentData, updateDocument]);
 
-  const handleConnectPlatform = async (platformName: 'jira' | 'trello') => {
-    if (!session?.user?.email) {
-      // First connect Google account
-      await handleConnectGoogle();
-      return;
-    }
-
-    setConnectingPlatform(platformName);
-    
-    try {
-      if (platformName === 'jira') {
-        // Connect to Jira using server-side credentials
-        const response = await fetch('/api/stories/jira/connect', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            jiraUrl: 'https://nzlouiscom.atlassian.net',
-            jiraEmail: 'nzlouis.com@gmail.com',
-            jiraApiToken: 'ATATT3xFfGF0JJuWG-5Ix48CcQDuiqQ9r2VpqPKmaVYzUHPcxJFIMUx0_p_kCjH4JLUNsRgbi5IjdMS2cmBVXNAHm6jzHi58_KFJh0SWgTAuDcjwNFwqbGxqltFS4tdq6P88dyA14q6-suzhU8jX7J84vyYqR6A5FPzElXLdcsP99O5JCbjVL10=04488D64',
-            jiraProjectKey: 'PAJF',
-          }),
+  // Force re-render when document title or content changes
+  useEffect(() => {
+    const activeData = getActiveDocument();
+    if (activeData && documentData) {
+      const { document } = activeData;
+      if (document.title !== documentData.title || document.content !== documentData.content) {
+        setDocumentData((prev: any) => {
+          // Only update if values actually changed
+          if (prev?.title !== document.title || prev?.content !== document.content) {
+            return {
+              ...prev,
+              title: document.title,
+              content: document.content || ''
+            };
+          }
+          return prev;
         });
-
-        const result = await response.json();
-        
-        if (result.success) {
-          updatePlatformStatus(platformName, 'connected', session.user.email);
-        } else {
-          throw new Error(result.error || 'Failed to connect to Jira');
-        }
-      } else if (platformName === 'trello') {
-        // Connect to Trello using server-side credentials
-        const response = await fetch('/api/stories/trello/connect', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            trelloKey: '0d82362fa61811ac6840d22e41f14fc8',
-            trelloToken: 'ATTA4fbd4b8251baa3de7212d6cdc044426530ae533069a707247e9f5de0efd79575BECD8877',
-            trelloBoardId: '3LjHBq1w',
-          }),
-        });
-
-        const result = await response.json();
-        
-        if (result.success) {
-          updatePlatformStatus(platformName, 'connected', session.user.email);
-        } else {
-          throw new Error(result.error || 'Failed to connect to Trello');
-        }
       }
-      
-      setConnectingPlatform(null);
-      
-    } catch (error) {
-      console.error(`Failed to connect ${platformName}:`, error);
-      updatePlatformStatus(platformName, 'error', session.user.email);
-      setConnectingPlatform(null);
     }
-  };
+  }, [getActiveDocument, documentData?.title, documentData?.content]);
+
+  const handleTitleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleTitleBlur();
+    } else if (e.key === 'Escape') {
+      setEditingTitle(false);
+      setTitleValue(documentData?.title || '');
+    }
+  }, [handleTitleBlur, documentData]);
+
+  useEffect(() => {
+    if (documentData?.title) {
+      setTitleValue(documentData.title);
+    }
+  }, [documentData?.title]);
+
 
   if (!activeDocumentId || !activeData) {
     return (
@@ -279,89 +364,15 @@ export default function StoriesContent() {
             Welcome to Stories
           </h2>
           <p className="text-gray-600 mb-8">
-            Connect your Jira or Trello accounts to start managing your project stories and reports.
+            Select a project from the sidebar or connect your platform to get started.
           </p>
           
-          {/* Google Account Status */}
-          <div className="mb-8">
-            {session?.user ? (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-                <div className="flex items-center justify-center space-x-3">
-                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                  <span className="text-green-800 font-medium">
-                    Connected as {session.user.email}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
-                <h3 className="font-medium text-gray-800 mb-3">Step 1: Connect Google Account</h3>
-                <button
-                  onClick={handleConnectGoogle}
-                  disabled={status === 'loading'}
-                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-2 rounded-md font-medium transition-colors"
-                >
-                  {status === 'loading' ? 'Connecting...' : 'Connect with Google'}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Platform Connections */}
-          {session?.user && (
-            <div className="space-y-4 mb-8">
-              <h3 className="font-medium text-gray-800 mb-4">Step 2: Connect Platform</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Jira Connection */}
-                <div className="bg-white border border-gray-200 rounded-lg p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="font-medium text-gray-800">Jira</h4>
-                    <div className={`w-3 h-3 rounded-full ${
-                      platforms.find(p => p.name === 'jira')?.connectionStatus === 'connected' 
-                        ? 'bg-green-500' 
-                        : 'bg-red-500'
-                    }`}></div>
-                  </div>
-                  <button
-                    onClick={() => handleConnectPlatform('jira')}
-                    disabled={connectingPlatform === 'jira'}
-                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-md font-medium transition-colors"
-                  >
-                    {connectingPlatform === 'jira' ? 'Connecting...' : 'Connect Jira'}
-                  </button>
-                </div>
-
-                {/* Trello Connection */}
-                <div className="bg-white border border-gray-200 rounded-lg p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="font-medium text-gray-800">Trello</h4>
-                    <div className={`w-3 h-3 rounded-full ${
-                      platforms.find(p => p.name === 'trello')?.connectionStatus === 'connected' 
-                        ? 'bg-green-500' 
-                        : 'bg-red-500'
-                    }`}></div>
-                  </div>
-                  <button
-                    onClick={() => handleConnectPlatform('trello')}
-                    disabled={connectingPlatform === 'trello'}
-                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-md font-medium transition-colors"
-                  >
-                    {connectingPlatform === 'trello' ? 'Connecting...' : 'Connect Trello'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Getting Started Guide */}
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
             <h3 className="font-medium text-gray-800 mb-2">Getting Started</h3>
             <ol className="text-sm text-gray-600 space-y-2 text-left">
-              <li>1. Connect your Google account</li>
-              <li>2. Link your Jira or Trello workspace</li>
-              <li>3. Select a project or board</li>
-              <li>4. Start creating reports and stories</li>
+              <li>1. Connect Jira or Trello from the sidebar</li>
+              <li>2. Select a project or create a new one</li>
+              <li>3. Start creating reports and stories</li>
             </ol>
           </div>
         </div>
@@ -390,9 +401,24 @@ export default function StoriesContent() {
           <span>•</span>
           <span>{project?.projectName}</span>
         </div>
-        <h1 className="text-2xl font-semibold text-gray-800">
-          {documentData?.title || document?.title}
-        </h1>
+        {editingTitle ? (
+          <input
+            type="text"
+            value={titleValue}
+            onChange={(e) => handleTitleChange(e.target.value)}
+            onBlur={handleTitleBlur}
+            onKeyDown={handleTitleKeyDown}
+            autoFocus
+            className="text-2xl font-semibold text-gray-800 w-full border-none outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1"
+          />
+        ) : (
+          <h1 
+            className="text-2xl font-semibold text-gray-800 cursor-pointer hover:bg-gray-50 rounded px-2 py-1 -ml-2"
+            onClick={() => setEditingTitle(true)}
+          >
+            {documentData?.title || document?.title}
+          </h1>
+        )}
       </div>
 
       <div className="flex-1 p-6 overflow-hidden">
@@ -454,7 +480,7 @@ export default function StoriesContent() {
 
               <StoriesEditor
                 documentId={activeDocumentId}
-                initialContent={documentData.content || []}
+                initialContent={convertMarkdownToBlockNote(documentData.content || '')}
                 onContentChange={handleContentChange}
                 onSave={handleDocumentSave}
                 placeholder={`Start writing your ${documentData.document_type}...`}
@@ -486,17 +512,6 @@ export default function StoriesContent() {
           )}
         </div>
       </div>
-
-      {/* AI Chatbot */}
-      {documentData && (
-        <StoriesChatbot
-          documentId={activeDocumentId}
-          documentType={documentData.document_type}
-          platform={platform.name}
-          projectName={project.projectName}
-          onContentGenerated={handleAIContentGenerated}
-        />
-      )}
     </div>
   );
 }

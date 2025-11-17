@@ -1,11 +1,10 @@
-// Mock Supabase before importing anything else
-jest.mock('@/lib/supabase/tasky-db-client', () => ({
+import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('@/lib/supabase/tasky-db-client', () => ({
   taskyDb: {
-    from: jest.fn(),
+    from: vi.fn(),
   },
 }));
-
-import { describe, it, expect, jest } from '@jest/globals';
 import {
   isValidModel,
   getAvailableModels,

@@ -36,28 +36,11 @@ const nextConfig: NextConfig = {
     } : false,
   },
   
-  // Module optimizations
-  modularizeImports: {
-    'lucide-react': {
-      transform: 'lucide-react/dist/esm/icons/{{member}}',
-    },
-    'react-icons': {
-      transform: 'react-icons/{{member}}',
-    },
-    'lodash': {
-      transform: 'lodash/{{member}}',
-    },
-    '@supabase/supabase-js': {
-      transform: '@supabase/supabase-js/dist/module/{{member}}',
-    },
-  },
-  
   // Experimental features to improve performance
   experimental: {
     optimizePackageImports: [
       'lucide-react', 
       'react-icons', 
-      '@supabase/supabase-js',
       'zustand',
       '@tanstack/react-query'
     ],
@@ -71,25 +54,6 @@ const nextConfig: NextConfig = {
     '@prisma/client',
     'jira-client'
   ],
-  
-  // Webpack optimizations
-  webpack: (config, { isServer, dev }) => {
-    // Optimize builds
-    if (!dev) {
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        // Reduce bundle size by aliasing heavy dependencies
-        'moment': 'dayjs',
-      };
-    }
-    
-    // External packages for server-side
-    if (isServer) {
-      config.externals.push('sharp');
-    }
-    
-    return config;
-  },
 };
 
 export default withBundleAnalyzer(nextConfig);

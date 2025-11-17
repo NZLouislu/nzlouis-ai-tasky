@@ -136,8 +136,9 @@ ${reportContent || 'No report content provided. Please generate basic user stori
 Please generate 5-10 user stories that cover the main features and requirements mentioned in the report. Each story should be well-structured with clear acceptance criteria.`;
 
     try {
+      const model = google('gemini-2.0-flash-exp');
       const { text } = await generateText({
-        model: google('gemini-2.0-flash-exp'),
+        model: model as any, // Type assertion for compatibility
         system: systemPrompt,
         prompt: userPrompt,
         maxTokens: 3000,

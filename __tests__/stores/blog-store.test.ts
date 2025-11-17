@@ -1,20 +1,20 @@
 import { useBlogStore } from '@/lib/stores/blog-store';
 import { supabase } from '@/lib/supabase/supabase-client';
+import { vi } from 'vitest';
 
-// Mock fetch for API calls
-global.fetch = jest.fn();
+global.fetch = vi.fn();
 
-jest.mock('@/lib/supabase/supabase-client', () => ({
+vi.mock('@/lib/supabase/supabase-client', () => ({
   supabase: {
-    from: jest.fn(),
+    from: vi.fn(),
   },
 }));
 
-const mockSupabase = supabase as jest.Mocked<typeof supabase>;
+const mockSupabase = supabase as any;
 
 describe('Blog Store', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     useBlogStore.setState({
       posts: [],
       currentPostId: null,
@@ -30,8 +30,7 @@ describe('Blog Store', () => {
         { id: 'post-2', title: 'Child', parent_id: 'post-1', user_id: 'user-1' },
       ];
 
-      // Mock fetch for API call
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
+      (global.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ data: mockPosts }),
       });
@@ -46,8 +45,7 @@ describe('Blog Store', () => {
     });
 
     it('should handle empty posts', async () => {
-      // Mock fetch for API call
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
+      (global.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ data: [] }),
       });
@@ -69,8 +67,7 @@ describe('Blog Store', () => {
         published: false,
       };
 
-      // Mock fetch for API call
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
+      (global.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ data: newPost }),
       });
@@ -112,8 +109,7 @@ describe('Blog Store', () => {
         published: false,
       };
 
-      // Mock fetch for API call
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
+      (global.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ data: childPost }),
       });
@@ -157,10 +153,10 @@ describe('Blog Store', () => {
         updated_at: new Date().toISOString(),
       };
 
-      (mockSupabase as any).from = jest.fn().mockReturnValue({
-        update: jest.fn().mockReturnValue({
-          eq: jest.fn().mockReturnValue({
-            select: jest.fn().mockResolvedValue({
+      (mockSupabase as any).from = vi.fn().mockReturnValue({
+        update: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            select: vi.fn().mockResolvedValue({
               data: [updatedPost],
               error: null,
             }),
@@ -168,8 +164,7 @@ describe('Blog Store', () => {
         }),
       });
 
-      // Mock fetch for API call
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
+      (global.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ data: updatedPost }),
       });
@@ -204,8 +199,7 @@ describe('Blog Store', () => {
         }],
       });
 
-      // Mock fetch for API call
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
+      (global.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ data: { id: validUuid } }),
       });
