@@ -21,6 +21,7 @@
 /out/
 .kiro/
 .codeflicker/
+.lingma/
 
 # production
 /build

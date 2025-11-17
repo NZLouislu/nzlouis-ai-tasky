@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 获取用户的Jira配置
+    // Get user's Jira configuration
     const { data: configs, error: configError } = await taskyDb
       .from('user_platform_configs')
       .select('*')
@@ -37,9 +37,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const config = configs[0]; // 使用第一个活跃配置
+    const config = configs[0]; // Use the first active configuration
 
-    // 解密API Token
+    // Decrypt API Token
     let jiraApiToken: string;
     try {
       jiraApiToken = decrypt(config.jira_api_token_encrypted);
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 获取Jira项目列表
+    // Get Jira projects list
     try {
       const projectsResponse = await fetch(`${config.jira_url}/rest/api/3/project`, {
         headers: {
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
 
       const projects = await projectsResponse.json();
 
-      // 过滤和格式化项目数据
+      // Filter and format project data
       const formattedProjects = projects.map((project: any) => ({
         id: project.id,
         key: project.key,
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 获取用户的Jira配置
+    // Get user's Jira configuration
     const { data: configs, error: configError } = await taskyDb
       .from('user_platform_configs')
       .select('*')
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
 
     const config = configs[0];
 
-    // 创建Stories项目记录
+    // Create Stories project record
     const { data: project, error: projectError } = await taskyDb
       .from('stories_projects')
       .insert({
@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 创建默认的Report文档
+    // Create default Report document
     const reportFileName = `${projectName.replace(/\s+/g, '-')}-Report.md`;
     const { data: reportDoc, error: reportError } = await taskyDb
       .from('stories_documents')
@@ -189,7 +189,18 @@ export async function POST(request: NextRequest) {
             content: [
               {
                 type: 'text',
-                text: `# ${projectName} Project Report\n\nThis is the project report for ${projectName}.\n\n## Overview\n\n## Requirements\n\n## Implementation Plan\n\n## Notes\n`
+                text: `# ${projectName} Project Report
+
+This is the project report for ${projectName}.
+
+## Overview
+
+## Requirements
+
+## Implementation Plan
+
+## Notes
+`
               }
             ]
           }
