@@ -170,3 +170,86 @@ console.log(`
 
 console.log('='.repeat(50));
 console.log('✅ 诊断完成\n');
+
+/**
+ * Admin authentication diagnostic script
+ * Helps identify issues with admin authentication configuration
+ */
+
+async function diagnoseAdminAuth() {
+  console.log('🏥 Diagnosing Admin Authentication Configuration...\n');
+  
+  // Check environment variables
+  console.log('📋 Environment Variables Check:');
+  console.log('   ADMIN_USERNAME:', process.env.ADMIN_USERNAME ? 'SET' : 'NOT SET');
+  console.log('   ADMIN_PASSWORD:', process.env.ADMIN_PASSWORD ? 'SET' : 'NOT SET');
+  
+  if (!process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD) {
+    console.log('\n❌ CRITICAL: Admin credentials not properly configured');
+    console.log('   Please set ADMIN_USERNAME and ADMIN_PASSWORD in your environment');
+    console.log('   You can add them to a .env.local file in your project root');
+    return;
+  }
+  
+  console.log('\n✅ Environment variables are set');
+  
+  // Test login endpoint
+  console.log('\n📡 Testing Login Endpoint...');
+  try {
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+    const loginResponse = await fetch(`${baseUrl}/api/admin/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        username: process.env.ADMIN_USERNAME,
+        password: process.env.ADMIN_PASSWORD,
+      }),
+    });
+
+    console.log('   Login Status:', loginResponse.status);
+    
+    if (loginResponse.ok) {
+      console.log('   ✅ Login endpoint working correctly');
+      
+      const loginData = await loginResponse.json();
+      console.log('   Login Response:', loginData);
+      
+      // Test verification endpoint
+      console.log('\n   🔍 Testing Verification Endpoint...');
+      if (loginData.token) {
+        const verifyResponse = await fetch(`${baseUrl}/api/admin/verify`, {
+          headers: {
+            'Authorization': `Bearer ${loginData.token}`,
+          },
+        });
+        
+        console.log('   Verification Status:', verifyResponse.status);
+        const verifyData = await verifyResponse.json();
+        console.log('   Verification Response:', verifyData);
+        
+        if (verifyResponse.ok && verifyData.authenticated) {
+          console.log('   ✅ Verification endpoint working correctly');
+        } else {
+          console.log('   ❌ Verification endpoint failed');
+        }
+      }
+    } else {
+      console.log('   ❌ Login endpoint failed');
+      const errorData = await loginResponse.json();
+      console.log('   Error Response:', errorData);
+    }
+  } catch (error) {
+    console.error('   ❌ Error testing endpoints:', error);
+  }
+  
+  console.log('\n🏁 Diagnostic complete');
+}
+
+// Run if called directly
+if (require.main === module) {
+  diagnoseAdminAuth().catch(console.error);
+}
+
+export default diagnoseAdminAuth;

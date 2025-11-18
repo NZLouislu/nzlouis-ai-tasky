@@ -22,6 +22,11 @@
 .kiro/
 .codeflicker/
 .lingma/
+.claude/
+.qodo/
+.vscode/
+.storybook/
+.codebuddy/
 
 # production
 /build

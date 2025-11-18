@@ -20,7 +20,7 @@ export default defineConfig({
         '**/*.d.ts',
         '**/*.config.*',
         '**/types/**',
-        '**/__tests__/**',
+        'src/**/__tests__/**',
         '**/test-utils.ts'
       ],
       thresholds: {
@@ -35,7 +35,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './'),
+      '@': path.resolve(__dirname, './src'),
     },
   },
 });

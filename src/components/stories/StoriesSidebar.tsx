@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { ChevronRight, ChevronDown, Search, Plus, X } from "lucide-react";
+import { ChevronRight, ChevronDown, Search, Plus, X, HelpCircle } from "lucide-react";
 import { useStoriesStore } from "@/lib/stores/stories-store";
 import { useSession } from "next-auth/react";
 import JiraConnectDialog, { JiraCredentials } from "./JiraConnectDialog";
@@ -41,6 +41,7 @@ export default function StoriesSidebar({
   const [showJiraProjectDialog, setShowJiraProjectDialog] = useState(false);
   const [showTrelloConnectDialog, setShowTrelloConnectDialog] = useState(false);
   const [showTrelloBoardDialog, setShowTrelloBoardDialog] = useState(false);
+  const [showTrelloHelpDialog, setShowTrelloHelpDialog] = useState(false);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -100,7 +101,16 @@ export default function StoriesSidebar({
     if (platformId === 'jira') {
       setShowJiraProjectDialog(true);
     } else if (platformId === 'trello') {
-      setShowTrelloBoardDialog(true);
+      // Check if there are any Trello boards
+      const trelloPlatform = platforms.find(p => p.id === 'trello');
+      const hasBoards = trelloPlatform && trelloPlatform.projects.length > 0;
+      
+      if (hasBoards) {
+        setShowTrelloBoardDialog(true);
+      } else {
+        // Show help dialog for first-time Trello board creation
+        setShowTrelloHelpDialog(true);
+      }
     }
   };
 
@@ -371,7 +381,7 @@ export default function StoriesSidebar({
 
             <div className="flex-1 overflow-y-auto">
               {filteredPlatforms.map((platform) => (
-            <div key={platform.id} className="border-b border-gray-100">
+                <div key={platform.id} className="border-b border-gray-100">
                   <button
                     onClick={() => handlePlatformClick(platform)}
                     className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
@@ -395,41 +405,38 @@ export default function StoriesSidebar({
                         <div key={project.id} className="border-l border-gray-200">
                           <button
                             onClick={() => toggleProjectExpansion(project.id)}
-                            className="w-full flex items-center justify-between p-3 pl-4 hover:bg-gray-50 transition-colors"
-                          >
-                            <div className="flex items-center space-x-2">
-                              {expandedProjects.has(project.id) ? (
-                                <ChevronDown className="w-4 h-4 text-gray-400" />
-                              ) : (
-                                <ChevronRight className="w-4 h-4 text-gray-400" />
-                              )}
-                              <span className="text-sm text-gray-700 truncate">
-                                {project.projectName}
-                              </span>
-                            </div>
-                          </button>
+                            className="w-full flex items-center justify-between p-3 hover:bg-gray-100 cursor-pointer transition-colors">
+                              <div className="flex items-center space-x-2">
+                                {expandedProjects.has(project.id) ? (
+                                  <ChevronDown className="w-4 h-4 text-gray-500" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4 text-gray-500" />
+                                )}
+                                <span className="font-medium truncate">{project.projectName}</span>
+                              </div>
+                            </button>
 
-                          {expandedProjects.has(project.id) && (
-                            <div className="pl-8">
-                              {project.documents.map((document) => (
-                                <button
-                                  key={document.id}
-                                  onClick={() => handleDocumentClick(document.id)}
-                                  className={`w-full text-left p-2 text-sm hover:bg-gray-50 transition-colors rounded-md mx-2 my-1 ${
-                                    activeDocumentId === document.id 
-                                      ? 'bg-blue-50 text-blue-700 border-l-2 border-blue-500' 
-                                      : 'text-gray-600'
-                                  }`}
-                                >
-                                  <div className="truncate">{document.title}</div>
-                                  <div className="text-xs text-gray-400 truncate">
-                                    {document.fileName}
-                                  </div>
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                            {expandedProjects.has(project.id) && (
+                              <div className="pl-8">
+                                {project.documents.map((document) => (
+                                  <button
+                                    key={document.id}
+                                    onClick={() => handleDocumentClick(document.id)}
+                                    className={`w-full text-left p-2 text-sm hover:bg-gray-50 transition-colors rounded-md mx-2 my-1 ${
+                                      activeDocumentId === document.id 
+                                        ? 'bg-blue-50 text-blue-700 border-l-2 border-blue-500' 
+                                        : 'text-gray-600'
+                                    }`}
+                                  >
+                                    <div className="truncate">{document.title}</div>
+                                    <div className="text-xs text-gray-400 truncate">
+                                      {document.fileName}
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                       ))}
                     </div>
                   )}
@@ -454,7 +461,7 @@ export default function StoriesSidebar({
                         className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-700 transition-colors"
                       >
                         <Plus className="w-4 h-4" />
-                        <span>New Project</span>
+                        <span>{platform.name === 'trello' ? 'Add Board' : 'New Project'}</span>
                       </button>
                     </div>
                   )}
@@ -487,5 +494,66 @@ export default function StoriesSidebar({
         )}
       </div>
     </>
+  );
+}
+
+function TrelloHelpDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  if (!isOpen) return null;
+
+  const handleGoToTrello = () => {
+    window.open('https://trello.com/', '_blank');
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-800">Add Your First Trello Board</h2>
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-gray-100 rounded-md transition-colors"
+          >
+            <X className="w-5 h-5 text-gray-600" />
+          </button>
+        </div>
+        
+        <div className="p-6 space-y-4">
+          <p className="text-gray-700">
+            It looks like you haven't added any Trello boards yet. To get started:
+          </p>
+          
+          <ol className="list-decimal list-inside space-y-2 text-gray-700">
+            <li>Go to Trello and create a new board</li>
+            <li>Add some cards or lists to your board</li>
+            <li>Return here to select your board</li>
+          </ol>
+          
+          <div className="flex items-center p-4 bg-blue-50 rounded-md mt-4">
+            <HelpCircle className="w-5 h-5 text-blue-500 mr-2 flex-shrink-0" />
+            <p className="text-sm text-blue-800">
+              You need at least one board with content in Trello before you can select it here.
+            </p>
+          </div>
+          
+          <div className="flex justify-between pt-4">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleGoToTrello}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center"
+            >
+              Go to Trello
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

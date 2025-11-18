@@ -694,7 +694,7 @@ export default function StoriesPage() {
           marginRight: isChatbotVisible && !isMobile ? `${chatbotWidth}px` : '0',
         }}
       >
-        {!activeDocumentId && platforms.every(p => p.projects.length === 0) ? (
+        {!activeDocumentId ? (
           <StoriesWelcome
             onConnectJira={() => setShowJiraConnectDialog(true)}
             onConnectTrello={() => setShowTrelloConnectDialog(true)}
