@@ -5,12 +5,11 @@ import { getUserIdFromRequest } from "@/lib/admin-auth";
 
 const MODEL_CONFIGS = {
     google: [
-        // 2.5 系列优先，Flash > Pro > Flash Live > Flash Lite（Flash 速度快，成本低，适合日常使用）
         { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Latest Gemini model with fast responses' },
+        { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro Preview (Paid API Required)', description: 'Advanced reasoning model - Requires paid API key ($2/M input, $12/M output tokens)' },
         { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Advanced reasoning and coding' },
         { id: 'gemini-2.5-flash-live', name: 'Gemini 2.5 Flash Live', description: 'Real-time conversation model' },
         { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', description: 'Lightweight version of 2.5 Flash' },
-        // 2.0 系列
         { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Fast and efficient model' },
         { id: 'gemini-2.0-flash-live', name: 'Gemini 2.0 Flash Live', description: 'Real-time conversation model' },
         { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', description: 'Lightweight fast model' },

@@ -18,6 +18,8 @@ interface StoriesChatbotPanelProps {
   setSidebarCollapsed: (collapsed: boolean) => void;
   handleMouseDown: (e: React.MouseEvent) => void;
   handlePageModification: (mod: PageModification) => Promise<string>;
+  documentId?: string;
+  userId?: string;
 }
 
 export default function StoriesChatbotPanel({
@@ -29,6 +31,8 @@ export default function StoriesChatbotPanel({
   setSidebarCollapsed,
   handleMouseDown,
   handlePageModification,
+  documentId,
+  userId,
 }: StoriesChatbotPanelProps) {
   if (!isChatbotVisible) {
     return (
@@ -68,6 +72,9 @@ export default function StoriesChatbotPanel({
           <UnifiedChatbot
             mode="workspace"
             onPageModification={handlePageModification}
+            documentId={documentId}
+            userId={userId}
+            apiEndpoint="stories"
           />
         </div>
       </div>
@@ -111,6 +118,9 @@ export default function StoriesChatbotPanel({
           <UnifiedChatbot
             mode="workspace"
             onPageModification={handlePageModification}
+            documentId={documentId}
+            userId={userId}
+            apiEndpoint="stories"
           />
         </div>
       </div>

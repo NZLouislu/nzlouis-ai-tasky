@@ -356,9 +356,37 @@ export default function ChatbotPage() {
 
       setMessages((prev) => [...prev, assistantMessage]);
 
+      let accumulatedContent = '';
+      let pendingUpdate = false;
+      let animationFrameId: number | null = null;
+
+      const updateMessage = () => {
+        setMessages((prev) => {
+          const newMessages = [...prev];
+          const lastMessage = newMessages[newMessages.length - 1];
+          if (lastMessage.role === 'assistant') {
+            lastMessage.content = accumulatedContent;
+          }
+          return newMessages;
+        });
+        pendingUpdate = false;
+        animationFrameId = null;
+      };
+
+      const scheduleUpdate = () => {
+        if (!pendingUpdate) {
+          pendingUpdate = true;
+          animationFrameId = requestAnimationFrame(updateMessage);
+        }
+      };
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) {
+          if (animationFrameId !== null) {
+            cancelAnimationFrame(animationFrameId);
+          }
+          updateMessage();
           setIsLoading(false);
           break;
         }
@@ -372,15 +400,8 @@ export default function ChatbotPage() {
             try {
               const jsonStr = line.substring(2);
               const text = JSON.parse(jsonStr);
-              assistantMessage.content += text;
-              setMessages((prev) => {
-                const newMessages = [...prev];
-                const lastMessage = newMessages[newMessages.length - 1];
-                if (lastMessage.role === 'assistant') {
-                  lastMessage.content = assistantMessage.content;
-                }
-                return newMessages;
-              });
+              accumulatedContent += text;
+              scheduleUpdate();
             } catch (error) {
               console.log('Parsing error:', error);
             }
@@ -754,6 +775,9 @@ export default function ChatbotPage() {
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {message.content}
                       </ReactMarkdown>
+                      {isLoading && messages[messages.length - 1].id === message.id && (
+                        <span className="inline-block w-1 h-4 bg-blue-600 ml-1 animate-pulse" />
+                      )}
                     </div>
                   ) : (
                     <p className="whitespace-pre-wrap">{message.content}</p>

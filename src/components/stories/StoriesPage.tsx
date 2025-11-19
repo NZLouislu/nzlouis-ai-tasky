@@ -579,6 +579,11 @@ export default function StoriesPage() {
     [activeDocumentId, getActiveDocument, updateDocument, replaceParagraphInContent]
   );
 
+  const existingJiraProjectKeys = React.useMemo(() => {
+    const jiraPlatform = platforms.find((p) => p.name === 'jira');
+    return jiraPlatform?.projects.map((proj) => proj.platformProjectId) || [];
+  }, [platforms]);
+
   if (sessionStatus === "loading" || isCheckingAdmin) {
     return (
       <div className="h-screen flex items-center justify-center">
@@ -589,6 +594,40 @@ export default function StoriesPage() {
 
   return (
     <div className="h-screen flex bg-gray-50 overflow-hidden">
+      <StoriesSidebar
+        isOpen={sidebarOpen}
+        isCollapsed={sidebarCollapsed}
+        onToggle={() => setSidebarOpen(!sidebarOpen)}
+        onCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        isMobile={isMobile}
+      />
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {!activeDocumentId ? (
+          <StoriesWelcome
+            onConnectJira={() => setShowJiraConnectDialog(true)}
+            onConnectTrello={() => setShowTrelloConnectDialog(true)}
+          />
+        ) : (
+          <StoriesContent />
+        )}
+      </div>
+
+      <StoriesChatbotPanel
+        isVisible={isChatbotVisible}
+        isMobile={isMobile}
+        width={chatbotWidth}
+        onClose={() => setIsChatbotVisible(false)}
+        onToggleSidebar={() => {
+          setSidebarOpen(true);
+          setSidebarCollapsed(false);
+        }}
+        onMouseDown={handleMouseDown}
+        onPageModification={handlePageModification}
+        documentId={activeDocumentId || undefined}
+        userId={userId}
+      />
+
       <JiraConnectDialog
         isOpen={showJiraConnectDialog}
         onClose={() => setShowJiraConnectDialog(false)}
@@ -599,6 +638,7 @@ export default function StoriesPage() {
         isOpen={showJiraProjectDialog}
         onClose={() => setShowJiraProjectDialog(false)}
         onSelectProject={handleJiraProjectSelect}
+        existingProjectKeys={existingJiraProjectKeys}
       />
       
       <TrelloConnectDialog
@@ -612,107 +652,6 @@ export default function StoriesPage() {
         onClose={() => setShowTrelloBoardDialog(false)}
         onSelect={handleTrelloBoardSelect}
         boards={trelloBoards}
-      />
-
-      {(sidebarCollapsed || isMobile) && !sidebarOpen && (
-        <button
-          onClick={() => {
-            setSidebarCollapsed(false);
-            setSidebarOpen(true);
-          }}
-          className="fixed left-4 top-20 z-30 bg-white p-3 rounded-lg shadow-lg hover:bg-gray-50 transition-colors border border-gray-200"
-          title="Show Sidebar"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-6 w-6 text-gray-700"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 6h16M4 12h16M4 18h16"
-            />
-          </svg>
-        </button>
-      )}
-
-      <div
-        className={`${
-          sidebarCollapsed ? "w-0 overflow-hidden" : "w-80"
-        } flex-shrink-0 transition-all duration-300 ${
-          isChatbotVisible && !isMobile ? "hidden lg:block" : "hidden md:block"
-        }`}
-      >
-        <StoriesSidebar
-          isOpen={sidebarOpen}
-          isCollapsed={sidebarCollapsed}
-          onToggle={toggleSidebar}
-          isMobile={isMobile}
-        />
-      </div>
-
-      {sidebarOpen && !sidebarCollapsed && isMobile && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-30"
-          onClick={() => {
-            setSidebarOpen(false);
-            setSidebarCollapsed(true);
-          }}
-        >
-          <div
-            className="w-80 h-full bg-white"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <StoriesSidebar
-              isOpen={sidebarOpen}
-              isCollapsed={sidebarCollapsed}
-              onToggle={() => {
-                setSidebarOpen(false);
-                setSidebarCollapsed(true);
-              }}
-              isMobile={isMobile}
-            />
-          </div>
-        </div>
-      )}
-
-      <div
-        className={`flex-1 flex flex-col transition-all duration-300 ${
-          isMobile
-            ? "ml-0 w-full"
-            : sidebarCollapsed
-            ? "ml-0"
-            : isChatbotVisible
-            ? "ml-0 lg:ml-80"
-            : "ml-0 md:ml-80"
-        }`}
-        style={{
-          marginRight: isChatbotVisible && !isMobile ? `${chatbotWidth}px` : '0',
-        }}
-      >
-        {!activeDocumentId ? (
-          <StoriesWelcome
-            onConnectJira={() => setShowJiraConnectDialog(true)}
-            onConnectTrello={() => setShowTrelloConnectDialog(true)}
-          />
-        ) : (
-          <StoriesContent />
-        )}
-      </div>
-
-      <StoriesChatbotPanel
-        isChatbotVisible={isChatbotVisible}
-        isMobile={isMobile}
-        chatbotWidth={chatbotWidth}
-        setIsChatbotVisible={setIsChatbotVisible}
-        setSidebarOpen={setSidebarOpen}
-        setSidebarCollapsed={setSidebarCollapsed}
-        handleMouseDown={handleMouseDown}
-        handlePageModification={handlePageModification}
       />
     </div>
   );

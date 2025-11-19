@@ -1878,6 +1878,8 @@ export default function BlogPage() {
           setSidebarCollapsed={setSidebarCollapsed}
           handleMouseDown={handleMouseDown}
           handlePageModification={handlePageModification}
+          postId={activePostId}
+          userId={userId}
         />
       </div>
     </div>

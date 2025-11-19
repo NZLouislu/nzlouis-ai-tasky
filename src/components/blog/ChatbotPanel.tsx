@@ -18,6 +18,8 @@ interface ChatbotPanelProps {
   setSidebarCollapsed: (collapsed: boolean) => void;
   handleMouseDown: (e: React.MouseEvent) => void;
   handlePageModification: (mod: PageModification) => Promise<string>;
+  postId?: string;
+  userId?: string;
 }
 
 export default function ChatbotPanel({
@@ -29,6 +31,8 @@ export default function ChatbotPanel({
   setSidebarCollapsed,
   handleMouseDown,
   handlePageModification,
+  postId,
+  userId,
 }: ChatbotPanelProps) {
   if (!isChatbotVisible) {
     return (
@@ -70,6 +74,8 @@ export default function ChatbotPanel({
           <UnifiedChatbot
             mode="workspace"
             onPageModification={handlePageModification}
+            postId={postId}
+            userId={userId}
           />
         </div>
       </div>
@@ -116,6 +122,8 @@ export default function ChatbotPanel({
           <UnifiedChatbot
             mode="workspace"
             onPageModification={handlePageModification}
+            postId={postId}
+            userId={userId}
           />
         </div>
       </div>

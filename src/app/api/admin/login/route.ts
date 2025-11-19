@@ -29,18 +29,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('[Admin Login] Checking credentials', {
-      providedUsername: username,
-      expectedUsername: ADMIN_USERNAME,
-      hasPassword: !!password,
-      hasExpectedPassword: !!ADMIN_PASSWORD
-    });
+    console.log('[Admin Login] Checking credentials');
 
     if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
-      console.log('[Admin Login] Invalid credentials provided', {
-        usernameMatch: username === ADMIN_USERNAME,
-        passwordMatch: password === ADMIN_PASSWORD
-      });
+      console.log('[Admin Login] Invalid credentials provided');
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }

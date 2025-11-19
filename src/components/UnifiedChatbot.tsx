@@ -34,16 +34,31 @@ interface UnifiedChatbotProps {
   mode: "standalone" | "workspace";
   onPageModification?: (mod: PageModification) => Promise<string>;
   sidebarCollapsed?: boolean;
+  postId?: string;
+  documentId?: string;
+  userId?: string;
+  apiEndpoint?: 'blog' | 'stories';
 }
 
 export default function UnifiedChatbot({
   mode,
   onPageModification,
   sidebarCollapsed = false,
+  postId,
+  documentId,
+  userId,
+  apiEndpoint = 'blog',
 }: UnifiedChatbotProps) {
-  const { messages, appendMessage } = useChat() as {
+  const { messages, appendMessage, clearMessages } = useChat({
+    postId,
+    documentId,
+    userId,
+    enablePersistence: mode === "workspace" && !!(postId || documentId) && !!userId,
+    apiEndpoint,
+  }) as {
     messages: Message[];
     appendMessage: (message: Message) => void;
+    clearMessages: () => Promise<void>;
   };
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -418,26 +433,6 @@ export default function UnifiedChatbot({
                 >
                   {new Date(message.timestamp).toLocaleTimeString()}
                 </div>
-                {message.role === "assistant" && mode === "workspace" && (
-                  <div className="mt-3 flex justify-end">
-                    <button
-                      onClick={async () => {
-                        if (onPageModification) {
-                          await onPageModification({
-                            type: "add",
-                            content:
-                              typeof message.content === "string"
-                                ? message.content
-                                : message.content.text,
-                          });
-                        }
-                      }}
-                      className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                    >
-                      Add to Page
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
           ))}

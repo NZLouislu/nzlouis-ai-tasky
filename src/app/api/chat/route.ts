@@ -7,12 +7,13 @@ import { getUserIdFromRequest } from '@/lib/admin-auth';
 
 const MODEL_PROVIDER_MAP: Record<string, AIProvider> = {
   'gemini-2.5-flash': 'google',
+  'gemini-3-pro-preview': 'google',
+  'gemini-2.5-pro': 'google',
   'gemini-2.5-flash-live': 'google',
   'gemini-2.0-flash-live': 'google',
   'gemini-2.0-flash-lite': 'google',
   'gemini-2.0-flash': 'google',
   'gemini-2.5-flash-lite': 'google',
-  'gemini-2.5-pro': 'google',
   'gemini-1.5-flash': 'google',
   'gemini-1.5-pro': 'google',
   'gpt-4o': 'openai',
@@ -96,7 +97,7 @@ export async function POST(req: NextRequest) {
         defaultProvider: 'google' as AIProvider,
         defaultModel: 'gemini-2.5-flash',
         temperature: 0.8,
-        maxTokens: 2048,
+        maxTokens: 4096,
         systemPrompt: 'You are a helpful AI assistant with vision capabilities. You can see and analyze images provided by users.',
       };
 
@@ -112,7 +113,12 @@ export async function POST(req: NextRequest) {
       modelName = body.model || settings.defaultModel;
     }
     const temperature = body.temperature ?? settings.temperature;
-    const maxTokens = body.maxTokens ?? settings.maxTokens;
+    let maxTokens = body.maxTokens ?? settings.maxTokens;
+    // Auto-upgrade legacy default limit
+    if (maxTokens === 1024) {
+      console.log('Upgrading legacy maxTokens 1024 to 4096');
+      maxTokens = 4096;
+    }
 
     console.log(`Using provider: ${provider}, model: ${modelName}`);
 
@@ -325,12 +331,13 @@ export async function POST(req: NextRequest) {
 
       const modelMap: Record<string, string> = {
         'gemini-2.5-flash': 'gemini-2.5-flash',
+        'gemini-3-pro-preview': 'gemini-3-pro-preview',
+        'gemini-2.5-pro': 'gemini-2.5-pro',
         'gemini-2.5-flash-live': 'gemini-2.5-flash',
         'gemini-2.0-flash-live': 'gemini-2.0-flash',
         'gemini-2.0-flash-lite': 'gemini-2.0-flash',
         'gemini-2.0-flash': 'gemini-2.0-flash',
         'gemini-2.5-flash-lite': 'gemini-2.5-flash',
-        'gemini-2.5-pro': 'gemini-2.5-pro',
         'gemini-1.5-flash': 'gemini-1.5-flash',
         'gemini-1.5-pro': 'gemini-1.5-pro',
       };

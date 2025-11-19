@@ -6,12 +6,13 @@ import { getUserIdFromRequest } from "@/lib/admin-auth";
 
 const MODEL_PROVIDER_MAP: Record<string, AIProvider> = {
     'gemini-2.5-flash': 'google',
+    'gemini-3-pro-preview': 'google',
+    'gemini-2.5-pro': 'google',
     'gemini-2.5-flash-live': 'google',
     'gemini-2.0-flash-live': 'google',
     'gemini-2.0-flash-lite': 'google',
     'gemini-2.0-flash': 'google',
     'gemini-2.5-flash-lite': 'google',
-    'gemini-2.5-pro': 'google',
     'gemini-1.5-flash': 'google',
     'gemini-1.5-pro': 'google',
     'gpt-4o': 'openai',
@@ -164,12 +165,13 @@ export async function POST(req: NextRequest) {
 
             const modelMap: Record<string, string> = {
                 'gemini-2.5-flash': 'gemini-2.5-flash',
+                'gemini-3-pro-preview': 'gemini-3-pro-preview',
+                'gemini-2.5-pro': 'gemini-2.5-pro',
                 'gemini-2.5-flash-live': 'gemini-2.5-flash',
                 'gemini-2.0-flash-live': 'gemini-2.0-flash',
                 'gemini-2.0-flash-lite': 'gemini-2.0-flash',
                 'gemini-2.0-flash': 'gemini-2.0-flash',
                 'gemini-2.5-flash-lite': 'gemini-2.5-flash',
-                'gemini-2.5-pro': 'gemini-2.5-pro',
                 'gemini-1.5-flash': 'gemini-1.5-flash',
                 'gemini-1.5-pro': 'gemini-1.5-pro',
             };

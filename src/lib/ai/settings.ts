@@ -21,7 +21,7 @@ export async function getUserAISettings(userId: string): Promise<UserAISettings>
       defaultProvider: 'google',
       defaultModel: 'gemini-2.5-flash',
       temperature: 0.8,
-      maxTokens: 1024,
+      maxTokens: 4096,
       systemPrompt: 'You are a helpful AI assistant.',
     };
   }
@@ -30,7 +30,7 @@ export async function getUserAISettings(userId: string): Promise<UserAISettings>
     defaultProvider: settings.default_provider as AIProvider,
     defaultModel: settings.default_model,
     temperature: settings.temperature,
-    maxTokens: settings.max_tokens,
+    maxTokens: settings.max_tokens === 1024 ? 4096 : settings.max_tokens,
     systemPrompt: settings.system_prompt,
   };
 }
@@ -46,7 +46,7 @@ export async function updateUserAISettings(
       default_provider: settings.defaultProvider || 'google',
       default_model: settings.defaultModel || 'gemini-2.5-flash',
       temperature: settings.temperature ?? 0.8,
-      max_tokens: settings.maxTokens ?? 1024,
+      max_tokens: settings.maxTokens ?? 4096,
       system_prompt: settings.systemPrompt || 'You are a helpful AI assistant.',
     })
     .select()
@@ -89,7 +89,7 @@ export async function ensureUserAISettings(userId: string): Promise<UserAISettin
       default_provider: 'google',
       default_model: 'gemini-2.5-flash',
       temperature: 0.8,
-      max_tokens: 1024,
+      max_tokens: 4096,
       system_prompt: 'You are a helpful AI assistant.',
     })
     .select()
@@ -100,7 +100,7 @@ export async function ensureUserAISettings(userId: string): Promise<UserAISettin
       defaultProvider: 'google',
       defaultModel: 'gemini-2.5-flash',
       temperature: 0.8,
-      maxTokens: 1024,
+      maxTokens: 4096,
       systemPrompt: 'You are a helpful AI assistant.',
     };
   }

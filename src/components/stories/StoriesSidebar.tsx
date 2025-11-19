@@ -101,14 +101,12 @@ export default function StoriesSidebar({
     if (platformId === 'jira') {
       setShowJiraProjectDialog(true);
     } else if (platformId === 'trello') {
-      // Check if there are any Trello boards
       const trelloPlatform = platforms.find(p => p.id === 'trello');
       const hasBoards = trelloPlatform && trelloPlatform.projects.length > 0;
       
       if (hasBoards) {
         setShowTrelloBoardDialog(true);
       } else {
-        // Show help dialog for first-time Trello board creation
         setShowTrelloHelpDialog(true);
       }
     }
@@ -297,6 +295,12 @@ export default function StoriesSidebar({
     }
   };
 
+  const existingJiraProjectKeys = React.useMemo(() => {
+    const jiraPlatform = platforms.find((p) => p.name === 'jira');
+    const keys = jiraPlatform?.projects.map((proj) => proj.platformProjectId) || [];
+    return keys;
+  }, [platforms]);
+
   if (isMobile && !isOpen) {
     return null;
   }
@@ -313,6 +317,7 @@ export default function StoriesSidebar({
         isOpen={showJiraProjectDialog}
         onClose={() => setShowJiraProjectDialog(false)}
         onSelectProject={handleJiraProjectSelect}
+        existingProjectKeys={existingJiraProjectKeys}
       />
       
       <TrelloConnectDialog

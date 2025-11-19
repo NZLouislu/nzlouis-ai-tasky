@@ -17,7 +17,7 @@ const DEFAULT_SETTINGS: AISettings = {
   selectedModel: "gemini-2.5-flash",
   apiKeys: {},
   temperature: 0.8,
-  maxTokens: 1024,
+  maxTokens: 4096,
   systemPrompt:
     "You are a helpful AI assistant. Be concise and direct in your responses.",
 };
@@ -52,6 +52,10 @@ export function useAISettings() {
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
+        // Migration: Upgrade legacy default maxTokens
+        if (parsed.maxTokens === 1024) {
+          parsed.maxTokens = 4096;
+        }
         setSettings({ ...DEFAULT_SETTINGS, ...parsed });
       } catch (error) {
         console.error("Failed to parse stored settings:", error);
