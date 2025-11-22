@@ -39,6 +39,7 @@ export const MODEL_MAPPINGS: Record<AIProvider, Record<string, string>> = {
     'claude-haiku': 'claude-3-5-haiku-20241022',
   },
   openrouter: {
+    'x-ai/grok-4.1-fast:free': 'x-ai/grok-4.1-fast:free',
     'openai/gpt-oss-20b:free': 'openai/gpt-oss-20b:free',
     'tngtech/deepseek-r1t2-chimera:free': 'tngtech/deepseek-r1t2-chimera:free',
     'tngtech/deepseek-r1t-chimera:free': 'tngtech/deepseek-r1t-chimera:free',

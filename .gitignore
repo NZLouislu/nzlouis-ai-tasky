@@ -27,6 +27,8 @@
 .vscode/
 .storybook/
 .codebuddy/
+.gemini/
+.vscode/
 
 # production
 /build

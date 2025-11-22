@@ -1,11 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-
-interface Message {
-  id: string;
-  content: string | { text: string; image?: string };
-  role: string;
-  timestamp: string;
-}
+import { useChatStore, Message } from "@/lib/store/chat-store";
 
 interface UseChatOptions {
   postId?: string;
@@ -17,21 +11,28 @@ interface UseChatOptions {
 
 export const useChat = (options?: UseChatOptions) => {
   const { postId, documentId, userId, enablePersistence = true, apiEndpoint = 'blog' } = options || {};
-  const [messages, setMessages] = useState<Message[]>([]);
+  
+  const { contextChats, setContextMessages, addContextMessage, clearContextMessages } = useChatStore();
   const [isLoading, setIsLoading] = useState(false);
 
   const entityId = postId || documentId;
   const entityParam = apiEndpoint === 'stories' ? 'documentId' : 'postId';
   const apiBase = `/api/${apiEndpoint}/chat-messages`;
 
+  // Get messages from store, default to empty array
+  const messages = entityId ? (contextChats[entityId] || []) : [];
+
   const loadMessages = useCallback(async () => {
     if (!entityId || !enablePersistence) {
-      setMessages([]);
       return;
     }
 
-    try {
+    // Only show loading if we don't have messages yet
+    if (messages.length === 0) {
       setIsLoading(true);
+    }
+
+    try {
       const response = await fetch(`${apiBase}?${entityParam}=${entityId}`);
       
       if (!response.ok) {
@@ -39,21 +40,35 @@ export const useChat = (options?: UseChatOptions) => {
       }
 
       const data = await response.json();
-      const loadedMessages: Message[] = (data.messages || []).map((msg: any) => ({
-        id: msg.id,
-        content: msg.content,
-        role: msg.role,
-        timestamp: msg.timestamp,
-      }));
+      const loadedMessages: Message[] = (data.messages || []).map((msg: any) => {
+        // Handle both string and object content formats
+        let content = '';
+        let image = undefined;
 
-      setMessages(loadedMessages);
+        if (typeof msg.content === 'string') {
+          content = msg.content;
+        } else if (typeof msg.content === 'object') {
+          content = msg.content.text || '';
+          image = msg.content.image;
+        }
+
+        return {
+          id: msg.id,
+          role: msg.role,
+          content: content,
+          image: image,
+          timestamp: new Date(msg.timestamp),
+        };
+      });
+
+      setContextMessages(entityId, loadedMessages);
     } catch (error) {
       console.error('Error loading chat messages:', error);
-      setMessages([]);
+      // Don't clear messages on error to allow offline viewing of cached data
     } finally {
       setIsLoading(false);
     }
-  }, [entityId, enablePersistence, apiBase, entityParam]);
+  }, [entityId, enablePersistence, apiBase, entityParam, setContextMessages, messages.length]);
 
   useEffect(() => {
     loadMessages();
@@ -68,9 +83,18 @@ export const useChat = (options?: UseChatOptions) => {
       const body: any = {
         userId,
         role: message.role,
-        content: message.content,
+        content: message.content, // Send as string
         timestamp: message.timestamp,
       };
+      
+      // If image exists, we might need to send it. 
+      // Adapting to what the API likely expects based on previous code
+      if (message.image) {
+        body.content = {
+          text: message.content,
+          image: message.image
+        };
+      }
 
       if (apiEndpoint === 'stories') {
         body.documentId = entityId;
@@ -91,23 +115,14 @@ export const useChat = (options?: UseChatOptions) => {
   }, [entityId, userId, enablePersistence, apiBase, apiEndpoint]);
 
   const appendMessage = useCallback((message: Message) => {
-    setMessages((prev) => {
-      const existingIndex = prev.findIndex((m) => m.id === message.id);
-      if (existingIndex >= 0) {
-        const updated = [...prev];
-        updated[existingIndex] = message;
-        return updated;
-      } else {
-        return [...prev, message];
-      }
-    });
-
-    saveMessage(message);
-  }, [saveMessage]);
+    if (entityId) {
+      addContextMessage(entityId, message);
+      saveMessage(message);
+    }
+  }, [entityId, addContextMessage, saveMessage]);
 
   const clearMessages = useCallback(async () => {
     if (!entityId || !enablePersistence) {
-      setMessages([]);
       return;
     }
 
@@ -115,11 +130,11 @@ export const useChat = (options?: UseChatOptions) => {
       await fetch(`${apiBase}?${entityParam}=${entityId}`, {
         method: 'DELETE',
       });
-      setMessages([]);
+      clearContextMessages(entityId);
     } catch (error) {
       console.error('Error clearing chat messages:', error);
     }
-  }, [entityId, enablePersistence, apiBase, entityParam]);
+  }, [entityId, enablePersistence, apiBase, entityParam, clearContextMessages]);
 
   return {
     messages,

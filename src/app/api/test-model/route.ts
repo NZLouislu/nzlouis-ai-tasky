@@ -29,6 +29,7 @@ const MODEL_PROVIDER_MAP: Record<string, AIProvider> = {
     'deepseek/deepseek-chat-v3-0324:free': 'openrouter',
     'deepseek/deepseek-r1-0528:free': 'openrouter',
     'qwen/qwen3-coder:free': 'openrouter',
+    'x-ai/grok-4.1-fast:free': 'openrouter',
     'xai-grok-code-fast-1': 'kilo',
     'claude-sonnet-4': 'kilo',
 };

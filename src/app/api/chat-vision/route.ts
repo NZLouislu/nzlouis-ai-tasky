@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { messages } = body;
+    const { messages, modelId } = body;
 
     const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) {
@@ -12,6 +12,29 @@ export async function POST(req: NextRequest) {
         headers: { 'Content-Type': 'application/json' },
       });
     }
+
+    // Determine model to use
+    // Default to gemini-1.5-flash-latest which is a stable alias
+    let modelName = 'gemini-1.5-flash-latest';
+    
+    if (modelId) {
+      // Map user friendly names to actual API model names
+      // We trust the modelId passed from the client, but handle specific aliases if needed
+      if (modelId.includes('gemini-2.0-flash')) {
+        modelName = 'gemini-2.0-flash-exp';
+      } else if (modelId.includes('gemini-1.5-pro')) {
+        modelName = 'gemini-1.5-pro-latest';
+      } else if (modelId.includes('gemini-1.5-flash')) {
+        modelName = 'gemini-1.5-flash-latest';
+      } else {
+        // For others (like gemini-2.5-flash or non-gemini models), try to use them directly
+        // If it's a non-Gemini model (e.g. x-ai/grok), it will likely fail with 404 from Google API
+        // We will catch this error and return a user-friendly message
+        modelName = modelId;
+      }
+    }
+
+    console.log(`Using Gemini model: ${modelName} (requested: ${modelId})`);
 
     // Convert messages to Gemini format
     const contents = [];
@@ -29,8 +52,30 @@ export async function POST(req: NextRequest) {
         let base64Data = msg.image;
         let mimeType = 'image/jpeg';
         
+        // If it's a URL, fetch and convert to base64
+        if (msg.image.startsWith('http://') || msg.image.startsWith('https://')) {
+          try {
+            console.log('Fetching image from URL:', msg.image);
+            const imageResponse = await fetch(msg.image);
+            if (!imageResponse.ok) {
+              throw new Error(`Failed to fetch image: ${imageResponse.statusText}`);
+            }
+            
+            const arrayBuffer = await imageResponse.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+            base64Data = buffer.toString('base64');
+            
+            // Get mime type from response or infer from URL
+            mimeType = imageResponse.headers.get('content-type') || 'image/jpeg';
+            console.log('Image converted to base64, mime type:', mimeType);
+          } catch (error) {
+            console.error('Failed to fetch image:', error);
+            // Skip this image if fetch fails
+            continue;
+          }
+        }
         // Parse data URL
-        if (msg.image.startsWith('data:')) {
+        else if (msg.image.startsWith('data:')) {
           const matches = msg.image.match(/^data:([^;]+);base64,(.+)$/);
           if (matches) {
             mimeType = matches[1];
@@ -58,7 +103,7 @@ export async function POST(req: NextRequest) {
 
     // Call Gemini API directly
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:streamGenerateContent?key=${apiKey}&alt=sse`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?key=${apiKey}&alt=sse`,
       {
         method: 'POST',
         headers: {
@@ -75,9 +120,32 @@ export async function POST(req: NextRequest) {
     );
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error('Gemini API error:', error);
-      return new Response(JSON.stringify({ error: 'API call failed', details: error }), {
+      const errorText = await response.text();
+      console.error('Gemini API error:', errorText);
+      
+      // Check for 404 (Model not found/supported) or 400 (Invalid argument)
+      if (response.status === 404 || response.status === 400) {
+        // Return a user-friendly error stream
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          start(controller) {
+            const errorMessage = `⚠️ **Error**: The model \`${modelName}\` does not support image recognition or is not available in the Gemini API.\n\nPlease switch to a model that supports vision, such as **Gemini 1.5 Flash** or **Gemini 1.5 Pro**.`;
+            const chunk = `0:"${errorMessage.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"\n`;
+            controller.enqueue(encoder.encode(chunk));
+            controller.close();
+          }
+        });
+        
+        return new Response(stream, {
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+          },
+        });
+      }
+
+      return new Response(JSON.stringify({ error: 'API call failed', details: errorText }), {
         status: response.status,
         headers: { 'Content-Type': 'application/json' },
       });

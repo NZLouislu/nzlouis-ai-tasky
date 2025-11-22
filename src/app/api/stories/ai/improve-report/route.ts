@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { google } from '@ai-sdk/google';
 import { generateText } from 'ai';
 
 export async function POST(request: NextRequest) {
@@ -48,12 +47,18 @@ Instruction: ${instruction}
 Please provide improved content for this report. Focus on the specific instruction while maintaining the overall structure and adding valuable information.`;
 
     try {
+      const { getUserAISettings } = await import('@/lib/ai/settings');
+      const { getModel } = await import('@/lib/ai/models');
+      
+      const settings = await getUserAISettings(session.user.id);
+      const model = await getModel(session.user.id, settings.defaultProvider, settings.defaultModel);
+
       const { text } = await generateText({
-        model: google('gemini-2.0-flash-exp') as any,
+        model: model,
         system: systemPrompt,
         prompt: userPrompt,
-        maxTokens: 2000,
-        temperature: 0.7,
+        maxTokens: settings.maxTokens || 2000,
+        temperature: settings.temperature || 0.7,
       });
 
       // Parse the generated content into BlockNote format

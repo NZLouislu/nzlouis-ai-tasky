@@ -30,6 +30,7 @@ const MODEL_PROVIDER_MAP: Record<string, AIProvider> = {
   'deepseek/deepseek-chat-v3-0324:free': 'openrouter',
   'deepseek/deepseek-r1-0528:free': 'openrouter',
   'qwen/qwen3-coder:free': 'openrouter',
+  'x-ai/grok-4.1-fast:free': 'openrouter',
   'xai-grok-code-fast-1': 'kilo',
   'claude-sonnet-4': 'kilo',
 };
@@ -67,6 +68,7 @@ interface ChatRequest {
     role: 'user' | 'assistant' | 'system';
     content: string;
     image?: string;
+    images?: string[];
   }>;
   provider?: AIProvider;
   model?: string;
@@ -122,7 +124,7 @@ export async function POST(req: NextRequest) {
 
     console.log(`Using provider: ${provider}, model: ${modelName}`);
 
-    const hasImages = messages.some(m => m.image);
+    const hasImages = messages.some(m => (m.images && m.images.length > 0) || m.image);
     if (hasImages) {
       console.log('Messages contain images - using vision model');
     }
@@ -130,9 +132,10 @@ export async function POST(req: NextRequest) {
     const { getModel } = await import('@/lib/ai/models');
     const model = await getModel(userId, provider, modelName);
 
-    const systemMessage = settings.systemPrompt && !messages.some(m => m.role === 'system')
-      ? settings.systemPrompt
-      : undefined;
+    const defaultSystemPrompt = 'You are a helpful AI assistant with vision capabilities. You can see and analyze images provided by users. When comparing items or presenting structured data, ALWAYS use Markdown tables with proper formatting. Example:\n\n| Column 1 | Column 2 |\n|----------|----------|\n| Data 1   | Data 2   |\n\nUse this format for all comparisons and structured information.';
+    
+    // Force use of new system prompt with Markdown table instructions
+    const systemMessage = defaultSystemPrompt;
 
     type MessageContent =
       | { type: 'text'; text: string }
@@ -159,37 +162,63 @@ export async function POST(req: NextRequest) {
       for (const msg of messages) {
         if (msg.role === 'system') continue;
         
+        const images = msg.images || (msg.image ? [msg.image] : []);
+
         // Skip messages with empty content and no image
-        if (!msg.content?.trim() && !msg.image) {
-          console.log('Skipping empty message for Gemini:', { role: msg.role, hasImage: !!msg.image, contentLength: msg.content?.length });
+        if (!msg.content?.trim() && images.length === 0) {
           continue;
         }
 
-        console.log('Processing message for Gemini:', { role: msg.role, hasImage: !!msg.image, contentLength: msg.content?.length });
-
-        if (msg.image) {
+        if (images.length > 0) {
           const content: MessageContent[] = [];
-          const imageData = msg.image;
-          let base64Data = imageData;
-          let mimeType = 'image/jpeg';
+          
+          for (const imageData of images) {
+            let base64Data = imageData;
+            let mimeType = 'image/jpeg';
 
-          if (imageData.startsWith('data:')) {
-            const matches = imageData.match(/^data:([^;]+);base64,(.+)$/);
-            if (matches) {
-              mimeType = matches[1];
-              base64Data = matches[2];
+            // Handle HTTP/HTTPS URLs - fetch and convert to Base64
+            if (imageData.startsWith('http://') || imageData.startsWith('https://')) {
+              try {
+                console.log('Fetching image from URL for Gemini:', imageData);
+                const imageResponse = await fetch(imageData);
+                if (!imageResponse.ok) {
+                  throw new Error(`Failed to fetch image: ${imageResponse.status}`);
+                }
+                const arrayBuffer = await imageResponse.arrayBuffer();
+                const buffer = Buffer.from(arrayBuffer);
+                base64Data = buffer.toString('base64');
+                
+                // Try to get mime type from response headers
+                const contentType = imageResponse.headers.get('content-type');
+                if (contentType) {
+                  mimeType = contentType;
+                }
+                console.log('Successfully converted URL to Base64, mimeType:', mimeType);
+              } catch (error) {
+                console.error('Failed to fetch image from URL:', error);
+                throw new Error('Failed to load image from URL');
+              }
+            } else if (imageData.startsWith('data:')) {
+              // Handle data URLs
+              const matches = imageData.match(/^data:([^;]+);base64,(.+)$/);
+              if (matches) {
+                mimeType = matches[1];
+                base64Data = matches[2];
+              }
             }
+            // If it's already base64, use it as-is
+
+            const properDataUrl = `data:${mimeType};base64,${base64Data}`;
+            const imageUrl = new URL(properDataUrl);
+
+            content.push({ type: 'image', image: imageUrl });
           }
-
-          const properDataUrl = `data:${mimeType};base64,${base64Data}`;
-          const imageUrl = new URL(properDataUrl);
-
-          content.push({ type: 'image', image: imageUrl });
 
           if (msg.content && msg.content.trim()) {
             content.push({ type: 'text', text: msg.content });
-          } else {
-            content.push({ type: 'text', text: 'Please describe in detail everything you see in this image, including objects, colors, scenes, etc.' });
+          } else if (content.length > 0) {
+             // If we have images but no text, add a default prompt
+            content.push({ type: 'text', text: 'Please describe in detail everything you see in these images, including objects, colors, scenes, etc.' });
           }
 
           geminiMessages.push({
@@ -207,10 +236,11 @@ export async function POST(req: NextRequest) {
     } else {
       const simpleMessages: Array<{
         role: 'user' | 'assistant' | 'system';
-        content: string;
+        content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
       }> = [];
 
       if (systemMessage) {
+        console.log('Adding system message to OpenRouter:', systemMessage);
         simpleMessages.push({
           role: 'system',
           content: systemMessage,
@@ -220,16 +250,37 @@ export async function POST(req: NextRequest) {
       for (const msg of messages) {
         if (msg.role === 'system') continue;
         
+        const images = msg.images || (msg.image ? [msg.image] : []);
+
         // Skip messages with empty content and no image
-        if (!msg.content?.trim() && !msg.image) {
-          console.log('Skipping empty message for OpenRouter:', { role: msg.role, hasImage: !!msg.image, contentLength: msg.content?.length });
+        if (!msg.content?.trim() && images.length === 0) {
           continue;
         }
 
-        console.log('Processing message for OpenRouter:', { role: msg.role, hasImage: !!msg.image, contentLength: msg.content?.length });
+        if (images.length > 0) {
+          const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
+          
+          // For the last user message with image, add explicit formatting instruction
+          const isLastMessage = messages.indexOf(msg) === messages.length - 1 && msg.role === 'user';
+          let textContent = msg.content && msg.content.trim() ? msg.content : '';
+          
+          if (isLastMessage && provider === 'openrouter') {
+            textContent += '\n\n**IMPORTANT: Please format all tables using proper Markdown syntax with pipes (|) and hyphens (-). Example:**\n```\n| Header 1 | Header 2 |\n|----------|----------|\n| Data 1   | Data 2   |\n```';
+          }
+          
+          if (textContent) {
+            content.push({ type: 'text', text: textContent });
+          }
+          
+          for (const img of images) {
+            content.push({
+              type: 'image_url',
+              image_url: {
+                url: img
+              }
+            });
+          }
 
-        if (msg.image) {
-          const content = msg.content || 'Please describe this image.';
           simpleMessages.push({
             role: msg.role === 'assistant' ? 'assistant' : 'user',
             content: content,
@@ -241,10 +292,11 @@ export async function POST(req: NextRequest) {
           });
         }
       }
-      promptMessages = simpleMessages;
+      promptMessages = simpleMessages as any;
     }
 
     console.log('Prompt messages count:', promptMessages.length);
+    console.log('First message (system):', JSON.stringify(promptMessages[0], null, 2));
 
     if (provider === 'openrouter') {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -267,7 +319,13 @@ export async function POST(req: NextRequest) {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('OpenRouter API error:', response.status, errorText);
-        throw new Error(`OpenRouter API error: ${response.status}`);
+        
+        // Check for common errors related to vision support
+        if (response.status === 400 && (errorText.includes('vision') || errorText.includes('image') || errorText.includes('multimodal'))) {
+          throw new Error(`The model ${modelName} does not support image recognition. Please switch to a vision-capable model like GPT-4o, Claude 3.5 Sonnet, or Gemini.`);
+        }
+        
+        throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
       }
 
       console.log('OpenRouter stream started successfully');
@@ -408,9 +466,12 @@ export async function POST(req: NextRequest) {
       const transformStream = new TransformStream({
         async transform(chunk, controller) {
           const chunkText = decoder.decode(chunk, { stream: true });
+          // console.log('Gemini raw chunk:', chunkText); // Debug raw output
           buffer += chunkText;
           
-          // Try to parse complete JSON objects from buffer
+          // Gemini stream returns an array of objects, e.g. [{...}, {...}]
+          // We need to handle the array brackets and commas
+          
           let startIndex = 0;
           let braceCount = 0;
           let inString = false;
@@ -418,6 +479,12 @@ export async function POST(req: NextRequest) {
           
           for (let i = 0; i < buffer.length; i++) {
             const char = buffer[i];
+            
+            // Skip array brackets and commas outside of JSON objects
+            if (braceCount === 0 && (char === '[' || char === ']' || char === ',' || char === '\n' || char === ' ')) {
+              startIndex = i + 1;
+              continue;
+            }
             
             if (escapeNext) {
               escapeNext = false;
@@ -447,12 +514,12 @@ export async function POST(req: NextRequest) {
                   const jsonStr = buffer.substring(startIndex, i + 1);
                   try {
                     const json = JSON.parse(jsonStr);
-                    console.log('Parsed Gemini response:', JSON.stringify(json, null, 2));
+                    // console.log('Parsed Gemini response:', JSON.stringify(json, null, 2));
                     
                     const textContent = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
                     
                     if (textContent) {
-                      console.log('Extracted text content:', textContent);
+                      // console.log('Extracted text content:', textContent);
                       const formatted = `0:"${textContent.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"\n`;
                       controller.enqueue(encoder.encode(formatted));
                     }
@@ -460,13 +527,18 @@ export async function POST(req: NextRequest) {
                     console.error('Failed to parse JSON object:', e, jsonStr.substring(0, 200));
                   }
                   
-                  // Remove processed JSON from buffer
-                  buffer = buffer.substring(i + 1);
-                  i = -1; // Reset loop
-                  startIndex = 0;
+                  // Update buffer start index
+                  startIndex = i + 1;
                 }
               }
             }
+          }
+          
+          // Keep only the unprocessed part of the buffer
+          if (startIndex < buffer.length) {
+            buffer = buffer.substring(startIndex);
+          } else {
+            buffer = '';
           }
         },
         async flush(controller) {
@@ -479,6 +551,12 @@ export async function POST(req: NextRequest) {
           for (let i = 0; i < buffer.length; i++) {
             const char = buffer[i];
             
+            // Skip array brackets and commas outside of JSON objects
+            if (braceCount === 0 && (char === '[' || char === ']' || char === ',' || char === '\n' || char === ' ')) {
+              startIndex = i + 1;
+              continue;
+            }
+            
             if (escapeNext) {
               escapeNext = false;
               continue;
@@ -507,12 +585,12 @@ export async function POST(req: NextRequest) {
                   const jsonStr = buffer.substring(startIndex, i + 1);
                   try {
                     const json = JSON.parse(jsonStr);
-                    console.log('Final Gemini response:', JSON.stringify(json, null, 2));
+                    // console.log('Final Gemini response:', JSON.stringify(json, null, 2));
                     
                     const textContent = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
                     
                     if (textContent) {
-                      console.log('Final extracted text content:', textContent);
+                      // console.log('Final extracted text content:', textContent);
                       const formatted = `0:"${textContent.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"\n`;
                       controller.enqueue(encoder.encode(formatted));
                     }
@@ -520,10 +598,8 @@ export async function POST(req: NextRequest) {
                     console.error('Failed to parse final JSON object:', e, jsonStr.substring(0, 200));
                   }
                   
-                  // Continue processing remaining buffer
-                  buffer = buffer.substring(i + 1);
-                  i = -1; // Reset loop
-                  startIndex = 0;
+                  // Update buffer start index
+                  startIndex = i + 1;
                 }
               }
             }
@@ -587,16 +663,24 @@ export async function POST(req: NextRequest) {
     console.error('Chat API error:', error);
 
     const errorMessage = error instanceof Error ? error.message : 'Failed to process chat request';
-
-    return new Response(
-      JSON.stringify({
-        error: errorMessage,
-        suggestion: 'Try changing the AI provider or model in Settings'
-      }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
+    
+    // Return error as a stream so it appears in the chat UI
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        const formattedError = `⚠️ **Error**: ${errorMessage}`;
+        const chunk = `0:"${formattedError.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"\n`;
+        controller.enqueue(encoder.encode(chunk));
+        controller.close();
       }
-    );
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
   }
 }

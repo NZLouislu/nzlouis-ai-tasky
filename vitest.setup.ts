@@ -15,6 +15,27 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+vi.mock('next/server', () => ({
+  NextRequest: class NextRequest {
+    constructor(url, init) {
+      this.url = url;
+      this.method = init?.method || 'GET';
+      this.headers = new Headers(init?.headers);
+      this._body = init?.body;
+    }
+    async json() {
+      return JSON.parse(this._body);
+    }
+  },
+  NextResponse: {
+    json: (data, init) => ({
+      json: async () => data,
+      status: init?.status || 200,
+      headers: new Headers(init?.headers),
+    }),
+  },
+}));
+
 vi.mock('next-auth/react', () => ({
   useSession: () => ({
     data: {

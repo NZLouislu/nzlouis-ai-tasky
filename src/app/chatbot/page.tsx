@@ -8,49 +8,44 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Image from 'next/image';
 import ChatInput from '@/components/ChatInput';
-
-interface ChatSession {
-  id: string;
-  title: string;
-  updatedAt: string;
-}
-
-interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  image?: string;
-  timestamp: Date;
-}
-
-interface AIModel {
-  id: string;
-  name: string;
-  provider: string;
-  description: string;
-  tested?: boolean;
-  working?: boolean;
-}
+import { useChatStore, Message, ChatSession, AIModel } from '@/lib/store/chat-store';
 
 export default function ChatbotPage() {
   const { data: session } = useSession();
   const [isAdmin, setIsAdmin] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  
+  // Zustand Store
+  const {
+    sessions,
+    currentSessionId,
+    messages,
+    availableModels,
+    selectedModel,
+    selectedProvider,
+    sidebarOpen,
+    isLoading,
+    input,
+    previewImages = [],
+    setSessions,
+    setCurrentSessionId,
+    setMessages,
+    addMessage,
+    updateLastMessage,
+    setAvailableModels,
+    setSelectedModel,
+    setSelectedProvider,
+    setSidebarOpen,
+    setIsLoading,
+    setInput,
+    setPreviewImages,
+    clearCurrentChat
+  } = useChatStore();
+
   const [isMobile, setIsMobile] = useState(false);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
-  const [availableModels, setAvailableModels] = useState<AIModel[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>('');
-  const [selectedProvider, setSelectedProvider] = useState<string>('');
-  const [draftMessage, setDraftMessage] = useState<string>('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -90,30 +85,21 @@ export default function ChatbotPage() {
     return () => {
       window.removeEventListener('resize', handleResize);
     };
-  }, []);
+  }, [setSidebarOpen]);
 
   useEffect(() => {
     if (!isCheckingAuth && (session?.user || isAdmin)) {
-      loadAvailableModels();
+      // Only load if empty to prevent flash, or could implement a background refresh
+      if (availableModels.length === 0) {
+        loadAvailableModels();
+      }
     }
-  }, [session, isAdmin, isCheckingAuth]);
-
-  useEffect(() => {
-    const savedDraft = localStorage.getItem('chatbot-draft');
-    if (savedDraft) {
-      setDraftMessage(savedDraft);
-      setInput(savedDraft);
-    }
-  }, []);
+  }, [session, isAdmin, isCheckingAuth, availableModels.length]);
 
   useEffect(() => {
     if (input.trim()) {
-      localStorage.setItem('chatbot-draft', input);
-      setDraftMessage(input);
       setHasUnsavedChanges(true);
     } else {
-      localStorage.removeItem('chatbot-draft');
-      setDraftMessage('');
       setHasUnsavedChanges(false);
     }
   }, [input]);
@@ -131,56 +117,79 @@ export default function ChatbotPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges, input]);
 
-  const handleImageUpload = useCallback(async (file: File) => {
-    if (file && file.type.startsWith('image/')) {
-      try {
-        setIsLoading(true);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  const handleImageUpload = useCallback(async (files: FileList | null | File | File[]) => {
+    if (!files) return;
+    
+    const fileList = files instanceof File ? [files] : Array.from(files);
+    if (fileList.length === 0) return;
+
+    setIsUploadingImage(true);
+
+    try {
+      const newImages: string[] = [];
+
+      for (const file of fileList) {
+        if (!file.type.startsWith('image/')) continue;
+
         const formData = new FormData();
         formData.append('file', file);
         formData.append('entityType', 'chat_message');
         formData.append('entityId', currentSessionId || 'temp');
 
-        const res = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-        });
+        try {
+          const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData,
+          });
 
-        if (!res.ok) {
-          throw new Error('Upload failed');
+          if (!res.ok) throw new Error('Upload failed');
+
+          const data = await res.json();
+          const imageUrl = data.url || data.publicUrl;
+          newImages.push(imageUrl);
+        } catch (error) {
+          console.error('Upload failed for file:', file.name, error);
+          // Fallback to base64
+          const reader = new FileReader();
+          await new Promise<void>((resolve) => {
+            reader.onload = (e) => {
+              const dataUrl = e.target?.result as string;
+              if (dataUrl) newImages.push(dataUrl);
+              resolve();
+            };
+            reader.readAsDataURL(file);
+          });
         }
-
-        const data = await res.json();
-        setPreviewImage(data.publicUrl);
-      } catch (error) {
-        console.error('Image upload failed:', error);
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          setPreviewImage(e.target?.result as string);
-        };
-        reader.readAsDataURL(file);
-      } finally {
-        setIsLoading(false);
       }
+
+      if (newImages.length > 0) {
+        setPreviewImages([...previewImages, ...newImages]);
+      }
+    } finally {
+      setIsUploadingImage(false);
     }
-  }, [currentSessionId]);
+  }, [currentSessionId, previewImages, setPreviewImages]);
 
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
       if (!items) return;
 
+      const files: File[] = [];
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
-
         if (item.type.indexOf('image') !== -1) {
-          e.preventDefault();
           const file = item.getAsFile();
-          if (file) {
-            console.log('Screenshot pasted:', file.type, file.size);
-            handleImageUpload(file);
-          }
-          break;
+          if (file) files.push(file);
         }
+      }
+
+      if (files.length > 0) {
+        e.preventDefault();
+        console.log('Pasted images:', files.length);
+        handleImageUpload(files);
       }
     };
 
@@ -209,19 +218,24 @@ export default function ChatbotPage() {
 
         setAvailableModels(sortedModels);
         
-        if (sortedModels.length > 0) {
+        if (!selectedModel && sortedModels.length > 0) {
           const firstProvider = sortedModels[0].provider;
           setSelectedProvider(firstProvider);
           setSelectedModel(sortedModels[0].id);
         }
       } else {
         setAvailableModels([]);
-        setSelectedModel('');
-        setSelectedProvider('');
+        if (!selectedModel) {
+          setSelectedModel('');
+          setSelectedProvider('');
+        }
       }
     } catch (error) {
       console.error('Failed to load AI models:', error);
-      setAvailableModels([]);
+      // Don't clear models on error if we have cached ones
+      if (availableModels.length === 0) {
+        setAvailableModels([]);
+      }
     }
   };
 
@@ -265,7 +279,7 @@ export default function ChatbotPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() && !previewImage) return;
+    if (!input.trim() && previewImages.length === 0) return;
     if (!selectedModel) return;
 
     let sessionId = currentSessionId;
@@ -294,34 +308,34 @@ export default function ChatbotPage() {
       id: Date.now().toString(),
       role: 'user',
       content: input,
-      image: previewImage || undefined,
+      images: previewImages.length > 0 ? previewImages : undefined,
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    addMessage(userMessage);
     const currentInput = input;
-    const currentImage = previewImage;
+    const currentImages = [...previewImages];
     setInput('');
-    setPreviewImage(null);
+    setPreviewImages([]);
     setIsLoading(true);
     setHasUnsavedChanges(false);
-    localStorage.removeItem('chatbot-draft');
 
     try {
       const chatMessages = messages.map((msg) => ({
         role: msg.role,
         content: msg.content,
-        ...(msg.image && { image: msg.image }),
+        ...(msg.images && msg.images.length > 0 ? { images: msg.images } : (msg.image ? { images: [msg.image] } : {})),
       }));
 
       chatMessages.push({
         role: 'user',
         content: currentInput,
-        ...(currentImage && { image: currentImage }),
+        ...(currentImages.length > 0 ? { images: currentImages } : {}),
       });
 
-      const hasImages = chatMessages.some(m => m.image);
-      const apiEndpoint = hasImages ? '/api/chat-vision' : '/api/chat';
+      const hasImages = chatMessages.some(m => m.images && m.images.length > 0);
+      // Unified API endpoint for both text and vision
+      const apiEndpoint = '/api/chat';
 
       console.log('Using API:', apiEndpoint, 'Has images:', hasImages, 'Model:', selectedModel);
 
@@ -354,21 +368,14 @@ export default function ChatbotPage() {
         timestamp: new Date(),
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      addMessage(assistantMessage);
 
       let accumulatedContent = '';
       let pendingUpdate = false;
       let animationFrameId: number | null = null;
 
       const updateMessage = () => {
-        setMessages((prev) => {
-          const newMessages = [...prev];
-          const lastMessage = newMessages[newMessages.length - 1];
-          if (lastMessage.role === 'assistant') {
-            lastMessage.content = accumulatedContent;
-          }
-          return newMessages;
-        });
+        updateLastMessage(accumulatedContent);
         pendingUpdate = false;
         animationFrameId = null;
       };
@@ -410,34 +417,28 @@ export default function ChatbotPage() {
 
         buffer = lines[lines.length - 1];
       }
-
-      // Check if assistant message is empty and provide fallback
-      if (!assistantMessage.content.trim()) {
-        console.error('Assistant message is empty, providing fallback response');
-        assistantMessage.content = 'Sorry, I encountered an issue generating a response. Please try again.';
-        setMessages((prev) => {
-          const newMessages = [...prev];
-          const lastMessage = newMessages[newMessages.length - 1];
-          if (lastMessage.role === 'assistant') {
-            lastMessage.content = assistantMessage.content;
-          }
-          return newMessages;
+      
+      // Save messages to database
+      if (sessionId) {
+        // Prepare messages for saving - ensure images are handled correctly
+        const messagesToSave = [...messages, userMessage, { ...assistantMessage, content: accumulatedContent }];
+        
+        await fetch(`/api/chat-sessions/${sessionId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: messagesToSave.map(msg => ({
+              role: msg.role,
+              content: msg.content,
+              images: msg.images || (msg.image ? [msg.image] : undefined),
+            })),
+          }),
         });
       }
-
-      if (sessionId) {
-        await saveMessages(sessionId, [userMessage, assistantMessage]);
-      }
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Chat error:', error);
       setIsLoading(false);
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: 'Sorry, something went wrong. Please try again.',
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      updateLastMessage('Sorry, I encountered an error. Please try again.');
     }
   };
 
@@ -453,16 +454,24 @@ export default function ChatbotPage() {
     } catch (error) {
       console.error('Failed to load sessions:', error);
     }
-  }, [currentSessionId]);
+  }, [currentSessionId, setSessions, setCurrentSessionId]);
 
   useEffect(() => {
     if (!isCheckingAuth && (session?.user || isAdmin)) {
-      loadSessions();
+      // Only fetch if sessions are empty to avoid flash, or could implement background refresh
+      if (sessions.length === 0) {
+        loadSessions();
+      }
     }
-  }, [session, isAdmin, isCheckingAuth, loadSessions]);
+  }, [session, isAdmin, isCheckingAuth, loadSessions, sessions.length]);
 
   useEffect(() => {
     if (currentSessionId) {
+      // Check if we already have messages for this session in store? 
+      // Actually, store only keeps messages for *current* session.
+      // So we should load messages when ID changes.
+      // But we can check if messages are already loaded for this ID if we stored session ID with messages.
+      // For now, let's just load. Optimizing this would require storing messages per session in Zustand.
       loadSessionMessages(currentSessionId);
     }
   }, [currentSessionId]);
@@ -478,13 +487,15 @@ export default function ChatbotPage() {
           role: string;
           content: string;
           image_url?: string;
+          image_urls?: string[]; // New field for multiple images
           created_at: string;
         }
         const loadedMessages: Message[] = data.session.messages.map((msg: DbMessage) => ({
           id: msg.id,
           role: msg.role as 'user' | 'assistant',
           content: msg.content,
-          image: msg.image_url || undefined,
+          image: msg.image_url || undefined, // Keep for backward compatibility
+          images: msg.image_urls || (msg.image_url ? [msg.image_url] : undefined), // Prefer images array
           timestamp: new Date(msg.created_at),
         }));
         setMessages(loadedMessages);
@@ -507,6 +518,7 @@ export default function ChatbotPage() {
             role: msg.role,
             content: msg.content,
             imageUrl: msg.image,
+            imageUrls: msg.images, // Save images array
           })),
         }),
       });
@@ -530,9 +542,8 @@ export default function ChatbotPage() {
       setCurrentSessionId(data.session.id);
       setMessages([]);
       setInput('');
-      setPreviewImage(null);
+      setPreviewImages([]); // Changed from setPreviewImage
       setHasUnsavedChanges(false);
-      localStorage.removeItem('chatbot-draft');
       await loadSessions();
     } catch (error) {
       console.error('Failed to create session:', error);
@@ -546,9 +557,8 @@ export default function ChatbotPage() {
     }
     setCurrentSessionId(sessionId);
     setInput('');
-    setPreviewImage(null);
+    setPreviewImages([]); // Changed from setPreviewImage
     setHasUnsavedChanges(false);
-    localStorage.removeItem('chatbot-draft');
   };
 
   const renameSession = async (sessionId: string, newTitle: string) => {
@@ -735,16 +745,16 @@ export default function ChatbotPage() {
 
         <div className="flex-1 overflow-y-auto chatbot-scrollbar">
           <div className="max-w-[900px] mx-auto p-4 sm:p-6">
+            {availableModels.length === 0 && !isCheckingAuth && (
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm">
+                No AI models configured. Please configure your API keys in settings.
+              </div>
+            )}
+            
             {messages.length === 0 && (
               <div className="text-center text-gray-500 mt-20">
                 <h2 className="text-xl font-semibold mb-2">Welcome to AI Tasky</h2>
                 <p>Start a conversation by typing a message below.</p>
-                {draftMessage && (
-                  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg max-w-md mx-auto">
-                    <p className="text-sm text-yellow-700 mb-2">Draft message recovered:</p>
-                    <p className="text-sm text-gray-600 italic">"{draftMessage.substring(0, 100)}{draftMessage.length > 100 ? '...' : ''}"</p>
-                  </div>
-                )}
               </div>
             )}
             {messages.map((message) => (
@@ -759,7 +769,21 @@ export default function ChatbotPage() {
                     : 'bg-white border border-gray-200 w-full'
                     }`}
                 >
-                  {message.image && (
+                  {(message.images && message.images.length > 0) ? (
+                    <div className="mb-2 flex flex-wrap gap-2">
+                      {message.images.map((img, idx) => (
+                        <Image
+                          key={idx}
+                          src={img}
+                          alt={`Uploaded image ${idx + 1}`}
+                          width={300}
+                          height={200}
+                          className="rounded-lg max-w-full h-auto object-cover"
+                          style={{ maxHeight: '300px' }}
+                        />
+                      ))}
+                    </div>
+                  ) : message.image ? (
                     <div className="mb-2">
                       <Image
                         src={message.image}
@@ -769,10 +793,28 @@ export default function ChatbotPage() {
                         className="rounded-lg max-w-full h-auto"
                       />
                     </div>
-                  )}
+                  ) : null}
+                  
                   {message.role === 'assistant' ? (
                     <div className="prose prose-sm max-w-none">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      <ReactMarkdown 
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          table: ({node, ...props}) => (
+                            <div className="overflow-x-auto my-4 rounded-lg border border-gray-200 shadow-sm">
+                              <table className="min-w-full divide-y divide-gray-200" {...props} />
+                            </div>
+                          ),
+                          thead: ({node, ...props}) => <thead className="bg-orange-50" {...props} />,
+                          tbody: ({node, ...props}) => <tbody className="divide-y divide-gray-200 bg-white" {...props} />,
+                          tr: ({node, ...props}) => <tr className="hover:bg-gray-50/50 transition-colors" {...props} />,
+                          th: ({node, ...props}) => <th className="px-4 py-3 text-left text-sm font-bold text-gray-900 border-r border-gray-200 last:border-r-0" {...props} />,
+                          td: ({node, ...props}) => <td className="whitespace-pre-wrap px-4 py-3 text-sm text-gray-800 border-r border-gray-200 last:border-r-0 leading-relaxed" {...props} />,
+                          p: ({node, ...props}) => <p className="mb-4 leading-7 text-gray-800 last:mb-0" {...props} />,
+                          li: ({node, ...props}) => <li className="leading-7 text-gray-800 my-1" {...props} />,
+                          strong: ({node, ...props}) => <strong className="font-semibold text-gray-900" {...props} />,
+                        }}
+                      >
                         {message.content}
                       </ReactMarkdown>
                       {isLoading && messages[messages.length - 1].id === message.id && (
@@ -808,8 +850,8 @@ export default function ChatbotPage() {
           setInput={setInput}
           onSubmit={handleSubmit}
           isLoading={isLoading}
-          previewImage={previewImage}
-          setPreviewImage={setPreviewImage}
+          previewImages={previewImages}
+          setPreviewImages={setPreviewImages}
           onImageUpload={handleImageUpload}
           availableModels={availableModels}
           selectedModel={selectedModel}

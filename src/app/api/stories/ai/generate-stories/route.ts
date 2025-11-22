@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { taskyDb } from '@/lib/supabase/tasky-db-client';
-import { google } from '@ai-sdk/google';
 import { generateText } from 'ai';
 import { generateDocument } from '@/lib/stories/document-generator';
 
@@ -136,13 +135,18 @@ ${reportContent || 'No report content provided. Please generate basic user stori
 Please generate 5-10 user stories that cover the main features and requirements mentioned in the report. Each story should be well-structured with clear acceptance criteria.`;
 
     try {
-      const model = google('gemini-2.0-flash-exp');
+      const { getUserAISettings } = await import('@/lib/ai/settings');
+      const { getModel } = await import('@/lib/ai/models');
+      
+      const settings = await getUserAISettings(session.user.id);
+      const model = await getModel(session.user.id, settings.defaultProvider, settings.defaultModel);
+      
       const { text } = await generateText({
-        model: model as any, // Type assertion for compatibility
+        model: model,
         system: systemPrompt,
         prompt: userPrompt,
-        maxTokens: 3000,
-        temperature: 0.7,
+        maxTokens: settings.maxTokens || 3000,
+        temperature: settings.temperature || 0.7,
       });
 
       // Create stories document

@@ -17,9 +17,9 @@ interface ChatInputProps {
   setInput: (value: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   isLoading: boolean;
-  previewImage: string | null;
-  setPreviewImage: (value: string | null) => void;
-  onImageUpload: (file: File) => void;
+  previewImages: string[];
+  setPreviewImages: (value: string[]) => void;
+  onImageUpload: (files: FileList | null) => void;
   availableModels: AIModel[];
   selectedModel: string;
   setSelectedModel: (value: string) => void;
@@ -34,8 +34,8 @@ export default function ChatInput({
   setInput,
   onSubmit,
   isLoading,
-  previewImage,
-  setPreviewImage,
+  previewImages,
+  setPreviewImages,
   onImageUpload,
   availableModels,
   selectedModel,
@@ -47,18 +47,15 @@ export default function ChatInput({
 }: ChatInputProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Get unique providers
   const getAvailableProviders = () => {
     const providers = new Set(availableModels.map(m => m.provider));
     return Array.from(providers);
   };
 
-  // Get models for selected provider
   const getModelsForProvider = (provider: string) => {
     return availableModels.filter(m => m.provider === provider);
   };
 
-  // Provider display names
   const getProviderName = (provider: string) => {
     const names: Record<string, string> = {
       'google': 'Google Gemini',
@@ -70,24 +67,43 @@ export default function ChatInput({
     return names[provider] || provider;
   };
 
+  const removeImage = (index: number) => {
+    const newImages = [...previewImages];
+    newImages.splice(index, 1);
+    setPreviewImages(newImages);
+  };
+
   return (
     <div className="bg-white border-t border-gray-200 p-3 sm:p-4 flex-shrink-0">
       <div className="max-w-[900px] mx-auto">
-        {previewImage && (
-          <div className="mb-3 relative inline-block">
-            <Image
-              src={previewImage}
-              alt="Preview"
-              width={120}
-              height={120}
-              className="rounded-lg"
-            />
-            <button
-              onClick={() => setPreviewImage(null)}
-              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
-            >
-              ×
-            </button>
+        {previewImages.length > 0 && (
+          <div className="mb-3 p-3 bg-blue-50 border-2 border-blue-200 rounded-lg">
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap gap-3">
+                {previewImages.map((img, index) => (
+                  <div key={index} className="relative">
+                    <Image
+                      src={img}
+                      alt={`Preview ${index + 1}`}
+                      width={100}
+                      height={100}
+                      className="rounded-lg border-2 border-white shadow-sm object-cover w-24 h-24"
+                    />
+                    <button
+                      onClick={() => removeImage(index)}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 shadow-md transition-colors text-sm"
+                      title="Remove image"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="pt-1">
+                <p className="text-sm font-medium text-blue-900">{previewImages.length} image{previewImages.length > 1 ? 's' : ''} attached</p>
+                <p className="text-xs text-blue-700 mt-1">Type your message below and send together</p>
+              </div>
+            </div>
           </div>
         )}
         {availableModels.length === 0 && (
@@ -103,7 +119,8 @@ export default function ChatInput({
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="absolute left-3 top-3 text-gray-400 hover:text-gray-600 z-10"
+                  className="absolute left-3 top-3 text-gray-500 hover:text-blue-600 transition-colors z-10 p-1 hover:bg-blue-50 rounded"
+                  title="Upload images (or paste with Ctrl+V)"
                 >
                   <Paperclip size={20} />
                 </button>
@@ -112,10 +129,12 @@ export default function ChatInput({
                   ref={fileInputRef}
                   onChange={(e) => {
                     if (e.target.files?.length) {
-                      onImageUpload(e.target.files[0]);
+                      onImageUpload(e.target.files);
+                      e.target.value = '';
                     }
                   }}
                   accept="image/*"
+                  multiple
                   className="hidden"
                 />
                 <textarea
@@ -127,7 +146,7 @@ export default function ChatInput({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
-                      if ((input.trim() || previewImage) && selectedModel) {
+                      if ((input.trim() || previewImages.length > 0) && selectedModel) {
                         onSubmit(e);
                       }
                     }
@@ -136,8 +155,8 @@ export default function ChatInput({
                 />
                 <button
                   type="submit"
-                  disabled={(!input.trim() && !previewImage) || !selectedModel || isLoading}
-                  className="absolute right-3 top-3 bg-teal-500 text-white rounded-full p-2 hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={(!input.trim() && previewImages.length === 0) || !selectedModel || isLoading}
+                  className="absolute right-3 top-3 bg-teal-500 text-white rounded-full p-2 hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <Send size={18} />
                 </button>
@@ -146,7 +165,6 @@ export default function ChatInput({
               {availableModels.length > 0 && (
                 <div className="border-t border-gray-200 px-3 py-2 bg-gray-50/50">
                   <div className="flex items-center gap-2">
-                    {/* Provider Selection */}
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-gray-500">Provider:</span>
                       <select
@@ -154,7 +172,6 @@ export default function ChatInput({
                         onChange={(e) => {
                           const newProvider = e.target.value;
                           setSelectedProvider(newProvider);
-                          // Auto-select first model of new provider
                           const providerModels = getModelsForProvider(newProvider);
                           if (providerModels.length > 0) {
                             setSelectedModel(providerModels[0].id);
@@ -170,7 +187,6 @@ export default function ChatInput({
                       </select>
                     </div>
 
-                    {/* Model Selection */}
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-gray-500">Model:</span>
                       <select
@@ -188,7 +204,6 @@ export default function ChatInput({
                       </select>
                     </div>
 
-                    {/* Status Icon */}
                     {(() => {
                       const currentModel = availableModels.find(m => m.id === selectedModel);
                       if (!currentModel) return null;

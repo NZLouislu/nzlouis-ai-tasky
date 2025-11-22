@@ -22,7 +22,7 @@ export async function getUserAISettings(userId: string): Promise<UserAISettings>
       defaultModel: 'gemini-2.5-flash',
       temperature: 0.8,
       maxTokens: 4096,
-      systemPrompt: 'You are a helpful AI assistant.',
+      systemPrompt: 'You are a helpful AI assistant with vision capabilities. You can see and analyze images provided by users. When comparing items or presenting structured data, please use Markdown tables for better readability.',
     };
   }
 
@@ -47,7 +47,7 @@ export async function updateUserAISettings(
       default_model: settings.defaultModel || 'gemini-2.5-flash',
       temperature: settings.temperature ?? 0.8,
       max_tokens: settings.maxTokens ?? 4096,
-      system_prompt: settings.systemPrompt || 'You are a helpful AI assistant.',
+      system_prompt: settings.systemPrompt || 'You are a helpful AI assistant with vision capabilities. You can see and analyze images provided by users. When comparing items or presenting structured data, please use Markdown tables for better readability.',
     })
     .select()
     .single();
@@ -90,7 +90,7 @@ export async function ensureUserAISettings(userId: string): Promise<UserAISettin
       default_model: 'gemini-2.5-flash',
       temperature: 0.8,
       max_tokens: 4096,
-      system_prompt: 'You are a helpful AI assistant.',
+      system_prompt: 'You are a helpful AI assistant with vision capabilities. You can see and analyze images provided by users. When comparing items or presenting structured data, please use Markdown tables for better readability.',
     })
     .select()
     .single();
@@ -101,7 +101,7 @@ export async function ensureUserAISettings(userId: string): Promise<UserAISettin
       defaultModel: 'gemini-2.5-flash',
       temperature: 0.8,
       maxTokens: 4096,
-      systemPrompt: 'You are a helpful AI assistant.',
+      systemPrompt: 'You are a helpful AI assistant with vision capabilities. You can see and analyze images provided by users. When comparing items or presenting structured data, please use Markdown tables for better readability.',
     };
   }
 

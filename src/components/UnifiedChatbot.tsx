@@ -3,31 +3,17 @@ import React from "react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useChat } from "@/lib/hooks/use-chat";
 import { v4 as uuidv4 } from "uuid";
-import { useAISettings } from "@/lib/useAISettings";
 import Image from "next/image";
 import ChatInput from "./ChatInput";
-
-interface Message {
-  id: string;
-  content: string | { text: string; image?: string };
-  role: string;
-  timestamp: string;
-}
+import { useChatStore, Message } from "@/lib/store/chat-store";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface PageModification {
   type: string;
   target?: string;
   content?: string;
   title?: string;
-}
-
-interface AIModel {
-  id: string;
-  name: string;
-  provider: string;
-  description: string;
-  tested?: boolean;
-  working?: boolean;
 }
 
 interface UnifiedChatbotProps {
@@ -49,23 +35,27 @@ export default function UnifiedChatbot({
   userId,
   apiEndpoint = 'blog',
 }: UnifiedChatbotProps) {
+  // Use store for models
+  const { 
+    availableModels, 
+    selectedModel, 
+    selectedProvider,
+    setSelectedModel,
+    setSelectedProvider,
+    setAvailableModels
+  } = useChatStore();
+
   const { messages, appendMessage, clearMessages } = useChat({
     postId,
     documentId,
     userId,
     enablePersistence: mode === "workspace" && !!(postId || documentId) && !!userId,
     apiEndpoint,
-  }) as {
-    messages: Message[];
-    appendMessage: (message: Message) => void;
-    clearMessages: () => Promise<void>;
-  };
+  });
+
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [availableModels, setAvailableModels] = useState<AIModel[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>('');
-  const [selectedProvider, setSelectedProvider] = useState<string>('');
   const [isMobile, setIsMobile] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
@@ -73,15 +63,17 @@ export default function UnifiedChatbot({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Load available models
+  // Load available models if not loaded
   useEffect(() => {
     const loadAvailableModels = async () => {
+      if (availableModels.length > 0) return; // Already loaded
+
       try {
         const res = await fetch('/api/ai-models');
         const data = await res.json();
 
         if (data.models && data.models.length > 0) {
-          const sortedModels = data.models.sort((a: AIModel, b: AIModel) => {
+          const sortedModels = data.models.sort((a: any, b: any) => {
             if (a.provider === 'google' && b.provider !== 'google') return -1;
             if (a.provider !== 'google' && b.provider === 'google') return 1;
             return 0;
@@ -95,19 +87,14 @@ export default function UnifiedChatbot({
             setSelectedProvider(firstProvider);
             setSelectedModel(sortedModels[0].id);
           }
-        } else {
-          setAvailableModels([]);
-          setSelectedModel('');
-          setSelectedProvider('');
         }
       } catch (error) {
         console.error('Failed to load AI models:', error);
-        setAvailableModels([]);
       }
     };
 
     loadAvailableModels();
-  }, []);
+  }, [availableModels.length, setAvailableModels, setSelectedModel, setSelectedProvider]);
 
   // Detect mobile
   useEffect(() => {
@@ -208,7 +195,7 @@ export default function UnifiedChatbot({
             id: uuidv4(),
             content: text,
             role: "user",
-            timestamp: new Date().toISOString(),
+            timestamp: new Date(),
           };
           appendMessage(userMessage);
           setInput("");
@@ -231,7 +218,7 @@ export default function UnifiedChatbot({
               id: uuidv4(),
               content: result,
               role: "assistant",
-              timestamp: new Date().toISOString(),
+              timestamp: new Date(),
             };
             appendMessage(assistantMessage);
           } catch (error) {
@@ -240,7 +227,7 @@ export default function UnifiedChatbot({
               id: uuidv4(),
               content: `❌ Failed to apply modification: ${error instanceof Error ? error.message : 'Unknown error'}`,
               role: "assistant",
-              timestamp: new Date().toISOString(),
+              timestamp: new Date(),
             };
             appendMessage(errorMessage);
           } finally {
@@ -252,9 +239,10 @@ export default function UnifiedChatbot({
 
       const userMessage: Message = {
         id: uuidv4(),
-        content: previewImage ? { text, image: previewImage } : text,
+        content: text,
+        image: previewImage || undefined,
         role: "user",
-        timestamp: new Date().toISOString(),
+        timestamp: new Date(),
       };
 
       appendMessage(userMessage);
@@ -267,20 +255,23 @@ export default function UnifiedChatbot({
       try {
         const chatMessages = messages.map((msg) => ({
           role: msg.role,
-          content: typeof msg.content === 'string' ? msg.content : msg.content.text,
-          ...(typeof msg.content !== 'string' && msg.content.image && { image: msg.content.image }),
+          content: msg.content,
+          image: msg.image,
         }));
 
         chatMessages.push({
           role: 'user',
           content: currentInput,
-          ...(currentImage && { image: currentImage }),
+          image: currentImage || undefined,
         });
 
         const hasImages = chatMessages.some(m => m.image);
-        const apiEndpoint = hasImages ? '/api/chat-vision' : '/api/chat';
+        // Use chat-vision only for Google provider when images are present, 
+        // as it supports env var API keys which chat/route.ts might not for Google.
+        // For all other providers (like OpenRouter), use /api/chat which handles vision correctly.
+        const apiEndpoint = (hasImages && selectedProvider === 'google') ? '/api/chat-vision' : '/api/chat';
 
-        console.log('Using API:', apiEndpoint, 'Has images:', hasImages, 'Model:', selectedModel);
+        console.log('Using API:', apiEndpoint, 'Has images:', hasImages, 'Model:', selectedModel, 'Provider:', selectedProvider);
 
         const response = await fetch(apiEndpoint, {
           method: 'POST',
@@ -308,7 +299,7 @@ export default function UnifiedChatbot({
           id: (Date.now() + 1).toString(),
           content: '',
           role: 'assistant',
-          timestamp: new Date().toISOString(),
+          timestamp: new Date(),
         };
 
         appendMessage(assistantMessage);
@@ -346,22 +337,32 @@ export default function UnifiedChatbot({
           id: (Date.now() + 1).toString(),
           content: 'Sorry, something went wrong. Please try again.',
           role: 'assistant',
-          timestamp: new Date().toISOString(),
+          timestamp: new Date(),
         };
         appendMessage(errorMessage);
       }
     },
-    [input, previewImage, selectedModel, messages, appendMessage, mode, onPageModification]
+    [input, previewImage, selectedModel, messages, appendMessage, mode, onPageModification, selectedProvider]
   );
 
   const renderMessageContent = useCallback(
     (content: string | { text: string; image?: string }) => {
       if (typeof content === "string") {
-        return <div className="whitespace-pre-wrap">{content}</div>;
+        return (
+          <div className="prose prose-sm max-w-none dark:prose-invert">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {content}
+            </ReactMarkdown>
+          </div>
+        );
       }
       return (
         <div>
-          <div className="whitespace-pre-wrap mb-2">{content.text}</div>
+          <div className="prose prose-sm max-w-none dark:prose-invert mb-2">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {content.text}
+            </ReactMarkdown>
+          </div>
           {content.image && (
             <div className="mt-2">
               <Image

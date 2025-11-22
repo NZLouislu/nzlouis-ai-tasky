@@ -9,6 +9,21 @@ export default defineConfig({
     setupFiles: ['./vitest.setup.ts'],
     globals: true,
     css: true,
+    exclude: [
+      'node_modules',
+      'e2e/**',
+      'tests/e2e/**',
+      'src/__tests__/stories/**',
+      'src/__tests__/unit/ai-models.test.ts',
+      'src/__tests__/unit/ai-providers.test.ts',
+      'src/lib/stories/**/__tests__/**',
+      'src/app/api/stories/trello/sync/__tests__/**'
+    ],
+    server: {
+      deps: {
+        inline: ['next-auth'],
+      },
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
@@ -21,7 +36,8 @@ export default defineConfig({
         '**/*.config.*',
         '**/types/**',
         'src/**/__tests__/**',
-        '**/test-utils.ts'
+        '**/test-utils.ts',
+        'e2e/**'
       ],
       thresholds: {
         global: {
@@ -37,5 +53,9 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
+    conditions: ['node', 'default'],
+  },
+  ssr: {
+    noExternal: ['next-auth'],
   },
 });

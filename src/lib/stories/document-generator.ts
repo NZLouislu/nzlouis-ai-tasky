@@ -157,28 +157,85 @@ export function generateStoriesDocument(options: DocumentGenerationOptions): Gen
   Labels: [feature, backend]
   Assignees: developer@example.com
   Reporter: reporter@example.com`
-            : `- Story: Story Title
+            : `- Story: STORY-001 Story Title
   Description: Brief description of the story
   Acceptance_Criteria:
     - [ ] Criterion 1
     - [ ] Criterion 2
     - [ ] Criterion 3
-  Priority: p1
+  Priority: High
   Labels: [feature, backend]
-  Assignees: @developer`
+  Assignees: developer`
         }
       ]
     },
     {
       type: 'heading',
       props: { level: 2 },
-      content: [{ type: 'text', text: 'Stories' }]
+      content: [{ type: 'text', text: 'Backlog' }]
     },
     {
       type: 'paragraph',
       content: [
-        { type: 'text', text: 'Add your user stories below:' }
+        { type: 'text', text: '- Story: STORY-001 Setup Project Infrastructure' }
       ]
+    },
+    {
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: '  Description: Initialize project with necessary dependencies and configuration' }
+      ]
+    },
+    {
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: '  Acceptance_Criteria:' }
+      ]
+    },
+    {
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: '    - [ ] Install required packages' }
+      ]
+    },
+    {
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: '    - [ ] Configure development environment' }
+      ]
+    },
+    {
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: '    - [ ] Setup version control' }
+      ]
+    },
+    {
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: '  Priority: High' }
+      ]
+    },
+    {
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: '  Labels: [setup, infrastructure]' }
+      ]
+    },
+    {
+      type: 'heading',
+      props: { level: 2 },
+      content: [{ type: 'text', text: 'Ready' }]
+    },
+    {
+      type: 'heading',
+      props: { level: 2 },
+      content: [{ type: 'text', text: 'In Progress' }]
+    },
+    {
+      type: 'heading',
+      props: { level: 2 },
+      content: [{ type: 'text', text: 'Done' }]
     }
   ];
 

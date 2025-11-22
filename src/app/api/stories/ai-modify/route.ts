@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { getUserIdFromRequest } from '@/lib/admin-auth';
+import { detectAICommand } from '@/lib/stories/trello/ai-commands';
 
 interface PageModification {
   type: 'replace' | 'insert' | 'append' | 'update_title' | 'add_section' | 'delete' | 'replace_paragraph';
@@ -639,6 +640,21 @@ export async function POST(request: NextRequest) {
         { error: 'Instruction too short', details: 'Please provide a more detailed instruction (at least 5 characters).' },
         { status: 400 }
       );
+    }
+
+    // Check for specific Trello AI commands
+    const aiCommandResult = detectAICommand(instruction, currentContent || '');
+    if (aiCommandResult) {
+      console.log('✅ Detected Trello AI command:', aiCommandResult.command.type);
+      return NextResponse.json({
+        modifications: [
+          {
+            type: 'replace',
+            content: aiCommandResult.result,
+          },
+        ],
+        explanation: `Executed command: ${aiCommandResult.command.description}`,
+      });
     }
 
     const language = detectLanguage(instruction);
