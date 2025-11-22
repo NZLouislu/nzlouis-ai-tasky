@@ -1880,6 +1880,23 @@ export default function BlogPage() {
           handlePageModification={handlePageModification}
           postId={activePostId}
           userId={userId}
+          articleContext={activePost ? {
+            title: activePost.title || 'Untitled',
+            content: activePost.content ? activePost.content.map(block => {
+              if (typeof block.content === 'string') return block.content;
+              if (Array.isArray(block.content)) {
+                return block.content.map(item => {
+                  if (typeof item === 'string') return item;
+                  if (typeof item === 'object' && 'text' in item) return item.text;
+                  return '';
+                }).join('');
+              }
+              return '';
+            }).filter(text => text.trim()).join('\n\n') : '',
+            icon: activePost.icon,
+            coverType: activePost.cover?.type,
+            coverValue: activePost.cover?.value,
+          } : undefined}
         />
       </div>
     </div>

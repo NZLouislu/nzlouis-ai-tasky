@@ -25,8 +25,18 @@ export interface AIModel {
   working?: boolean;
 }
 
+export interface ChatMeta {
+  lastFetched: number;
+  isStale: boolean;
+  totalCount: number;
+  hasMore: boolean;
+  currentOffset: number;
+  isLoadingMore: boolean;
+}
+
+export type LoadingState = 'idle' | 'loading' | 'success' | 'error';
+
 interface ChatState {
-  // Data
   sessions: ChatSession[];
   currentSessionId: string | null;
   messages: Message[];
@@ -35,12 +45,14 @@ interface ChatState {
   selectedProvider: string;
   sidebarOpen: boolean;
   
-  // UI State (not necessarily persisted, but good for global access)
   isLoading: boolean;
   input: string;
   previewImages: string[];
 
-  // Actions
+  contextChats: Record<string, Message[]>;
+  contextChatsMeta: Record<string, ChatMeta>;
+  loadingStates: Record<string, LoadingState>;
+
   setSessions: (sessions: ChatSession[]) => void;
   setCurrentSessionId: (id: string | null) => void;
   setMessages: (messages: Message[]) => void;
@@ -54,19 +66,22 @@ interface ChatState {
   setInput: (input: string) => void;
   setPreviewImages: (images: string[]) => void;
   
-  // Helper to clear current chat
   clearCurrentChat: () => void;
 
-  // Contextual Chat State (for Blog/Stories)
-  contextChats: Record<string, Message[]>;
   setContextMessages: (entityId: string, messages: Message[]) => void;
   addContextMessage: (entityId: string, message: Message) => void;
+  updateContextLastMessage: (entityId: string, content: string) => void;
   clearContextMessages: (entityId: string) => void;
+  
+  setChatMeta: (entityId: string, meta: ChatMeta) => void;
+  isCacheValid: (entityId: string) => boolean;
+  setLoadingState: (entityId: string, state: LoadingState) => void;
+  getLoadingState: (entityId: string) => LoadingState;
 }
 
 export const useChatStore = create<ChatState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       sessions: [],
       currentSessionId: null,
       messages: [],
@@ -78,6 +93,8 @@ export const useChatStore = create<ChatState>()(
       input: '',
       previewImages: [],
       contextChats: {},
+      contextChatsMeta: {},
+      loadingStates: {},
 
       setSessions: (sessions) => set({ sessions }),
       setCurrentSessionId: (id) => set({ currentSessionId: id }),
@@ -114,25 +131,65 @@ export const useChatStore = create<ChatState>()(
           [entityId]: [...(state.contextChats[entityId] || []), message]
         }
       })),
+      updateContextLastMessage: (entityId, content) => set((state) => {
+        const messages = state.contextChats[entityId] || [];
+        if (messages.length === 0) return state;
+        
+        const newMessages = [...messages];
+        const lastMessage = { ...newMessages[newMessages.length - 1] };
+        lastMessage.content = content;
+        newMessages[newMessages.length - 1] = lastMessage;
+
+        return {
+          contextChats: {
+            ...state.contextChats,
+            [entityId]: newMessages
+          }
+        };
+      }),
       clearContextMessages: (entityId) => set((state) => {
         const newContextChats = { ...state.contextChats };
         delete newContextChats[entityId];
         return { contextChats: newContextChats };
       }),
+
+      setChatMeta: (entityId, meta) => set((state) => ({
+        contextChatsMeta: { ...state.contextChatsMeta, [entityId]: meta }
+      })),
+
+      isCacheValid: (entityId) => {
+        const state = get();
+        const meta = state.contextChatsMeta[entityId];
+        if (!meta) return false;
+
+        const cacheMaxAge = 5 * 60 * 1000;
+        const now = Date.now();
+        const isExpired = now - meta.lastFetched > cacheMaxAge;
+
+        return !isExpired && !meta.isStale;
+      },
+
+      setLoadingState: (entityId, loadingState) => set((state) => ({
+        loadingStates: { ...state.loadingStates, [entityId]: loadingState }
+      })),
+
+      getLoadingState: (entityId) => {
+        const state = get();
+        return state.loadingStates[entityId] || 'idle';
+      },
     }),
     {
-      name: 'chat-storage', // name of the item in the storage (must be unique)
+      name: 'chat-storage',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        // Only persist these fields
         sessions: state.sessions,
         currentSessionId: state.currentSessionId,
-        // messages: state.messages, // Optional: persist messages if we want offline access, but might be heavy
         availableModels: state.availableModels,
         selectedModel: state.selectedModel,
         selectedProvider: state.selectedProvider,
         sidebarOpen: state.sidebarOpen,
-        contextChats: state.contextChats, // Persist context chats
+        contextChats: state.contextChats,
+        contextChatsMeta: state.contextChatsMeta,
       }),
     }
   )

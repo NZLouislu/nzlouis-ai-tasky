@@ -463,10 +463,10 @@ export default function Chatbot({ onPageModification }: ChatbotProps = {}) {
                 </div>
               )}
               <div
-                className={`p-4 rounded-2xl ${
+                className={`py-1 ${
                   message.sender === "user"
-                    ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-tr-none max-w-[85%] md:max-w-[75%]"
-                    : "bg-white text-gray-800 rounded-tl-none shadow-sm flex-1 mr-12"
+                    ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-2xl rounded-tr-none max-w-[85%] md:max-w-[75%] p-4"
+                    : "text-gray-800 flex-1 mr-12 w-full px-1"
                 }`}
               >
                 {renderMessageContent(message)}

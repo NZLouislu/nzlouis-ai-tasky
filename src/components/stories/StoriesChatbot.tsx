@@ -206,10 +206,10 @@ export default function StoriesChatbot({
                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
+                  className={`max-w-xs py-2 text-sm ${
                     message.role === 'user'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-800'
+                      ? 'bg-blue-600 text-white px-3 rounded-lg'
+                      : 'text-gray-800 w-full'
                   }`}
                 >
                   {message.content}

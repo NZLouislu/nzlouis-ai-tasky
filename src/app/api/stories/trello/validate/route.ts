@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
+import { getUserIdFromRequest } from '@/lib/admin-auth';
 
 interface TrelloValidationRequest {
   trelloKey: string;
@@ -9,8 +10,9 @@ interface TrelloValidationRequest {
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
+    const userId = getUserIdFromRequest(session?.user?.id, request);
     
-    if (!session?.user?.id) {
+    if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }

@@ -744,7 +744,7 @@ export default function ChatbotPage() {
         </div>
 
         <div className="flex-1 overflow-y-auto chatbot-scrollbar">
-          <div className="max-w-[900px] mx-auto p-4 sm:p-6">
+          <div className="w-full max-w-[800px] lg:max-w-[900px] mx-auto p-4 sm:p-6">
             {availableModels.length === 0 && !isCheckingAuth && (
               <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm">
                 No AI models configured. Please configure your API keys in settings.
@@ -763,60 +763,147 @@ export default function ChatbotPage() {
                 className={`flex mb-4 ${message.role === 'user' ? 'justify-end' : 'justify-start'
                   }`}
               >
-                <div
-                  className={`rounded-2xl px-4 py-3 ${message.role === 'user'
-                    ? 'bg-blue-600 text-white max-w-[85%]'
-                    : 'bg-white border border-gray-200 w-full'
-                    }`}
-                >
-                  {(message.images && message.images.length > 0) ? (
-                    <div className="mb-2 flex flex-wrap gap-2">
-                      {message.images.map((img, idx) => (
+                  <div
+                    className={`rounded-2xl py-1 ${message.role === 'user'
+                      ? 'bg-blue-600 text-white max-w-[85%] px-4 py-3'
+                      : 'w-full text-gray-900 px-1'
+                      }`}
+                  >
+                    {(message.images && message.images.length > 0) ? (
+                      <div className="mb-2 flex flex-wrap gap-2">
+                        {message.images.map((img, idx) => (
+                          <Image
+                            key={idx}
+                            src={img}
+                            alt={`Uploaded image ${idx + 1}`}
+                            width={300}
+                            height={200}
+                            className="rounded-lg max-w-full h-auto object-cover"
+                            style={{ maxHeight: '300px' }}
+                          />
+                        ))}
+                      </div>
+                    ) : message.image ? (
+                      <div className="mb-2">
                         <Image
-                          key={idx}
-                          src={img}
-                          alt={`Uploaded image ${idx + 1}`}
+                          src={message.image}
+                          alt="Uploaded image"
                           width={300}
                           height={200}
-                          className="rounded-lg max-w-full h-auto object-cover"
-                          style={{ maxHeight: '300px' }}
+                          className="rounded-lg max-w-full h-auto"
                         />
-                      ))}
-                    </div>
-                  ) : message.image ? (
-                    <div className="mb-2">
-                      <Image
-                        src={message.image}
-                        alt="Uploaded image"
-                        width={300}
-                        height={200}
-                        className="rounded-lg max-w-full h-auto"
-                      />
-                    </div>
-                  ) : null}
-                  
-                  {message.role === 'assistant' ? (
-                    <div className="prose prose-sm max-w-none">
-                      <ReactMarkdown 
-                        remarkPlugins={[remarkGfm]}
-                        components={{
-                          table: ({node, ...props}) => (
-                            <div className="overflow-x-auto my-4 rounded-lg border border-gray-200 shadow-sm">
-                              <table className="min-w-full divide-y divide-gray-200" {...props} />
-                            </div>
-                          ),
-                          thead: ({node, ...props}) => <thead className="bg-orange-50" {...props} />,
-                          tbody: ({node, ...props}) => <tbody className="divide-y divide-gray-200 bg-white" {...props} />,
-                          tr: ({node, ...props}) => <tr className="hover:bg-gray-50/50 transition-colors" {...props} />,
-                          th: ({node, ...props}) => <th className="px-4 py-3 text-left text-sm font-bold text-gray-900 border-r border-gray-200 last:border-r-0" {...props} />,
-                          td: ({node, ...props}) => <td className="whitespace-pre-wrap px-4 py-3 text-sm text-gray-800 border-r border-gray-200 last:border-r-0 leading-relaxed" {...props} />,
-                          p: ({node, ...props}) => <p className="mb-4 leading-7 text-gray-800 last:mb-0" {...props} />,
-                          li: ({node, ...props}) => <li className="leading-7 text-gray-800 my-1" {...props} />,
-                          strong: ({node, ...props}) => <strong className="font-semibold text-gray-900" {...props} />,
-                        }}
-                      >
-                        {message.content}
-                      </ReactMarkdown>
+                      </div>
+                    ) : null}
+                    
+                    {message.role === 'assistant' ? (
+                      <div className="prose prose-sm max-w-none">
+                          <ReactMarkdown 
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            hr: ({ ...props }) => <hr className="my-6 border-t border-gray-200" {...props} />,
+                            h1: ({ ...props }) => <h1 className="text-2xl font-bold mb-4" {...props} />,
+                            h2: ({ ...props }) => <h2 className="text-xl font-bold mb-3" {...props} />,
+                            table: ({ ...props }) => (
+                                <div 
+                                  style={{
+                                    margin: '1.5rem 0',
+                                    all: 'initial',
+                                    display: 'block',
+                                    fontFamily: 'inherit',
+                                  }}
+                                >
+                                  <div 
+                                    style={{
+                                      backgroundColor: '#FFF8F0',
+                                      borderRadius: '1rem',
+                                      padding: '1.25rem',
+                                      border: '1px solid #F5E6D3',
+                                      boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                                      overflow: 'hidden',
+                                      display: 'block',
+                                    }}
+                                  >
+                                    <table 
+                                      style={{
+                                        width: '100%',
+                                        borderCollapse: 'separate',
+                                        borderSpacing: '0',
+                                        margin: '0',
+                                        backgroundColor: 'transparent',
+                                        display: 'table',
+                                      }}
+                                      {...props} 
+                                    />
+                                  </div>
+                                </div>
+                              ),
+                              thead: ({ ...props }) => (
+                                <thead 
+                                  style={{ 
+                                    backgroundColor: '#FFF8F0',
+                                    display: 'table-header-group',
+                                  }} 
+                                  {...props} 
+                                />
+                              ),
+                              tbody: ({ ...props }) => (
+                                <tbody 
+                                  style={{ 
+                                    backgroundColor: 'white',
+                                    display: 'table-row-group',
+                                  }} 
+                                  {...props} 
+                                />
+                              ),
+                              th: ({ ...props }) => (
+                                <th 
+                                  style={{
+                                    padding: '0.75rem 1.25rem',
+                                    textAlign: 'left',
+                                    fontSize: '0.875rem',
+                                    fontWeight: '700',
+                                    color: '#1f2937',
+                                    backgroundColor: '#FFF8F0',
+                                    borderBottom: '2px solid #F5E6D3',
+                                    display: 'table-cell',
+                                  }}
+                                  {...props} 
+                                />
+                              ),
+                              td: ({ ...props }) => (
+                                <td 
+                                  style={{
+                                    padding: '1rem 1.25rem',
+                                    fontSize: '0.875rem',
+                                    color: '#374151',
+                                    backgroundColor: 'white',
+                                    borderBottom: '1px solid rgba(245, 230, 211, 0.4)',
+                                    display: 'table-cell',
+                                  }}
+                                  {...props} 
+                                />
+                              ),
+                              tr: ({ ...props }) => (
+                                <tr 
+                                  style={{
+                                    transition: 'background-color 0.2s',
+                                    display: 'table-row',
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    const target = e.currentTarget as HTMLElement;
+                                    target.style.backgroundColor = 'rgba(255, 248, 240, 0.3)';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    const target = e.currentTarget as HTMLElement;
+                                    target.style.backgroundColor = 'transparent';
+                                  }}
+                                  {...props} 
+                                />
+                              ),
+                          } as any}
+                        >
+                          {message.content}
+                        </ReactMarkdown>
                       {isLoading && messages[messages.length - 1].id === message.id && (
                         <span className="inline-block w-1 h-4 bg-blue-600 ml-1 animate-pulse" />
                       )}

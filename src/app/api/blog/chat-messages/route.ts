@@ -5,6 +5,8 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const postId = searchParams.get('postId');
+    const limit = parseInt(searchParams.get('limit') || '50');
+    const offset = parseInt(searchParams.get('offset') || '0');
 
     if (!postId) {
       return NextResponse.json(
@@ -13,11 +15,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase
+    const { data, error, count } = await supabase
       .from('blog_chat_messages')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('post_id', postId)
-      .order('timestamp', { ascending: true });
+      .order('timestamp', { ascending: true })
+      .range(offset, offset + limit - 1);
 
     if (error) {
       console.error('Error fetching chat messages:', error);
@@ -27,7 +30,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ messages: data || [] });
+    return NextResponse.json({ 
+      messages: data || [],
+      total: count || 0,
+      hasMore: (count || 0) > offset + limit,
+      offset,
+      limit
+    });
   } catch (error) {
     console.error('Error in GET /api/blog/chat-messages:', error);
     return NextResponse.json(

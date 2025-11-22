@@ -29,6 +29,7 @@
 .codebuddy/
 .gemini/
 .vscode/
+.agent/
 
 # production
 /build

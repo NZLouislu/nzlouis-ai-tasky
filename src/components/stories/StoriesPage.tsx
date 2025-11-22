@@ -602,7 +602,12 @@ export default function StoriesPage() {
         isMobile={isMobile}
       />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div 
+        className="flex-1 flex flex-col overflow-hidden transition-all duration-300"
+        style={{
+          marginRight: isChatbotVisible && !isMobile ? `${chatbotWidth}px` : '0',
+        }}
+      >
         {!activeDocumentId ? (
           <StoriesWelcome
             onConnectJira={() => setShowJiraConnectDialog(true)}
@@ -614,16 +619,14 @@ export default function StoriesPage() {
       </div>
 
       <StoriesChatbotPanel
-        isVisible={isChatbotVisible}
+        isChatbotVisible={isChatbotVisible}
         isMobile={isMobile}
-        width={chatbotWidth}
-        onClose={() => setIsChatbotVisible(false)}
-        onToggleSidebar={() => {
-          setSidebarOpen(true);
-          setSidebarCollapsed(false);
-        }}
-        onMouseDown={handleMouseDown}
-        onPageModification={handlePageModification}
+        chatbotWidth={chatbotWidth}
+        setIsChatbotVisible={setIsChatbotVisible}
+        setSidebarOpen={setSidebarOpen}
+        setSidebarCollapsed={setSidebarCollapsed}
+        handleMouseDown={handleMouseDown}
+        handlePageModification={handlePageModification}
         documentId={activeDocumentId || undefined}
         userId={userId}
       />
@@ -650,8 +653,7 @@ export default function StoriesPage() {
       <TrelloBoardSelectDialog
         isOpen={showTrelloBoardDialog}
         onClose={() => setShowTrelloBoardDialog(false)}
-        onSelect={handleTrelloBoardSelect}
-        boards={trelloBoards}
+        onSelectBoard={handleTrelloBoardSelect}
       />
     </div>
   );

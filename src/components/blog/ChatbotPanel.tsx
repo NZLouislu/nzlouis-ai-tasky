@@ -9,6 +9,14 @@ interface PageModification {
   title?: string;
 }
 
+interface ArticleContext {
+  title: string;
+  content: string;
+  icon?: string;
+  coverType?: string;
+  coverValue?: string;
+}
+
 interface ChatbotPanelProps {
   isChatbotVisible: boolean;
   isMobile: boolean;
@@ -20,6 +28,7 @@ interface ChatbotPanelProps {
   handlePageModification: (mod: PageModification) => Promise<string>;
   postId?: string;
   userId?: string;
+  articleContext?: ArticleContext;
 }
 
 export default function ChatbotPanel({
@@ -33,6 +42,7 @@ export default function ChatbotPanel({
   handlePageModification,
   postId,
   userId,
+  articleContext,
 }: ChatbotPanelProps) {
   if (!isChatbotVisible) {
     return (
@@ -76,6 +86,7 @@ export default function ChatbotPanel({
             onPageModification={handlePageModification}
             postId={postId}
             userId={userId}
+            articleContext={articleContext}
           />
         </div>
       </div>
@@ -124,6 +135,7 @@ export default function ChatbotPanel({
             onPageModification={handlePageModification}
             postId={postId}
             userId={userId}
+            articleContext={articleContext}
           />
         </div>
       </div>

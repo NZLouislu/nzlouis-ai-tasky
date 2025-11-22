@@ -8,12 +8,21 @@ import ChatInput from "./ChatInput";
 import { useChatStore, Message } from "@/lib/store/chat-store";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import ChatSkeleton from "./ChatSkeleton";
 
 interface PageModification {
   type: string;
   target?: string;
   content?: string;
   title?: string;
+}
+
+interface ArticleContext {
+  title: string;
+  content: string;
+  icon?: string;
+  coverType?: string;
+  coverValue?: string;
 }
 
 interface UnifiedChatbotProps {
@@ -24,6 +33,7 @@ interface UnifiedChatbotProps {
   documentId?: string;
   userId?: string;
   apiEndpoint?: 'blog' | 'stories';
+  articleContext?: ArticleContext;
 }
 
 export default function UnifiedChatbot({
@@ -34,6 +44,7 @@ export default function UnifiedChatbot({
   documentId,
   userId,
   apiEndpoint = 'blog',
+  articleContext,
 }: UnifiedChatbotProps) {
   // Use store for models
   const { 
@@ -45,7 +56,16 @@ export default function UnifiedChatbot({
     setAvailableModels
   } = useChatStore();
 
-  const { messages, appendMessage, clearMessages } = useChat({
+  const { 
+    messages, 
+    appendMessage, 
+    updateLastMessage,
+    clearMessages, 
+    loadingState,
+    loadMoreMessages,
+    hasMore,
+    isLoadingMore
+  } = useChat({
     postId,
     documentId,
     userId,
@@ -53,15 +73,35 @@ export default function UnifiedChatbot({
     apiEndpoint,
   });
 
+
+
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewImages, setPreviewImages] = useState<string[]>([]);
   const [isMobile, setIsMobile] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
+  const topSentinelRef = useRef<null | HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoadingMore) {
+          loadMoreMessages();
+        }
+      },
+      { threshold: 1.0 }
+    );
+
+    if (topSentinelRef.current) {
+      observer.observe(topSentinelRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingMore, loadMoreMessages]);
 
   // Load available models if not loaded
   useEffect(() => {
@@ -106,36 +146,48 @@ export default function UnifiedChatbot({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const handleImageUpload = useCallback(async (file: File) => {
-    if (file && file.type.startsWith("image/")) {
-      try {
-        setIsLoading(true);
+  const handleImageUpload = useCallback(async (files: FileList | File | null) => {
+    if (!files) return;
+
+    const fileArray = files instanceof FileList ? Array.from(files) : [files];
+    const validFiles = fileArray.filter(f => f.type.startsWith("image/"));
+
+    if (validFiles.length === 0) return;
+
+    setIsLoading(true);
+
+    try {
+      const uploadPromises = validFiles.map(async (file) => {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('entityType', 'chat_message');
         formData.append('entityId', 'temp');
 
-        const res = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-        });
+        try {
+          const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData,
+          });
 
-        if (!res.ok) {
-          throw new Error('Upload failed');
+          if (!res.ok) throw new Error('Upload failed');
+          const data = await res.json();
+          return data.publicUrl;
+        } catch (error) {
+          console.error('Image upload failed, falling back to base64:', error);
+          return new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target?.result as string);
+            reader.readAsDataURL(file);
+          });
         }
+      });
 
-        const data = await res.json();
-        setPreviewImage(data.publicUrl);
-      } catch (error) {
-        console.error('Image upload failed:', error);
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          setPreviewImage(e.target?.result as string);
-        };
-        reader.readAsDataURL(file);
-      } finally {
-        setIsLoading(false);
-      }
+      const uploadedUrls = await Promise.all(uploadPromises);
+      setPreviewImages(prev => [...prev, ...uploadedUrls]);
+    } catch (error) {
+      console.error('Error processing images:', error);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
@@ -170,7 +222,7 @@ export default function UnifiedChatbot({
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!input.trim() && !previewImage) return;
+      if (!input.trim() && previewImages.length === 0) return;
       if (!selectedModel) return;
 
       const text = input;
@@ -199,7 +251,7 @@ export default function UnifiedChatbot({
           };
           appendMessage(userMessage);
           setInput("");
-          setPreviewImage(null);
+          setPreviewImages([]);
           setIsLoading(true);
 
           try {
@@ -240,32 +292,63 @@ export default function UnifiedChatbot({
       const userMessage: Message = {
         id: uuidv4(),
         content: text,
-        image: previewImage || undefined,
+        images: previewImages.length > 0 ? previewImages : undefined,
         role: "user",
         timestamp: new Date(),
       };
 
       appendMessage(userMessage);
       const currentInput = input;
-      const currentImage = previewImage;
+      const currentImages = [...previewImages];
       setInput("");
-      setPreviewImage(null);
+      setPreviewImages([]);
       setIsLoading(true);
 
       try {
         const chatMessages = messages.map((msg) => ({
           role: msg.role,
           content: msg.content,
-          image: msg.image,
+          images: msg.images || (msg.image ? [msg.image] : undefined),
         }));
+
+        // Add article context as system message in workspace mode
+        if (mode === "workspace" && articleContext) {
+          const contextMessage = {
+            role: 'user' as const,
+            content: `[SYSTEM CONTEXT - Current Article Information]
+
+**Title:** ${articleContext.title}
+**Icon:** ${articleContext.icon || 'None'}
+**Cover:** ${articleContext.coverType === 'image' ? `Image (${articleContext.coverValue})` : articleContext.coverType === 'color' ? `Color (${articleContext.coverValue})` : 'None'}
+
+**Current Content:**
+${articleContext.content || '(Article is empty)'}
+
+---
+
+You are an AI assistant helping to edit this blog article. You can help the user:
+1. View and understand the current article content
+2. Modify the article title
+3. Add new content to the article
+4. Update existing content
+5. Delete specific paragraphs or sections
+6. Reorganize the article structure
+
+When the user asks you to modify the article, provide clear instructions on what changes should be made.
+
+Please respond in the same language as the user's question.`,
+            images: undefined
+          };
+          chatMessages.unshift(contextMessage);
+        }
 
         chatMessages.push({
           role: 'user',
           content: currentInput,
-          image: currentImage || undefined,
+          images: currentImages.length > 0 ? currentImages : undefined,
         });
 
-        const hasImages = chatMessages.some(m => m.image);
+        const hasImages = chatMessages.some(m => m.images && m.images.length > 0);
         // Use chat-vision only for Google provider when images are present, 
         // as it supports env var API keys which chat/route.ts might not for Google.
         // For all other providers (like OpenRouter), use /api/chat which handles vision correctly.
@@ -303,6 +386,7 @@ export default function UnifiedChatbot({
         };
 
         appendMessage(assistantMessage);
+        let fullContent = '';
 
         while (true) {
           const { done, value } = await reader.read();
@@ -320,8 +404,8 @@ export default function UnifiedChatbot({
               try {
                 const jsonStr = line.substring(2);
                 const text = JSON.parse(jsonStr);
-                assistantMessage.content += text;
-                appendMessage({ ...assistantMessage });
+                fullContent += text;
+                updateLastMessage(fullContent);
               } catch (error) {
                 console.log('Parsing error:', error);
               }
@@ -342,15 +426,121 @@ export default function UnifiedChatbot({
         appendMessage(errorMessage);
       }
     },
-    [input, previewImage, selectedModel, messages, appendMessage, mode, onPageModification, selectedProvider]
+    [input, previewImages, selectedModel, messages, appendMessage, updateLastMessage, mode, onPageModification, selectedProvider]
   );
 
   const renderMessageContent = useCallback(
     (content: string | { text: string; image?: string }) => {
+      const markdownComponents = {
+        hr: ({ ...props }) => <hr className="my-6 border-t border-gray-200" {...props} />,
+        h1: ({ ...props }) => <h1 className="text-2xl font-bold mb-4" {...props} />,
+        h2: ({ ...props }) => <h2 className="text-xl font-bold mb-3" {...props} />,
+        table: ({ ...props }) => (
+          <div 
+            style={{
+              margin: '1.5rem 0',
+              all: 'initial',
+              display: 'block',
+              fontFamily: 'inherit',
+            }}
+          >
+            <div 
+              style={{
+                backgroundColor: '#FFF8F0 !important' as any,
+                borderRadius: '1rem',
+                padding: '1.25rem',
+                border: '1px solid #F5E6D3',
+                boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                overflow: 'hidden',
+                display: 'block',
+              }}
+            >
+              <table 
+                style={{
+                  width: '100%',
+                  borderCollapse: 'separate',
+                  borderSpacing: '0',
+                  margin: '0',
+                  backgroundColor: 'transparent',
+                  display: 'table',
+                }}
+                {...props} 
+              />
+            </div>
+          </div>
+        ),
+        thead: ({ ...props }) => (
+          <thead 
+            style={{ 
+              backgroundColor: '#FFF8F0',
+              display: 'table-header-group',
+            }} 
+            {...props} 
+          />
+        ),
+        tbody: ({ ...props }) => (
+          <tbody 
+            style={{ 
+              backgroundColor: 'white',
+              display: 'table-row-group',
+            }} 
+            {...props} 
+          />
+        ),
+        th: ({ ...props }) => (
+          <th 
+            style={{
+              padding: '0.75rem 1.25rem',
+              textAlign: 'left',
+              fontSize: '0.875rem',
+              fontWeight: '700',
+              color: '#1f2937',
+              backgroundColor: '#FFF8F0',
+              borderBottom: '2px solid #F5E6D3',
+              display: 'table-cell',
+            }}
+            {...props} 
+          />
+        ),
+        td: ({ ...props }) => (
+          <td 
+            style={{
+              padding: '1rem 1.25rem',
+              fontSize: '0.875rem',
+              color: '#374151',
+              backgroundColor: 'white',
+              borderBottom: '1px solid rgba(245, 230, 211, 0.4)',
+              display: 'table-cell',
+            }}
+            {...props} 
+          />
+        ),
+        tr: ({ ...props }) => (
+          <tr 
+            style={{
+              transition: 'background-color 0.2s',
+              display: 'table-row',
+            }}
+            onMouseEnter={(e) => {
+              const target = e.currentTarget as HTMLElement;
+              target.style.backgroundColor = 'rgba(255, 248, 240, 0.3)';
+            }}
+            onMouseLeave={(e) => {
+              const target = e.currentTarget as HTMLElement;
+              target.style.backgroundColor = 'transparent';
+            }}
+            {...props} 
+          />
+        ),
+      };
+
       if (typeof content === "string") {
         return (
-          <div className="prose prose-sm max-w-none dark:prose-invert">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          <div className="max-w-none">
+            <ReactMarkdown 
+              remarkPlugins={[remarkGfm]}
+              components={markdownComponents as any}
+            >
               {content}
             </ReactMarkdown>
           </div>
@@ -359,7 +549,10 @@ export default function UnifiedChatbot({
       return (
         <div>
           <div className="prose prose-sm max-w-none dark:prose-invert mb-2">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <ReactMarkdown 
+              remarkPlugins={[remarkGfm]}
+              components={markdownComponents as any}
+            >
               {content.text}
             </ReactMarkdown>
           </div>
@@ -395,71 +588,96 @@ export default function UnifiedChatbot({
         }}
       >
         <div
-          className={`w-full space-y-6 ${mode === "standalone" ? "max-w-[900px] mx-auto" : ""
+          className={`w-full space-y-6 ${mode === "standalone" ? "max-w-[800px] lg:max-w-[900px] mx-auto" : ""
             }`}
         >
-          {messages.length === 0 && (
-            <div className="text-center py-12 pt-16">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl">🤖</span>
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Start a conversation
-              </h3>
-              <p className="text-gray-500">
-                Ask me anything or type a command to get started.
-              </p>
-            </div>
-          )}
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex ${message.role === "user" ? "justify-end" : "justify-end"
-                }`}
-            >
-              <div
-                className={`px-4 py-3 rounded-2xl ${message.role === "user"
-                    ? mode === "standalone"
-                      ? "bg-blue-600 text-white max-w-[85%]"
-                      : "bg-blue-600 text-white max-w-[80%] lg:max-w-[70%]"
-                    : mode === "standalone"
-                      ? "bg-gray-100 text-gray-900 w-full"
-                      : "bg-gray-100 text-gray-900 w-full"
-                  }`}
-              >
-                {renderMessageContent(message.content)}
+          {loadingState === 'loading' && messages.length === 0 ? (
+            <ChatSkeleton />
+          ) : (
+            <>
+              <div ref={topSentinelRef} className="h-4" />
+              
+              {isLoadingMore && (
+                <div className="flex justify-center py-4">
+                  <div className="flex items-center space-x-2 text-sm text-gray-500">
+                    <div className="flex space-x-1">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                      <div
+                        className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"
+                        style={{ animationDelay: "0.1s" }}
+                      ></div>
+                      <div
+                        className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"
+                        style={{ animationDelay: "0.2s" }}
+                      ></div>
+                    </div>
+                    <span>Loading older messages...</span>
+                  </div>
+                </div>
+              )}
+
+              {messages.length === 0 && (
+                <div className="text-center py-12 pt-16">
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="text-2xl">🤖</span>
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    Start a conversation
+                  </h3>
+                  <p className="text-gray-500">
+                    Ask me anything or type a command to get started.
+                  </p>
+                </div>
+              )}
+              {messages.map((message) => (
                 <div
-                  className={`text-xs mt-2 opacity-70 ${message.role === "user" ? "text-blue-100" : "text-gray-500"
+                  key={message.id}
+                  className={`flex ${message.role === "user" ? "justify-end" : "justify-end"
                     }`}
                 >
-                  {new Date(message.timestamp).toLocaleTimeString()}
-                </div>
-              </div>
-            </div>
-          ))}
-          {isLoading && (
-            <div className={`flex justify-end`}>
-              <div
-                className={`bg-gray-100 text-gray-900 px-4 py-3 rounded-2xl w-full`}
-              >
-                <div className="flex items-center space-x-2">
-                  <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <div
+                    className={`py-1 ${message.role === "user"
+                        ? mode === "standalone"
+                          ? "bg-blue-600 text-white max-w-[85%] px-4 py-3 rounded-2xl"
+                          : "bg-blue-600 text-white max-w-[80%] lg:max-w-[70%] px-4 py-3 rounded-2xl"
+                        : "w-full text-gray-900 px-1"
+                      }`}
+                  >
+                    {renderMessageContent(message.content)}
                     <div
-                      className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"
-                      style={{ animationDelay: "0.1s" }}
-                    ></div>
-                    <div
-                      className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"
-                      style={{ animationDelay: "0.2s" }}
-                    ></div>
+                      className={`text-xs mt-2 opacity-70 ${message.role === "user" ? "text-blue-100" : "text-gray-500"
+                        }`}
+                    >
+                      {new Date(message.timestamp).toLocaleTimeString()}
+                    </div>
                   </div>
-                  <span className="text-sm text-blue-600">
-                    AI is thinking...
-                  </span>
                 </div>
-              </div>
-            </div>
+              ))}
+              {isLoading && (
+                <div className={`flex justify-end`}>
+                  <div
+                    className={`bg-gray-100 text-gray-900 px-4 py-3 rounded-2xl w-full`}
+                  >
+                    <div className="flex items-center space-x-2">
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                        <div
+                          className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"
+                          style={{ animationDelay: "0.1s" }}
+                        ></div>
+                        <div
+                          className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"
+                          style={{ animationDelay: "0.2s" }}
+                        ></div>
+                      </div>
+                      <span className="text-sm text-blue-600">
+                        AI is thinking...
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
           )}
           <div ref={messagesEndRef} />
         </div>
@@ -474,8 +692,8 @@ export default function UnifiedChatbot({
             setInput={setInput}
             onSubmit={handleSubmit}
             isLoading={isLoading}
-            previewImage={previewImage}
-            setPreviewImage={setPreviewImage}
+            previewImages={previewImages}
+            setPreviewImages={setPreviewImages}
             onImageUpload={handleImageUpload}
             availableModels={availableModels}
             selectedModel={selectedModel}
@@ -491,8 +709,8 @@ export default function UnifiedChatbot({
           setInput={setInput}
           onSubmit={handleSubmit}
           isLoading={isLoading}
-          previewImage={previewImage}
-          setPreviewImage={setPreviewImage}
+          previewImages={previewImages}
+          setPreviewImages={setPreviewImages}
           onImageUpload={handleImageUpload}
           availableModels={availableModels}
           selectedModel={selectedModel}

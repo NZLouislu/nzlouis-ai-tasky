@@ -12,28 +12,64 @@ interface UseChatOptions {
 export const useChat = (options?: UseChatOptions) => {
   const { postId, documentId, userId, enablePersistence = true, apiEndpoint = 'blog' } = options || {};
   
-  const { contextChats, setContextMessages, addContextMessage, clearContextMessages } = useChatStore();
+  const { 
+    contextChats, 
+    setContextMessages, 
+    addContextMessage, 
+    clearContextMessages,
+    setChatMeta,
+    isCacheValid,
+    setLoadingState,
+    getLoadingState
+  } = useChatStore();
+  
   const [isLoading, setIsLoading] = useState(false);
 
   const entityId = postId || documentId;
   const entityParam = apiEndpoint === 'stories' ? 'documentId' : 'postId';
   const apiBase = `/api/${apiEndpoint}/chat-messages`;
 
-  // Get messages from store, default to empty array
   const messages = entityId ? (contextChats[entityId] || []) : [];
+  const loadingState = entityId ? getLoadingState(entityId) : 'idle';
+  const chatMeta = entityId ? useChatStore.getState().contextChatsMeta[entityId] : undefined;
 
-  const loadMessages = useCallback(async () => {
+  const loadMessages = useCallback(async (loadMore = false) => {
     if (!entityId || !enablePersistence) {
       return;
     }
 
-    // Only show loading if we don't have messages yet
-    if (messages.length === 0) {
-      setIsLoading(true);
+    const cachedMessages = contextChats[entityId];
+    const cacheIsValid = isCacheValid(entityId);
+    const currentMeta = useChatStore.getState().contextChatsMeta[entityId];
+    
+    if (!loadMore && cachedMessages && cachedMessages.length > 0 && cacheIsValid) {
+      console.log('Using cached chat messages');
+      return;
+    }
+
+    if (loadingState === 'loading' || currentMeta?.isLoadingMore) {
+      return;
+    }
+
+    const offset = loadMore ? (currentMeta?.currentOffset || 0) : 0;
+    const limit = 50;
+
+    if (loadMore) {
+      setChatMeta(entityId, {
+        ...currentMeta!,
+        isLoadingMore: true,
+      });
+    } else {
+      setLoadingState(entityId, 'loading');
+      if (messages.length === 0) {
+        setIsLoading(true);
+      }
     }
 
     try {
-      const response = await fetch(`${apiBase}?${entityParam}=${entityId}`);
+      const response = await fetch(
+        `${apiBase}?${entityParam}=${entityId}&limit=${limit}&offset=${offset}`
+      );
       
       if (!response.ok) {
         throw new Error('Failed to load messages');
@@ -41,7 +77,6 @@ export const useChat = (options?: UseChatOptions) => {
 
       const data = await response.json();
       const loadedMessages: Message[] = (data.messages || []).map((msg: any) => {
-        // Handle both string and object content formats
         let content = '';
         let image = undefined;
 
@@ -61,14 +96,53 @@ export const useChat = (options?: UseChatOptions) => {
         };
       });
 
-      setContextMessages(entityId, loadedMessages);
+      if (loadMore) {
+        setContextMessages(entityId, [...loadedMessages, ...cachedMessages]);
+      } else {
+        setContextMessages(entityId, loadedMessages);
+      }
+      
+      setChatMeta(entityId, {
+        lastFetched: Date.now(),
+        isStale: false,
+        totalCount: data.total || loadedMessages.length,
+        hasMore: data.hasMore || false,
+        currentOffset: offset + loadedMessages.length,
+        isLoadingMore: false,
+      });
+      
+      if (!loadMore) {
+        setLoadingState(entityId, 'success');
+      }
     } catch (error) {
       console.error('Error loading chat messages:', error);
-      // Don't clear messages on error to allow offline viewing of cached data
+      setLoadingState(entityId, 'error');
+      if (loadMore && currentMeta) {
+        setChatMeta(entityId, {
+          ...currentMeta,
+          isLoadingMore: false,
+        });
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [entityId, enablePersistence, apiBase, entityParam, setContextMessages, messages.length]);
+  }, [
+    entityId, 
+    enablePersistence, 
+    apiBase, 
+    entityParam, 
+    setContextMessages, 
+    contextChats, 
+    isCacheValid,
+    setChatMeta,
+    setLoadingState,
+    loadingState,
+    messages.length
+  ]);
+
+  const loadMoreMessages = useCallback(async () => {
+    await loadMessages(true);
+  }, [loadMessages]);
 
   useEffect(() => {
     loadMessages();
@@ -136,11 +210,22 @@ export const useChat = (options?: UseChatOptions) => {
     }
   }, [entityId, enablePersistence, apiBase, entityParam, clearContextMessages]);
 
+  const updateLastMessage = useCallback((content: string) => {
+    if (entityId) {
+      useChatStore.getState().updateContextLastMessage(entityId, content);
+    }
+  }, [entityId]);
+
   return {
     messages,
     appendMessage,
+    updateLastMessage,
     clearMessages,
     isLoading,
     loadMessages,
+    loadingState,
+    loadMoreMessages,
+    hasMore: chatMeta?.hasMore || false,
+    isLoadingMore: chatMeta?.isLoadingMore || false,
   };
 };

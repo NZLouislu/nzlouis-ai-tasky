@@ -1,5 +1,5 @@
 "use client";
-import React, { useRef } from 'react';
+import React, { useRef, useMemo, useCallback } from 'react';
 import { Send, Paperclip } from 'lucide-react';
 import Image from 'next/image';
 
@@ -47,16 +47,16 @@ export default function ChatInput({
 }: ChatInputProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const getAvailableProviders = () => {
+  const availableProviders = useMemo(() => {
     const providers = new Set(availableModels.map(m => m.provider));
     return Array.from(providers);
-  };
+  }, [availableModels]);
 
-  const getModelsForProvider = (provider: string) => {
+  const getModelsForProvider = useCallback((provider: string) => {
     return availableModels.filter(m => m.provider === provider);
-  };
+  }, [availableModels]);
 
-  const getProviderName = (provider: string) => {
+  const getProviderName = useCallback((provider: string) => {
     const names: Record<string, string> = {
       'google': 'Google Gemini',
       'openai': 'OpenAI',
@@ -65,13 +65,13 @@ export default function ChatInput({
       'kilo': 'Kilo'
     };
     return names[provider] || provider;
-  };
+  }, []);
 
-  const removeImage = (index: number) => {
+  const removeImage = useCallback((index: number) => {
     const newImages = [...previewImages];
     newImages.splice(index, 1);
     setPreviewImages(newImages);
-  };
+  }, [previewImages, setPreviewImages]);
 
   return (
     <div className="bg-white border-t border-gray-200 p-3 sm:p-4 flex-shrink-0">
@@ -179,7 +179,7 @@ export default function ChatInput({
                         }}
                         className="text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 transition-colors"
                       >
-                        {getAvailableProviders().map(provider => (
+                        {availableProviders.map(provider => (
                           <option key={provider} value={provider}>
                             {getProviderName(provider)}
                           </option>

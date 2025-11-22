@@ -54,7 +54,7 @@ export function parseStoriesForTrello(content: string): Array<{
   priority: string;
   labels: string[];
   assignees: string[];
-  acceptanceCriteria: string[];
+  acceptanceCriteria: { text: string; checked: boolean }[];
   dueDate?: string;
 }> {
   const stories: any[] = [];
@@ -101,7 +101,7 @@ function parseStoryForTrello(section: string): any {
   
   // Extract acceptance criteria
   const criteriaMatch = section.match(/Acceptance_Criteria:\s*((?:\s*- \[[ x]\].*\n?)*)/);
-  const acceptanceCriteria: string[] = [];
+  const acceptanceCriteria: { text: string; checked: boolean }[] = [];
   
   if (criteriaMatch) {
     const criteriaText = criteriaMatch[1];

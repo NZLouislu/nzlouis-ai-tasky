@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { taskyDb } from '@/lib/supabase/tasky-db-client';
 import { encrypt } from '@/lib/encryption';
+import { getUserIdFromRequest } from '@/lib/admin-auth';
 import crypto from 'crypto';
 
 interface JiraConnectionRequest {
@@ -15,8 +16,9 @@ interface JiraConnectionRequest {
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
+    const userId = getUserIdFromRequest(session?.user?.id, request);
     
-    if (!session?.user?.id) {
+    if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -69,7 +71,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await taskyDb
       .from('user_platform_configs')
       .upsert({
-        user_id: session.user.id,
+        user_id: userId,
         platform: 'jira',
         jira_url: jiraUrl,
         jira_email: jiraEmail,
@@ -94,9 +96,9 @@ export async function POST(request: NextRequest) {
     await taskyDb
       .from('stories_platform_connections')
       .upsert({
-        user_id: session.user.id,
+        user_id: userId,
         platform: 'jira',
-        google_account_email: session.user.email || '',
+        google_account_email: session?.user?.email || '',
         platform_user_id: jiraEmail,
         platform_username: jiraEmail,
         connection_status: 'connected',
@@ -133,8 +135,9 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const session = await auth();
+    const userId = getUserIdFromRequest(session?.user?.id, request);
     
-    if (!session?.user?.id) {
+    if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -144,7 +147,7 @@ export async function GET(request: NextRequest) {
     const { data, error } = await taskyDb
       .from('user_platform_configs_safe')
       .select('*')
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .eq('platform', 'jira')
       .eq('is_active', true);
 
@@ -173,8 +176,9 @@ export async function GET(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const session = await auth();
+    const userId = getUserIdFromRequest(session?.user?.id, request);
     
-    if (!session?.user?.id) {
+    if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -187,7 +191,7 @@ export async function DELETE(request: NextRequest) {
     const { error } = await taskyDb
       .from('user_platform_configs')
       .delete()
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .eq('platform', 'jira')
       .eq('config_name', configName);
 
@@ -205,7 +209,7 @@ export async function DELETE(request: NextRequest) {
         connection_status: 'disconnected',
         updated_at: new Date().toISOString(),
       })
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .eq('platform', 'jira');
 
     return NextResponse.json({

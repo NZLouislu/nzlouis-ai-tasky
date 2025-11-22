@@ -12,6 +12,7 @@ interface StoriesSidebarProps {
   isOpen: boolean;
   isCollapsed: boolean;
   onToggle: () => void;
+  onCollapse?: () => void;
   isMobile: boolean;
 }
 
@@ -19,6 +20,7 @@ export default function StoriesSidebar({
   isOpen, 
   isCollapsed, 
   onToggle, 
+  onCollapse,
   isMobile 
 }: StoriesSidebarProps) {
   const {
@@ -353,7 +355,7 @@ export default function StoriesSidebar({
             <h2 className="text-lg font-semibold -gray-800">Stories</h2>
           )}
           <button
-            onClick={onToggle}
+            onClick={isMobile ? onToggle : (onCollapse || onToggle)}
             className="p-1 hover:bg-gray-100 rounded-md transition-colors"
           >
             {isMobile ? (

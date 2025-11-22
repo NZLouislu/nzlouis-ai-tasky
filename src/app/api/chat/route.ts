@@ -80,6 +80,9 @@ interface ChatRequest {
 
 export async function POST(req: NextRequest) {
   try {
+    const startTime = Date.now();
+    console.log('[Performance] Chat API request started');
+
     const session = await auth();
     const userId = getUserIdFromRequest(session?.user?.id, req);
 
@@ -93,21 +96,32 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const settings = userId
-      ? await getUserAISettings(userId)
-      : {
-        defaultProvider: 'google' as AIProvider,
-        defaultModel: 'gemini-2.5-flash',
-        temperature: 0.8,
-        maxTokens: 4096,
-        systemPrompt: 'You are a helpful AI assistant with vision capabilities. You can see and analyze images provided by users.',
-      };
+    // Parallelize database queries for better performance
+    const settingsPromise = userId
+      ? getUserAISettings(userId)
+      : Promise.resolve({
+          defaultProvider: 'google' as AIProvider,
+          defaultModel: 'gemini-2.5-flash',
+          temperature: 0.8,
+          maxTokens: 4096,
+          systemPrompt: 'You are a helpful AI assistant with vision capabilities. You can see and analyze images provided by users.',
+        });
+
+    const modelConfigPromise = modelId && userId
+      ? getModelConfigFromId(userId, modelId)
+      : Promise.resolve(null);
+
+    const [settings, modelConfig] = await Promise.all([
+      settingsPromise,
+      modelConfigPromise,
+    ]);
+
+    console.log(`[Performance] Settings and model config loaded in ${Date.now() - startTime}ms`);
 
     let provider: AIProvider;
     let modelName: string;
 
-    if (modelId) {
-      const modelConfig = await getModelConfigFromId(userId, modelId);
+    if (modelConfig) {
       provider = modelConfig.provider;
       modelName = modelConfig.modelName;
     } else {
@@ -368,6 +382,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (provider === 'google') {
+      const apiKeyStartTime = Date.now();
       const { decryptAPIKey } = await import('@/lib/encryption');
       
       const { data: apiKeyRecord } = await taskyDb
@@ -386,6 +401,8 @@ export async function POST(req: NextRequest) {
         apiKeyRecord.iv,
         apiKeyRecord.auth_tag
       );
+
+      console.log(`[Performance] API key retrieved and decrypted in ${Date.now() - apiKeyStartTime}ms`);
 
       const modelMap: Record<string, string> = {
         'gemini-2.5-flash': 'gemini-2.5-flash',
@@ -436,6 +453,7 @@ export async function POST(req: NextRequest) {
 
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${actualModel}:streamGenerateContent?key=${apiKey}`;
 
+      const apiCallStartTime = Date.now();
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -456,6 +474,8 @@ export async function POST(req: NextRequest) {
         throw new Error(`Gemini API error: ${response.status}`);
       }
 
+      console.log(`[Performance] Gemini API responded in ${Date.now() - apiCallStartTime}ms`);
+      console.log(`[Performance] Total request time: ${Date.now() - startTime}ms`);
       console.log('Gemini stream started successfully');
 
       const encoder = new TextEncoder();
