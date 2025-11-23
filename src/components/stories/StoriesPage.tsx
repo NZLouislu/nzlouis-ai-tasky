@@ -10,6 +10,7 @@ import JiraProjectSelectDialog from "./JiraProjectSelectDialog";
 import TrelloConnectDialog, { TrelloCredentials, TrelloBoard } from "./TrelloConnectDialog";
 import TrelloBoardSelectDialog from "./TrelloBoardSelectDialog";
 import { useStoriesStore } from "@/lib/stores/stories-store";
+import StoriesSkeleton from "./StoriesSkeleton";
 
 interface PageModification {
   type: string;
@@ -36,71 +37,11 @@ export default function StoriesPage() {
   const [showTrelloBoardDialog, setShowTrelloBoardDialog] = useState(false);
   const [trelloBoards, setTrelloBoards] = useState<TrelloBoard[]>([]);
 
-  const { setUserId, userId, activeDocumentId, platforms, updateDocument } = useStoriesStore();
+  const { setUserId, userId, activeDocumentId, platforms, updateDocument, fetchProjects } = useStoriesStore();
   const resizeStartX = useRef<number>(0);
   const resizeStartWidth = useRef<number>(600);
 
-  const reloadProjects = async () => {
-    try {
-      const response = await fetch('/api/stories/projects');
-      const result = await response.json();
 
-      if (result.success && result.projects) {
-        const platformsMap = new Map<string, any>();
-        
-        platformsMap.set('jira', {
-          id: 'jira',
-          name: 'jira' as const,
-          displayName: 'Jira',
-          connectionStatus: 'disconnected' as const,
-          projects: []
-        });
-        
-        platformsMap.set('trello', {
-          id: 'trello',
-          name: 'trello' as const,
-          displayName: 'Trello',
-          connectionStatus: 'disconnected' as const,
-          projects: []
-        });
-
-        for (const project of result.projects) {
-          const platformData = platformsMap.get(project.platform);
-          if (platformData) {
-            platformData.connectionStatus = project.connection_status;
-            platformData.googleAccountEmail = project.google_account_email;
-            
-            platformData.projects.push({
-              id: project.id,
-              platformProjectId: project.platform_project_id,
-              projectName: project.project_name,
-              platform: project.platform,
-              connectionStatus: project.connection_status,
-              googleAccountEmail: project.google_account_email,
-              documents: (project.stories_documents || []).map((doc: any) => ({
-                id: doc.id,
-                projectId: doc.project_id,
-                documentType: doc.document_type,
-                fileName: doc.file_name,
-                title: doc.title,
-                content: doc.content,
-                lastSyncedAt: doc.last_synced_at,
-                createdAt: doc.created_at,
-                updatedAt: doc.updated_at,
-              })),
-              createdAt: project.created_at,
-              updatedAt: project.updated_at,
-            });
-          }
-        }
-
-        const { setPlatforms } = useStoriesStore.getState();
-        setPlatforms(Array.from(platformsMap.values()));
-      }
-    } catch (error) {
-      console.error('Failed to reload projects:', error);
-    }
-  };
 
   const handleJiraConnect = async (credentials: JiraCredentials) => {
     try {
@@ -144,7 +85,7 @@ export default function StoriesPage() {
       const result = await response.json();
       
       if (result.success) {
-        await reloadProjects();
+        await fetchProjects();
       } else {
         throw new Error(result.error || 'Failed to add project');
       }
@@ -203,7 +144,7 @@ export default function StoriesPage() {
       const result = await response.json();
       
       if (result.success) {
-        await reloadProjects();
+        await fetchProjects();
         setShowTrelloBoardDialog(false);
       } else {
         throw new Error(result.error || 'Failed to connect to board');
@@ -256,72 +197,10 @@ export default function StoriesPage() {
   }, [session, userId, setUserId, sessionStatus, isCheckingAdmin]);
 
   useEffect(() => {
-    const loadProjects = async () => {
-      if (!userId || userId === "00000000-0000-0000-0000-000000000000") return;
-
-      try {
-        const response = await fetch('/api/stories/projects');
-        const result = await response.json();
-
-        if (result.success && result.projects) {
-          const platformsMap = new Map<string, any>();
-          
-          platformsMap.set('jira', {
-            id: 'jira',
-            name: 'jira' as const,
-            displayName: 'Jira',
-            connectionStatus: 'disconnected' as const,
-            projects: []
-          });
-          
-          platformsMap.set('trello', {
-            id: 'trello',
-            name: 'trello' as const,
-            displayName: 'Trello',
-            connectionStatus: 'disconnected' as const,
-            projects: []
-          });
-
-          for (const project of result.projects) {
-            const platformData = platformsMap.get(project.platform);
-            if (platformData) {
-              platformData.connectionStatus = project.connection_status;
-              platformData.googleAccountEmail = project.google_account_email;
-              
-              platformData.projects.push({
-                id: project.id,
-                platformProjectId: project.platform_project_id,
-                projectName: project.project_name,
-                platform: project.platform,
-                connectionStatus: project.connection_status,
-                googleAccountEmail: project.google_account_email,
-                documents: (project.stories_documents || []).map((doc: any) => ({
-                  id: doc.id,
-                  projectId: doc.project_id,
-                  documentType: doc.document_type,
-                  fileName: doc.file_name,
-                  title: doc.title,
-                  content: doc.content,
-                  lastSyncedAt: doc.last_synced_at,
-                  createdAt: doc.created_at,
-                  updatedAt: doc.updated_at,
-                })),
-                createdAt: project.created_at,
-                updatedAt: project.updated_at,
-              });
-            }
-          }
-
-          const { setPlatforms } = useStoriesStore.getState();
-          setPlatforms(Array.from(platformsMap.values()));
-        }
-      } catch (error) {
-        console.error('Failed to load projects:', error);
-      }
-    };
-
-    loadProjects();
-  }, [userId]);
+    if (userId && userId !== "00000000-0000-0000-0000-000000000000") {
+      fetchProjects();
+    }
+  }, [userId, fetchProjects]);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -585,11 +464,7 @@ export default function StoriesPage() {
   }, [platforms]);
 
   if (sessionStatus === "loading" || isCheckingAdmin) {
-    return (
-      <div className="h-screen flex items-center justify-center">
-        <div className="text-gray-500">Loading...</div>
-      </div>
-    );
+    return <StoriesSkeleton />;
   }
 
   return (
@@ -618,18 +493,20 @@ export default function StoriesPage() {
         )}
       </div>
 
-      <StoriesChatbotPanel
-        isChatbotVisible={isChatbotVisible}
-        isMobile={isMobile}
-        chatbotWidth={chatbotWidth}
-        setIsChatbotVisible={setIsChatbotVisible}
-        setSidebarOpen={setSidebarOpen}
-        setSidebarCollapsed={setSidebarCollapsed}
-        handleMouseDown={handleMouseDown}
-        handlePageModification={handlePageModification}
-        documentId={activeDocumentId || undefined}
-        userId={userId}
-      />
+      {activeDocumentId && (
+        <StoriesChatbotPanel
+          isChatbotVisible={isChatbotVisible}
+          isMobile={isMobile}
+          chatbotWidth={chatbotWidth}
+          setIsChatbotVisible={setIsChatbotVisible}
+          setSidebarOpen={setSidebarOpen}
+          setSidebarCollapsed={setSidebarCollapsed}
+          handleMouseDown={handleMouseDown}
+          handlePageModification={handlePageModification}
+          documentId={activeDocumentId || undefined}
+          userId={userId}
+        />
+      )}
 
       <JiraConnectDialog
         isOpen={showJiraConnectDialog}

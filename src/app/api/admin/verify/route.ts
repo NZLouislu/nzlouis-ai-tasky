@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!token) {
-      console.log('[Admin Verify] No token found in cookies or Authorization header');
+      // console.log('[Admin Verify] No token found in cookies or Authorization header');
       return NextResponse.json({ 
         authenticated: false, 
         error: "No authentication token provided" 

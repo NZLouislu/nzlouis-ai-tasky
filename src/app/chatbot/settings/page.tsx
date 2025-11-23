@@ -56,6 +56,7 @@ interface TestResult {
   status: 'testing' | 'success' | 'error';
   message?: string;
   response?: string;
+  testedAt?: string;
 }
 
 export default function ChatbotSettingsPage() {
@@ -128,6 +129,43 @@ export default function ChatbotSettingsPage() {
       console.error('Failed to load configured keys:', error);
     }
   };
+
+  const loadModelStatuses = async () => {
+    try {
+      const res = await fetch('/api/ai-models');
+      const data = await res.json();
+      
+      if (data.models) {
+        const newTestResults: Record<string, TestResult> = {};
+        
+        data.models.forEach((model: any) => {
+          if (model.tested) {
+            const testKey = `${model.provider}-${model.id}`;
+            newTestResults[testKey] = {
+              provider: model.provider,
+              model: model.id,
+              status: model.working ? 'success' : 'error',
+              message: model.working ? undefined : 'Last test failed',
+              response: model.working ? 'Last test passed' : undefined,
+              testedAt: model.testedAt
+            };
+          }
+        });
+        
+        setTestResults(prev => ({ ...prev, ...newTestResults }));
+      }
+    } catch (error) {
+      console.error('Failed to load model statuses:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (!isCheckingAuth && (session?.user || isAdmin)) {
+      loadSettings();
+      loadConfiguredKeys();
+      loadModelStatuses();
+    }
+  }, [session, isAdmin, isCheckingAuth]);
 
   const saveApiKey = async (provider: string) => {
     const apiKey = apiKeys[provider];
@@ -519,6 +557,12 @@ export default function ChatbotSettingsPage() {
                                   <div className="mt-2 p-3 bg-white rounded border border-red-200">
                                     <div className="text-xs font-medium text-red-700 mb-1">Error:</div>
                                     <div className="text-sm text-red-600 break-words">{result.message}</div>
+                                  </div>
+                                )}
+
+                                {result?.testedAt && (
+                                  <div className="mt-1 text-xs text-gray-400">
+                                    Last tested: {new Date(result.testedAt).toLocaleString()}
                                   </div>
                                 )}
 

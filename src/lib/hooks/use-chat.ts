@@ -227,5 +227,6 @@ export const useChat = (options?: UseChatOptions) => {
     loadMoreMessages,
     hasMore: chatMeta?.hasMore || false,
     isLoadingMore: chatMeta?.isLoadingMore || false,
+    saveMessage,
   };
 };

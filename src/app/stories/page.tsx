@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Stories from "@/components/stories/Stories";
+import StoriesSkeleton from "@/components/stories/StoriesSkeleton";
 
 export default function StoriesPage() {
   const router = useRouter();
@@ -34,11 +35,7 @@ export default function StoriesPage() {
   }, [status, isAdmin, checking, router]);
 
   if (status === "loading" || checking) {
-    return (
-      <div className="h-screen flex items-center justify-center">
-        <div className="text-gray-500">Loading...</div>
-      </div>
-    );
+    return <StoriesSkeleton />;
   }
 
   if (status === "unauthenticated" && !isAdmin) {

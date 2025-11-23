@@ -64,7 +64,8 @@ export default function UnifiedChatbot({
     loadingState,
     loadMoreMessages,
     hasMore,
-    isLoadingMore
+    isLoadingMore,
+    saveMessage
   } = useChat({
     postId,
     documentId,
@@ -223,137 +224,225 @@ export default function UnifiedChatbot({
 
 
   const renderMessageContent = useCallback(
-    (content: string | { text: string; image?: string }) => {
+    (message: Message) => {
+      const { content, role } = message;
+      const textContent = typeof content === "string" ? content : (content as any)?.text || "";
+      const imageContent = typeof content !== "string" ? (content as any)?.image : undefined;
+
+      // User Message Styling
+      if (role === "user") {
+        return (
+          <div className="text-white text-base">
+            {message.images && message.images.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {message.images.map((img, idx) => (
+                  <Image
+                    key={idx}
+                    src={img}
+                    alt={`Uploaded image ${idx + 1}`}
+                    width={300}
+                    height={200}
+                    className="rounded-lg max-w-full h-auto object-cover"
+                    style={{ maxHeight: "200px" }}
+                  />
+                ))}
+              </div>
+            )}
+            {imageContent && (
+              <div className="mb-2">
+                <Image
+                  src={imageContent}
+                  alt="Attached image"
+                  width={300}
+                  height={200}
+                  className="rounded-lg max-w-full h-auto"
+                />
+              </div>
+            )}
+            <p className="whitespace-pre-wrap leading-relaxed">{textContent}</p>
+          </div>
+        );
+      }
+
+      // Assistant Message Styling
       const markdownComponents = {
-        hr: ({ ...props }) => <hr className="my-6 border-t border-gray-200" {...props} />,
-        h1: ({ ...props }) => <h1 className="text-2xl font-bold mb-4" {...props} />,
-        h2: ({ ...props }) => <h2 className="text-xl font-bold mb-3" {...props} />,
+        p: ({ ...props }) => (
+          <p className="mb-4 leading-relaxed text-gray-800 text-[16px]" {...props} />
+        ),
+        hr: ({ ...props }) => (
+          <hr
+            className="my-8 border-t border-[#E5D5C0]"
+            {...props}
+          />
+        ),
+        h1: ({ ...props }) => (
+          <h1
+            className="text-2xl font-bold mb-6 mt-2 text-gray-900 pb-2 border-b border-[#E5D5C0]/50"
+            {...props}
+          />
+        ),
+        h2: ({ ...props }) => (
+          <h2
+            className="text-xl font-bold mb-4 mt-8 text-gray-900"
+            {...props}
+          />
+        ),
+        h3: ({ ...props }) => (
+          <h3
+            className="text-lg font-semibold mb-3 mt-6 text-gray-900"
+            {...props}
+          />
+        ),
+        ul: ({ ...props }) => (
+          <ul className="list-disc pl-6 mb-4 space-y-2 text-gray-800" {...props} />
+        ),
+        ol: ({ ...props }) => (
+          <ol className="list-decimal pl-6 mb-4 space-y-2 text-gray-800" {...props} />
+        ),
+        li: ({ ...props }) => (
+          <li className="leading-relaxed pl-1" {...props} />
+        ),
+        strong: ({ ...props }) => (
+          <strong className="font-bold text-gray-900" {...props} />
+        ),
+        blockquote: ({ ...props }) => (
+          <blockquote className="border-l-4 border-[#E5D5C0] pl-4 py-1 my-4 italic text-gray-700 bg-[#F5E6D3]/20 rounded-r" {...props} />
+        ),
+        code: ({ className, children, ...props }: any) => {
+          const match = /language-(\w+)/.exec(className || '');
+          return !match ? (
+            <code className="bg-[#F5E6D3]/50 px-1.5 py-0.5 rounded text-sm font-mono text-[#B45309]" {...props}>
+              {children}
+            </code>
+          ) : (
+            <code className={className} {...props}>
+              {children}
+            </code>
+          );
+        },
         table: ({ ...props }) => (
-          <div 
+          <div
             style={{
-              margin: '1.5rem 0',
-              all: 'initial',
-              display: 'block',
-              fontFamily: 'inherit',
+              margin: "2rem 0",
+              all: "initial",
+              display: "block",
+              fontFamily: "inherit",
             }}
           >
-            <div 
+            <div
               style={{
-                backgroundColor: '#FFF8F0 !important' as any,
-                borderRadius: '1rem',
-                padding: '1.25rem',
-                border: '1px solid #F5E6D3',
-                boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-                overflow: 'hidden',
-                overflowX: 'auto',
-                display: 'block',
+                backgroundColor: "#FFF8F0",
+                borderRadius: "1rem",
+                padding: "0",
+                border: "1px solid #F5E6D3",
+                boxShadow:
+                  "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)",
+                overflow: "hidden",
+                display: "block",
               }}
             >
-              <table 
-                style={{
-                  width: '100%',
-                  borderCollapse: 'separate',
-                  borderSpacing: '0',
-                  margin: '0',
-                  backgroundColor: 'transparent',
-                  display: 'table',
-                }}
-                {...props} 
-              />
+              <div className="px-5 py-3 bg-[#FDFBF7] border-b border-[#F5E6D3] flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-[#E5D5C0]"></div>
+                <div className="w-3 h-3 rounded-full bg-[#E5D5C0]"></div>
+                <div className="w-3 h-3 rounded-full bg-[#E5D5C0]"></div>
+              </div>
+              <div className="p-5 overflow-x-auto">
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "separate",
+                    borderSpacing: "0",
+                    margin: "0",
+                    backgroundColor: "transparent",
+                    display: "table",
+                  }}
+                  {...props}
+                />
+              </div>
             </div>
           </div>
         ),
         thead: ({ ...props }) => (
-          <thead 
-            style={{ 
-              backgroundColor: '#FFF8F0',
-              display: 'table-header-group',
-            }} 
-            {...props} 
+          <thead
+            style={{
+              backgroundColor: "#FFF8F0",
+              display: "table-header-group",
+            }}
+            {...props}
           />
         ),
         tbody: ({ ...props }) => (
-          <tbody 
-            style={{ 
-              backgroundColor: 'white',
-              display: 'table-row-group',
-            }} 
-            {...props} 
+          <tbody
+            style={{
+              backgroundColor: "white",
+              display: "table-row-group",
+            }}
+            {...props}
           />
         ),
         th: ({ ...props }) => (
-          <th 
+          <th
             style={{
-              padding: '0.75rem 1.25rem',
-              textAlign: 'left',
-              fontSize: '0.875rem',
-              fontWeight: '700',
-              color: '#1f2937',
-              backgroundColor: '#FFF8F0',
-              borderBottom: '2px solid #F5E6D3',
-              display: 'table-cell',
+              padding: "1rem 1.5rem",
+              textAlign: "left",
+              fontSize: "0.875rem",
+              fontWeight: "700",
+              color: "#4B5563",
+              backgroundColor: "#FFF8F0",
+              borderBottom: "2px solid #F5E6D3",
+              display: "table-cell",
             }}
-            {...props} 
+            {...props}
           />
         ),
         td: ({ ...props }) => (
-          <td 
+          <td
             style={{
-              padding: '1rem 1.25rem',
-              fontSize: '0.875rem',
-              color: '#374151',
-              backgroundColor: 'white',
-              borderBottom: '1px solid rgba(245, 230, 211, 0.4)',
-              display: 'table-cell',
+              padding: "1rem 1.5rem",
+              fontSize: "0.875rem",
+              color: "#374151",
+              backgroundColor: "white",
+              borderBottom:
+                "1px solid rgba(245, 230, 211, 0.4)",
+              display: "table-cell",
             }}
-            {...props} 
+            {...props}
           />
         ),
         tr: ({ ...props }) => (
-          <tr 
+          <tr
             style={{
-              transition: 'background-color 0.2s',
-              display: 'table-row',
+              transition: "background-color 0.2s",
+              display: "table-row",
             }}
             onMouseEnter={(e) => {
               const target = e.currentTarget as HTMLElement;
-              target.style.backgroundColor = 'rgba(255, 248, 240, 0.3)';
+              target.style.backgroundColor =
+                "rgba(255, 248, 240, 0.5)";
             }}
             onMouseLeave={(e) => {
               const target = e.currentTarget as HTMLElement;
-              target.style.backgroundColor = 'transparent';
+              target.style.backgroundColor = "transparent";
             }}
-            {...props} 
+            {...props}
           />
         ),
       };
 
-      if (typeof content === "string") {
-        return (
-          <div className="max-w-none">
-            <ReactMarkdown 
-              remarkPlugins={[remarkGfm]}
-              components={markdownComponents as any}
-            >
-              {content}
-            </ReactMarkdown>
-          </div>
-        );
-      }
       return (
         <div>
-          <div className="prose prose-sm max-w-none dark:prose-invert mb-2">
+          <div className="prose prose-slate max-w-none dark:prose-invert mb-2">
             <ReactMarkdown 
               remarkPlugins={[remarkGfm]}
               components={markdownComponents as any}
             >
-              {content.text}
+              {textContent}
             </ReactMarkdown>
           </div>
-          {content.image && (
+          {imageContent && (
             <div className="mt-2">
               <Image
-                src={content.image}
+                src={imageContent}
                 alt="Attached image"
                 width={300}
                 height={200}
@@ -386,20 +475,20 @@ export default function UnifiedChatbot({
       {messages.map((message) => (
         <div
           key={message.id}
-          className={`flex ${message.role === "user" ? "justify-end" : "justify-end"
+          className={`flex ${message.role === "user" ? "justify-end" : "justify-start"
             }`}
         >
           <div
             className={`py-1 ${message.role === "user"
                 ? mode === "standalone"
                   ? "bg-blue-600 text-white max-w-[85%] px-4 py-3 rounded-2xl"
-                  : "bg-blue-600 text-white max-w-[80%] lg:max-w-[70%] px-4 py-3 rounded-2xl"
+                  : "bg-blue-600 text-white max-w-[80%] lg:max-w-[85%] px-4 py-3 rounded-2xl"
                 : "w-full text-gray-900 px-1"
               }`}
           >
-            {renderMessageContent(message.content)}
+            {renderMessageContent(message)}
             <div
-              className={`text-xs mt-2 opacity-70 ${message.role === "user" ? "text-blue-100" : "text-gray-500"
+              className={`text-xs mt-2 opacity-70 ${message.role === "user" ? "text-blue-100" : "text-gray-400"
                 }`}
             >
               {new Date(message.timestamp).toLocaleTimeString()}
@@ -577,6 +666,14 @@ Please respond in the same language as the user's question.`,
           const { done, value } = await reader.read();
           if (done) {
             setIsLoading(false);
+            // Save the full message to the database
+            if (mode === "workspace" && (postId || documentId) && userId) {
+              const completedMessage = {
+                ...assistantMessage,
+                content: fullContent
+              };
+              saveMessage(completedMessage);
+            }
             break;
           }
 
@@ -611,12 +708,12 @@ Please respond in the same language as the user's question.`,
         appendMessage(errorMessage);
       }
     },
-    [previewImages, selectedModel, messages, appendMessage, updateLastMessage, mode, onPageModification, selectedProvider, articleContext]
+    [previewImages, selectedModel, messages, appendMessage, updateLastMessage, mode, onPageModification, selectedProvider, articleContext, saveMessage, postId, documentId, userId]
   );
 
   return (
     <div
-      className={`unified-chatbot flex flex-col bg-white ${mode === "standalone" ? "h-full" : "h-full"
+      className={`unified-chatbot flex flex-col bg-[#FDFBF7] ${mode === "standalone" ? "h-full" : "h-full"
         }`}
     >
       <div

@@ -1,6 +1,11 @@
 import React from "react";
 import { FaTimes as X, FaComments as MessageCircle } from "react-icons/fa";
-import UnifiedChatbot from "../UnifiedChatbot";
+import dynamic from "next/dynamic";
+
+const UnifiedChatbot = dynamic(() => import("../UnifiedChatbot"), {
+  loading: () => <div className="h-full flex items-center justify-center text-gray-400">Loading chat interface...</div>,
+  ssr: false,
+});
 
 interface PageModification {
   type: string;
