@@ -14,6 +14,7 @@ import {
 } from "react-icons/fa";
 import Sidebar from "./Sidebar";
 import UnifiedChatbot from "./UnifiedChatbot";
+import { ModificationPreview } from "./blog/ModificationPreview";
 import { useBlogData } from "@/hooks/use-blog-data";
 import { supabase } from "@/lib/supabase/supabase-client";
 import { getTaskySupabaseConfig } from "@/lib/environment";
@@ -86,6 +87,11 @@ export default function Blog() {
   const [isMobile, setIsMobile] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteDropdown, setShowDeleteDropdown] = useState(false);
+  const [pendingModification, setPendingModification] = useState<{
+    original: PartialBlock[];
+    modified: PartialBlock[];
+    explanation: string;
+  } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const unsavedChanges = useRef<Map<string, Post>>(new Map());
 

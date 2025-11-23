@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { getUserIdFromRequest } from '@/lib/admin-auth';
 import { PartialBlock } from '@blocknote/core';
+import { DocumentAnalyzer, DocumentStructure } from '@/lib/blog/document-analyzer';
 
 interface PageModification {
   type: 'replace' | 'insert' | 'append' | 'update_title' | 'add_section' | 'delete' | 'replace_paragraph';
@@ -54,18 +55,39 @@ async function generateModifications(params: {
   instruction: string;
   language: string;
   userId?: string;
+  documentStructure?: DocumentStructure;
 }): Promise<AIModifyResponse> {
-  const { currentContent, currentTitle, instruction, language, userId } = params;
+  const { currentContent, currentTitle, instruction, language, userId, documentStructure } = params;
 
   const contentText = blocksToText(currentContent);
-  const systemPrompt = `You are a professional blog editor and content creation expert. Generate high-quality, detailed, professional content based on user instructions.
+  
+  const structureInfo = documentStructure ? `
 
+**Document Structure Analysis:**
+- Total Sections: ${documentStructure.sections.length}
+- Total Words: ${documentStructure.stats.totalWords}
+- Total Paragraphs: ${documentStructure.stats.totalParagraphs}
+- Total Headings: ${documentStructure.stats.totalHeadings}
+- Reading Time: ${documentStructure.stats.readingTimeMinutes} minutes
+
+**Document Outline:**
+${documentStructure.outline.map((node, idx) => `${idx + 1}. ${node.title} (Level ${node.level})`).join('\n')}
+
+**Sections:**
+${documentStructure.sections.map((section, idx) => 
+  `Section ${idx + 1}: ${section.heading?.title || '(No heading)'} - ${section.wordCount} words`
+).join('\n')}
+` : '';
+
+  const systemPrompt = `You are a professional blog editor and content creation expert with deep understanding of document structure. Generate high-quality, detailed, professional content based on user instructions.
+${structureInfo}
 **CRITICAL RULES:**
 1. **ONLY return valid JSON format with English field names**
 2. **DO NOT use Chinese field names like "修改操作" or "操作类型"**
 3. **MUST use exact field names: "modifications", "type", "content", "title", "explanation"**
 4. **Content must be detailed, professional, and in-depth**
 5. **Content language should match user's language (${language})**
+6. **When user refers to "Section 2" or "第二章节", use the outline above to locate it precisely**
 
 **REQUIRED JSON FORMAT:**
 {
@@ -628,6 +650,15 @@ export async function POST(request: NextRequest) {
     console.log('Detected language:', language);
 
     
+    const analyzer = new DocumentAnalyzer();
+    const documentStructure = analyzer.analyze(currentContent || []);
+    console.log('📊 Document Structure:', {
+      sections: documentStructure.sections.length,
+      totalWords: documentStructure.stats.totalWords,
+      readingTime: documentStructure.stats.readingTimeMinutes,
+    });
+
+    
     console.log('Generating modifications...');
 
     const lowerInstruction = instruction.toLowerCase();
@@ -653,7 +684,8 @@ export async function POST(request: NextRequest) {
           currentTitle: currentTitle || 'Untitled',
           instruction: instruction.trim(),
           language,
-          userId, // Pass userId for AI API authentication
+          userId,
+          documentStructure, // Pass userId for AI API authentication
         });
         console.log('✅ AI generation successful');
       } catch (error) {

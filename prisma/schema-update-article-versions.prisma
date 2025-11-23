@@ -1,0 +1,55 @@
+// ============================================================================
+// Prisma Schema Update for Blog Smart AI Assistant
+// ============================================================================
+// Add this model to your prisma/schema.prisma file
+// Location: After the BlogPost model (around line 249)
+// ============================================================================
+
+model ArticleVersion {
+  id         String    @id @default(uuid())
+  postId     String    @map("post_id")
+  content    Json
+  metadata   Json      @default("{}")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  createdBy  String?   @map("created_by")
+  
+  post       BlogPost  @relation(fields: [postId], references: [id], onDelete: Cascade)
+  creator    User?     @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([postId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@index([createdBy])
+  @@map("article_versions")
+}
+
+// ============================================================================
+// IMPORTANT: Also update existing models
+// ============================================================================
+
+// 1. Add this to the User model (around line 34):
+/*
+model User {
+  // ... existing fields ...
+  blogPosts        BlogPost[]
+  articleVersions  ArticleVersion[]  // ← ADD THIS LINE
+  // ... rest of fields ...
+}
+*/
+
+// 2. Add this to the BlogPost model (around line 246):
+/*
+model BlogPost {
+  // ... existing fields ...
+  children  BlogPost[]         @relation("PostHierarchy")
+  versions  ArticleVersion[]   // ← ADD THIS LINE
+  user      User               @relation(fields: [userId], references: [id])
+  // ... rest if any ...
+}
+*/
+
+// ============================================================================
+// After updating the schema, run:
+// ============================================================================
+// npx prisma db pull     // Sync with database
+// npx prisma generate    // Generate Prisma Client
+// ============================================================================
