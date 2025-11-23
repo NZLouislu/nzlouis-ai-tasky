@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
         platform: 'trello',
         platform_project_id: boardId,
         project_name: boardName,
-        google_account_email: session.user.email || '',
+        google_account_email: session?.user?.email || '',
         connection_status: 'connected',
         platform_credentials: {
           board_id: boardId,
@@ -212,6 +212,38 @@ export async function POST(request: NextRequest) {
 
     if (reportError) {
       console.error('Failed to create report document:', reportError);
+    }
+
+    // Create default Stories document
+    const storiesFileName = `${boardName.replace(/\s+/g, '-')}-Trello-Stories.md`;
+    const { data: storiesDoc, error: storiesError } = await taskyDb
+      .from('stories_documents')
+      .insert({
+        project_id: project.id,
+        document_type: 'stories',
+        file_name: storiesFileName,
+        title: `${boardName} Stories`,
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              {
+                type: 'text',
+                text: `# ${boardName} Trello Stories\n\nThis document contains user stories to be synced with Trello.\n\n## List: To Do\n\n- Story: Implement Feature A\n  Description: As a user, I want to...\n  Checklist: Acceptance Criteria\n    - [ ] Criteria 1\n    - [ ] Criteria 2\n  Labels: [feature-a]\n  Members: [me]\n`
+              }
+            ]
+          }
+        ],
+        metadata: {
+          created_from: 'api',
+          board_id: boardId,
+        },
+      })
+      .select('*')
+      .single();
+
+    if (storiesError) {
+      console.error('Failed to create stories document:', storiesError);
     }
 
     return NextResponse.json({

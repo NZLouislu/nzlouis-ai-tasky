@@ -33,7 +33,8 @@ export default function StoriesSidebar({
     setActiveDocument,
     createNewDocument,
     addProject,
-    updatePlatformStatus
+    updatePlatformStatus,
+    fetchProjects
   } = useStoriesStore();
 
   const { data: session } = useSession();
@@ -114,68 +115,6 @@ export default function StoriesSidebar({
     }
   };
 
-  const reloadProjects = async () => {
-    try {
-      const response = await fetch('/api/stories/projects');
-      const result = await response.json();
-
-      if (result.success && result.projects) {
-        const platformsMap = new Map<string, any>();
-        
-        platformsMap.set('jira', {
-          id: 'jira',
-          name: 'jira' as const,
-          displayName: 'Jira',
-          connectionStatus: 'disconnected' as const,
-          projects: []
-        });
-        
-        platformsMap.set('trello', {
-          id: 'trello',
-          name: 'trello' as const,
-          displayName: 'Trello',
-          connectionStatus: 'disconnected' as const,
-          projects: []
-        });
-
-        for (const project of result.projects) {
-          const platformData = platformsMap.get(project.platform);
-          if (platformData) {
-            platformData.connectionStatus = project.connection_status;
-            platformData.googleAccountEmail = project.google_account_email;
-            
-            platformData.projects.push({
-              id: project.id,
-              platformProjectId: project.platform_project_id,
-              projectName: project.project_name,
-              platform: project.platform,
-              connectionStatus: project.connection_status,
-              googleAccountEmail: project.google_account_email,
-              documents: (project.stories_documents || []).map((doc: any) => ({
-                id: doc.id,
-                projectId: doc.project_id,
-                documentType: doc.document_type,
-                fileName: doc.file_name,
-                title: doc.title,
-                content: doc.content,
-                lastSyncedAt: doc.last_synced_at,
-                createdAt: doc.created_at,
-                updatedAt: doc.updated_at,
-              })),
-              createdAt: project.created_at,
-              updatedAt: project.updated_at,
-            });
-          }
-        }
-
-        const { setPlatforms } = useStoriesStore.getState();
-        setPlatforms(Array.from(platformsMap.values()));
-      }
-    } catch (error) {
-      console.error('Failed to reload projects:', error);
-    }
-  };
-
   const handleConnectPlatform = async (platformName: 'jira' | 'trello', e: React.MouseEvent) => {
     e.stopPropagation();
     
@@ -234,7 +173,7 @@ export default function StoriesSidebar({
       const result = await response.json();
       
       if (result.success) {
-        await reloadProjects();
+        await fetchProjects();
       } else {
         throw new Error(result.error || 'Failed to add project');
       }
@@ -287,7 +226,7 @@ export default function StoriesSidebar({
       const result = await response.json();
       
       if (result.success) {
-        await reloadProjects();
+        await fetchProjects();
       } else {
         throw new Error(result.error || 'Failed to add board');
       }

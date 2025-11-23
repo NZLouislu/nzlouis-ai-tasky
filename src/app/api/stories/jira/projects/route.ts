@@ -220,6 +220,38 @@ This is the project report for ${projectName}.
       console.error('Failed to create report document:', reportError);
     }
 
+    // Create default Stories document
+    const storiesFileName = `${projectName.replace(/\s+/g, '-')}-Jira-Stories.md`;
+    const { data: storiesDoc, error: storiesError } = await taskyDb
+      .from('stories_documents')
+      .insert({
+        project_id: project.id,
+        document_type: 'stories',
+        file_name: storiesFileName,
+        title: `${projectName} Stories`,
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              {
+                type: 'text',
+                text: `# ${projectName} Jira Stories\n\nThis document contains user stories to be synced with Jira.\n\n## Epic: Feature A\n\n- Story: STORY-001 Implement Feature A\n  Description: As a user, I want to...\n  Acceptance_Criteria:\n    - [ ] Criteria 1\n    - [ ] Criteria 2\n  Priority: Medium\n  Labels: [feature-a]\n`
+              }
+            ]
+          }
+        ],
+        metadata: {
+          created_from: 'api',
+          project_key: projectKey,
+        },
+      })
+      .select('*')
+      .single();
+
+    if (storiesError) {
+      console.error('Failed to create stories document:', storiesError);
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Jira project added successfully',

@@ -72,7 +72,7 @@ vi.mock('@blocknote/react', () => ({
     return React.createElement('div', {
       'data-testid': 'blocknote-editor',
       contentEditable: true,
-      onInput: (e) => onChange?.(e.target.textContent),
+      onInput: (e) => onChange?.((e.target as HTMLElement).textContent),
     });
   }),
   useBlockNote: vi.fn(() => ({
@@ -91,6 +91,9 @@ vi.mock('@blocknote/react', () => ({
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key';
+process.env.TASKY_SUPABASE_SERVICE_ROLE_KEY = 'test-tasky-service-role-key';
+process.env.BLOG_SUPABASE_URL = 'https://blog-test.supabase.co';
+process.env.BLOG_SUPABASE_SERVICE_ROLE_KEY = 'test-blog-service-role-key';
 process.env.NEXTAUTH_SECRET = 'test-secret';
 process.env.NEXTAUTH_URL = 'http://localhost:3000';
 

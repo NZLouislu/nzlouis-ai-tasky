@@ -5,7 +5,7 @@ import StoriesEditor from "./StoriesEditor";
 import { PartialBlock } from "@blocknote/core";
 
 export default function StoriesContent() {
-  const { activeDocumentId, platforms, updateDocument } = useStoriesStore();
+  const { activeDocumentId, platforms, updateDocument, fetchProjects } = useStoriesStore();
   const [documentData, setDocumentData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [generatingStories, setGeneratingStories] = useState(false);
@@ -248,7 +248,7 @@ export default function StoriesContent() {
         alert(`Stories generated successfully! Document: ${result.storiesDocument.title}`);
         
         // Refresh the sidebar to show the new document
-        // You might want to add a refresh function to the store
+        await fetchProjects();
       } else {
         throw new Error(result.error || 'Failed to generate stories');
       }
