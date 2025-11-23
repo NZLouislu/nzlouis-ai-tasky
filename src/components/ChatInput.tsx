@@ -13,9 +13,7 @@ interface AIModel {
 }
 
 interface ChatInputProps {
-  input: string;
-  setInput: (value: string) => void;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: (text: string) => void;
   isLoading: boolean;
   previewImages: string[];
   setPreviewImages: (value: string[]) => void;
@@ -30,8 +28,6 @@ interface ChatInputProps {
 }
 
 export default function ChatInput({
-  input,
-  setInput,
   onSubmit,
   isLoading,
   previewImages,
@@ -45,6 +41,7 @@ export default function ChatInput({
   placeholder = "Type your message... (Ctrl+V to paste screenshot)",
   isMobile = false,
 }: ChatInputProps) {
+  const [input, setInput] = React.useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const availableProviders = useMemo(() => {
@@ -72,6 +69,14 @@ export default function ChatInput({
     newImages.splice(index, 1);
     setPreviewImages(newImages);
   }, [previewImages, setPreviewImages]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if ((input.trim() || previewImages.length > 0) && selectedModel) {
+      onSubmit(input);
+      setInput("");
+    }
+  };
 
   return (
     <div className="bg-white border-t border-gray-200 p-3 sm:p-4 flex-shrink-0">
@@ -112,7 +117,7 @@ export default function ChatInput({
           </div>
         )}
 
-        <form onSubmit={onSubmit}>
+        <form onSubmit={handleSubmit}>
           <div className="relative border-2 border-blue-500 rounded-xl overflow-visible">
             <div className="flex flex-col">
               <div className="relative">
@@ -147,7 +152,7 @@ export default function ChatInput({
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
                       if ((input.trim() || previewImages.length > 0) && selectedModel) {
-                        onSubmit(e);
+                        handleSubmit(e);
                       }
                     }
                   }}
@@ -164,9 +169,9 @@ export default function ChatInput({
 
               {availableModels.length > 0 && (
                 <div className="border-t border-gray-200 px-3 py-2 bg-gray-50/50">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-gray-500">Provider:</span>
+                      <span className="text-xs text-gray-500 whitespace-nowrap">Provider:</span>
                       <select
                         value={selectedProvider}
                         onChange={(e) => {
@@ -177,7 +182,7 @@ export default function ChatInput({
                             setSelectedModel(providerModels[0].id);
                           }
                         }}
-                        className="text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 transition-colors"
+                        className="text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 transition-colors w-full sm:w-auto"
                       >
                         {availableProviders.map(provider => (
                           <option key={provider} value={provider}>
@@ -188,11 +193,11 @@ export default function ChatInput({
                     </div>
 
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-gray-500">Model:</span>
+                      <span className="text-xs text-gray-500 whitespace-nowrap">Model:</span>
                       <select
                         value={selectedModel}
                         onChange={(e) => setSelectedModel(e.target.value)}
-                        className="text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 transition-colors max-w-[200px]"
+                        className="text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 transition-colors w-full sm:w-auto max-w-full sm:max-w-[200px]"
                       >
                         {getModelsForProvider(selectedProvider).map(model => (
                           <option key={model.id} value={model.id}>
@@ -204,32 +209,7 @@ export default function ChatInput({
                       </select>
                     </div>
 
-                    {(() => {
-                      const currentModel = availableModels.find(m => m.id === selectedModel);
-                      if (!currentModel) return null;
-                      
-                      if (currentModel.tested === true && currentModel.working === true) {
-                        return (
-                          <div className="flex items-center text-green-600" title="Model tested and working">
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          </div>
-                        );
-                      }
-                      
-                      if (currentModel.tested === true && currentModel.working === false) {
-                        return (
-                          <div className="flex items-center text-red-600" title="Model test failed">
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
-                          </div>
-                        );
-                      }
-                      
-                      return null;
-                    })()}
+                    {/* Status icon removed as per request */}
                   </div>
                 </div>
               )}

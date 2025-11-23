@@ -35,7 +35,7 @@ export async function GET() {
         success: false,
         error: error.message,
         details: {
-          url: SUPABASE_URL,
+          urlPresent: !!SUPABASE_URL,
           serviceRoleKeyPresent: !!SERVICE_ROLE_KEY,
         },
       });

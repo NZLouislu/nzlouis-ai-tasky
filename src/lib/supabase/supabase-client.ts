@@ -26,10 +26,7 @@ export const supabase = (() => {
   }
 
   try {
-    console.log("Initializing Supabase client with:", {
-      url: supabaseConfig.url,
-      anonKeyPresent: !!supabaseConfig.anonKey,
-    });
+    // Supabase client initialized successfully
     return createClient(supabaseConfig.url, supabaseConfig.anonKey);
   } catch (error) {
     console.error("Failed to initialize Supabase client:", error);
@@ -57,10 +54,7 @@ export const supabaseService = (() => {
   }
 
   try {
-    console.log("Initializing Supabase service client with:", {
-      url: supabaseServiceConfig.url,
-      serviceRoleKeyPresent: !!supabaseServiceConfig.serviceRoleKey,
-    });
+    // Supabase service client initialized successfully
     return createClient(
       supabaseServiceConfig.url,
       supabaseServiceConfig.serviceRoleKey,

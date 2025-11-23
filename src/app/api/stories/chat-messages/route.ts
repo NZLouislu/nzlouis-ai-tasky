@@ -15,12 +15,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { data, error, count } = await supabase
+    const supabaseClient = supabase;
+
+    if (!supabaseClient) {
+      return NextResponse.json(
+        { error: 'Supabase client not initialized' },
+        { status: 500 }
+      );
+    }
+
+    // Optimize: 
+    // 1. Remove count: 'exact' which is slow on large tables
+    // 2. Order by timestamp DESC to get latest messages first
+    // 3. Fetch limit + 1 to determine hasMore without counting
+    const { data, error } = await supabaseClient
       .from('stories_chat_messages')
-      .select('*', { count: 'exact' })
+      .select('*')
       .eq('document_id', documentId)
-      .order('timestamp', { ascending: true })
-      .range(offset, offset + limit - 1);
+      .order('timestamp', { ascending: false })
+      .range(offset, offset + limit);
 
     if (error) {
       console.error('Error fetching chat messages:', error);
@@ -30,10 +43,21 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const messages = data || [];
+    const hasMore = messages.length > limit;
+    
+    // If we fetched an extra item to check hasMore, remove it
+    if (hasMore) {
+      messages.pop();
+    }
+
+    // Reverse messages to return them in chronological order (oldest -> newest)
+    messages.reverse();
+
     return NextResponse.json({ 
-      messages: data || [],
-      total: count || 0,
-      hasMore: (count || 0) > offset + limit,
+      messages,
+      total: 0, // Deprecated
+      hasMore,
       offset,
       limit
     });
@@ -58,7 +82,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase
+    const supabaseClient = supabase;
+
+    if (!supabaseClient) {
+      return NextResponse.json(
+        { error: 'Supabase client not initialized' },
+        { status: 500 }
+      );
+    }
+
+    const { data, error } = await supabaseClient
       .from('stories_chat_messages')
       .insert({
         document_id: documentId,
@@ -100,7 +133,16 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const { error } = await supabase
+    const supabaseClient = supabase;
+
+    if (!supabaseClient) {
+      return NextResponse.json(
+        { error: 'Supabase client not initialized' },
+        { status: 500 }
+      );
+    }
+
+    const { error } = await supabaseClient
       .from('stories_chat_messages')
       .delete()
       .eq('document_id', documentId);

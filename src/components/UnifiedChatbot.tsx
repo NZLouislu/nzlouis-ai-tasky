@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useChat } from "@/lib/hooks/use-chat";
 import { v4 as uuidv4 } from "uuid";
 import Image from "next/image";
@@ -72,10 +72,7 @@ export default function UnifiedChatbot({
     enablePersistence: mode === "workspace" && !!(postId || documentId) && !!userId,
     apiEndpoint,
   });
-
-
-
-  const [input, setInput] = useState("");
+  
   const [isLoading, setIsLoading] = useState(false);
   const [previewImages, setPreviewImages] = useState<string[]>([]);
   const [isMobile, setIsMobile] = useState(false);
@@ -219,215 +216,11 @@ export default function UnifiedChatbot({
     };
   }, [handleImageUpload]);
 
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!input.trim() && previewImages.length === 0) return;
-      if (!selectedModel) return;
 
-      const text = input;
 
-      // Check if this is a Blog modification request
-      if (mode === "workspace" && onPageModification) {
-        // Detect if the user wants to modify the blog content
-        const modificationKeywords = [
-          'modify', 'change', 'replace', 'add', 'insert', 'delete', 'improve',
-          'can you', 'please', 'help me', '修改', '改成', '添加', '插入', '删除'
-        ];
 
-        const isModificationRequest = modificationKeywords.some(keyword =>
-          text.toLowerCase().includes(keyword.toLowerCase())
-        );
 
-        if (isModificationRequest) {
-          console.log('🔧 Detected modification request:', text);
 
-          // This is a modification request, handle it specially
-          const userMessage: Message = {
-            id: uuidv4(),
-            content: text,
-            role: "user",
-            timestamp: new Date(),
-          };
-          appendMessage(userMessage);
-          setInput("");
-          setPreviewImages([]);
-          setIsLoading(true);
-
-          try {
-            console.log('🔧 Calling onPageModification with instruction:', text);
-
-            // Pass the instruction text directly
-            const result = await onPageModification({
-              type: 'modify',
-              content: text,  // This is the instruction
-              title: text,    // Also pass as title for compatibility
-            });
-
-            console.log('🔧 Modification result:', result);
-
-            const assistantMessage: Message = {
-              id: uuidv4(),
-              content: result,
-              role: "assistant",
-              timestamp: new Date(),
-            };
-            appendMessage(assistantMessage);
-          } catch (error) {
-            console.error('🔧 Modification error:', error);
-            const errorMessage: Message = {
-              id: uuidv4(),
-              content: `❌ Failed to apply modification: ${error instanceof Error ? error.message : 'Unknown error'}`,
-              role: "assistant",
-              timestamp: new Date(),
-            };
-            appendMessage(errorMessage);
-          } finally {
-            setIsLoading(false);
-          }
-          return;
-        }
-      }
-
-      const userMessage: Message = {
-        id: uuidv4(),
-        content: text,
-        images: previewImages.length > 0 ? previewImages : undefined,
-        role: "user",
-        timestamp: new Date(),
-      };
-
-      appendMessage(userMessage);
-      const currentInput = input;
-      const currentImages = [...previewImages];
-      setInput("");
-      setPreviewImages([]);
-      setIsLoading(true);
-
-      try {
-        const chatMessages = messages.map((msg) => ({
-          role: msg.role,
-          content: msg.content,
-          images: msg.images || (msg.image ? [msg.image] : undefined),
-        }));
-
-        // Add article context as system message in workspace mode
-        if (mode === "workspace" && articleContext) {
-          const contextMessage = {
-            role: 'user' as const,
-            content: `[SYSTEM CONTEXT - Current Article Information]
-
-**Title:** ${articleContext.title}
-**Icon:** ${articleContext.icon || 'None'}
-**Cover:** ${articleContext.coverType === 'image' ? `Image (${articleContext.coverValue})` : articleContext.coverType === 'color' ? `Color (${articleContext.coverValue})` : 'None'}
-
-**Current Content:**
-${articleContext.content || '(Article is empty)'}
-
----
-
-You are an AI assistant helping to edit this blog article. You can help the user:
-1. View and understand the current article content
-2. Modify the article title
-3. Add new content to the article
-4. Update existing content
-5. Delete specific paragraphs or sections
-6. Reorganize the article structure
-
-When the user asks you to modify the article, provide clear instructions on what changes should be made.
-
-Please respond in the same language as the user's question.`,
-            images: undefined
-          };
-          chatMessages.unshift(contextMessage);
-        }
-
-        chatMessages.push({
-          role: 'user',
-          content: currentInput,
-          images: currentImages.length > 0 ? currentImages : undefined,
-        });
-
-        const hasImages = chatMessages.some(m => m.images && m.images.length > 0);
-        // Use chat-vision only for Google provider when images are present, 
-        // as it supports env var API keys which chat/route.ts might not for Google.
-        // For all other providers (like OpenRouter), use /api/chat which handles vision correctly.
-        const apiEndpoint = (hasImages && selectedProvider === 'google') ? '/api/chat-vision' : '/api/chat';
-
-        console.log('Using API:', apiEndpoint, 'Has images:', hasImages, 'Model:', selectedModel, 'Provider:', selectedProvider);
-
-        const response = await fetch(apiEndpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            messages: chatMessages,
-            modelId: selectedModel,
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to get response from AI');
-        }
-
-        const reader = response.body?.getReader();
-        if (!reader) {
-          throw new Error('No reader available');
-        }
-
-        const decoder = new TextDecoder();
-        let buffer = '';
-        const assistantMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          content: '',
-          role: 'assistant',
-          timestamp: new Date(),
-        };
-
-        appendMessage(assistantMessage);
-        let fullContent = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) {
-            setIsLoading(false);
-            break;
-          }
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-
-          for (let i = 0; i < lines.length - 1; i++) {
-            const line = lines[i].trim();
-            if (line.startsWith('0:')) {
-              try {
-                const jsonStr = line.substring(2);
-                const text = JSON.parse(jsonStr);
-                fullContent += text;
-                updateLastMessage(fullContent);
-              } catch (error) {
-                console.log('Parsing error:', error);
-              }
-            }
-          }
-
-          buffer = lines[lines.length - 1];
-        }
-      } catch (error) {
-        console.error('Error:', error);
-        setIsLoading(false);
-        const errorMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          content: 'Sorry, something went wrong. Please try again.',
-          role: 'assistant',
-          timestamp: new Date(),
-        };
-        appendMessage(errorMessage);
-      }
-    },
-    [input, previewImages, selectedModel, messages, appendMessage, updateLastMessage, mode, onPageModification, selectedProvider]
-  );
 
   const renderMessageContent = useCallback(
     (content: string | { text: string; image?: string }) => {
@@ -452,6 +245,7 @@ Please respond in the same language as the user's question.`,
                 border: '1px solid #F5E6D3',
                 boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                 overflow: 'hidden',
+                overflowX: 'auto',
                 display: 'block',
               }}
             >
@@ -573,6 +367,253 @@ Please respond in the same language as the user's question.`,
     []
   );
 
+  // Memoize message list to prevent re-renders when input changes
+  const MessageList = useMemo(() => (
+    <>
+      {messages.length === 0 && (
+        <div className="text-center py-12 pt-16">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-2xl">🤖</span>
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            Start a conversation
+          </h3>
+          <p className="text-gray-500">
+            Ask me anything or type a command to get started.
+          </p>
+        </div>
+      )}
+      {messages.map((message) => (
+        <div
+          key={message.id}
+          className={`flex ${message.role === "user" ? "justify-end" : "justify-end"
+            }`}
+        >
+          <div
+            className={`py-1 ${message.role === "user"
+                ? mode === "standalone"
+                  ? "bg-blue-600 text-white max-w-[85%] px-4 py-3 rounded-2xl"
+                  : "bg-blue-600 text-white max-w-[80%] lg:max-w-[70%] px-4 py-3 rounded-2xl"
+                : "w-full text-gray-900 px-1"
+              }`}
+          >
+            {renderMessageContent(message.content)}
+            <div
+              className={`text-xs mt-2 opacity-70 ${message.role === "user" ? "text-blue-100" : "text-gray-500"
+                }`}
+            >
+              {new Date(message.timestamp).toLocaleTimeString()}
+            </div>
+          </div>
+        </div>
+      ))}
+    </>
+  ), [messages, mode, renderMessageContent]);
+
+  const handleSubmit = useCallback(
+    async (text: string) => {
+      if (!text.trim() && previewImages.length === 0) return;
+      if (!selectedModel) return;
+
+      // Check if this is a Blog modification request
+      if (mode === "workspace" && onPageModification) {
+        // Detect if the user wants to modify the blog content
+        const modificationKeywords = [
+          'modify', 'change', 'replace', 'add', 'insert', 'delete', 'improve',
+          'can you', 'please', 'help me', '修改', '改成', '添加', '插入', '删除'
+        ];
+
+        const isModificationRequest = modificationKeywords.some(keyword =>
+          text.toLowerCase().includes(keyword.toLowerCase())
+        );
+
+        if (isModificationRequest) {
+          console.log('🔧 Detected modification request:', text);
+
+          // This is a modification request, handle it specially
+          const userMessage: Message = {
+            id: uuidv4(),
+            content: text,
+            role: "user",
+            timestamp: new Date(),
+          };
+          appendMessage(userMessage);
+          setPreviewImages([]);
+          setIsLoading(true);
+
+          try {
+            console.log('🔧 Calling onPageModification with instruction:', text);
+
+            // Pass the instruction text directly
+            const result = await onPageModification({
+              type: 'modify',
+              content: text,  // This is the instruction
+              title: text,    // Also pass as title for compatibility
+            });
+
+            console.log('🔧 Modification result:', result);
+
+            const assistantMessage: Message = {
+              id: uuidv4(),
+              content: result,
+              role: "assistant",
+              timestamp: new Date(),
+            };
+            appendMessage(assistantMessage);
+          } catch (error) {
+            console.error('🔧 Modification error:', error);
+            const errorMessage: Message = {
+              id: uuidv4(),
+              content: `❌ Failed to apply modification: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              role: "assistant",
+              timestamp: new Date(),
+            };
+            appendMessage(errorMessage);
+          } finally {
+            setIsLoading(false);
+          }
+          return;
+        }
+      }
+
+      const userMessage: Message = {
+        id: uuidv4(),
+        content: text,
+        images: previewImages.length > 0 ? previewImages : undefined,
+        role: "user",
+        timestamp: new Date(),
+      };
+
+      appendMessage(userMessage);
+      const currentImages = [...previewImages];
+      setPreviewImages([]);
+      setIsLoading(true);
+
+      try {
+        const chatMessages = messages.map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+          images: msg.images || (msg.image ? [msg.image] : undefined),
+        }));
+
+        // Add article context as system message in workspace mode
+        if (mode === "workspace" && articleContext) {
+          const contextMessage = {
+            role: 'user' as const,
+            content: `[SYSTEM CONTEXT - Current Article Information]
+
+**Title:** ${articleContext.title}
+**Icon:** ${articleContext.icon || 'None'}
+**Cover:** ${articleContext.coverType === 'image' ? `Image (${articleContext.coverValue})` : articleContext.coverType === 'color' ? `Color (${articleContext.coverValue})` : 'None'}
+
+**Current Content:**
+${articleContext.content || '(Article is empty)'}
+
+---
+
+You are an AI assistant helping to edit this blog article. You can help the user:
+1. View and understand the current article content
+2. Modify the article title
+3. Add new content to the article
+4. Update existing content
+5. Delete specific paragraphs or sections
+6. Reorganize the article structure
+
+When the user asks you to modify the article, provide clear instructions on what changes should be made.
+
+Please respond in the same language as the user's question.`,
+            images: undefined
+          };
+          chatMessages.unshift(contextMessage);
+        }
+
+        chatMessages.push({
+          role: 'user',
+          content: text,
+          images: currentImages.length > 0 ? currentImages : undefined,
+        });
+
+        const hasImages = chatMessages.some(m => m.images && m.images.length > 0);
+        // Use chat-vision only for Google provider when images are present, 
+        // as it supports env var API keys which chat/route.ts might not for Google.
+        // For all other providers (like OpenRouter), use /api/chat which handles vision correctly.
+        const apiEndpoint = (hasImages && selectedProvider === 'google') ? '/api/chat-vision' : '/api/chat';
+
+        console.log('Using API:', apiEndpoint, 'Has images:', hasImages, 'Model:', selectedModel, 'Provider:', selectedProvider);
+
+        const response = await fetch(apiEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messages: chatMessages,
+            modelId: selectedModel,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to get response from AI');
+        }
+
+        const reader = response.body?.getReader();
+        if (!reader) {
+          throw new Error('No reader available');
+        }
+
+        const decoder = new TextDecoder();
+        let buffer = '';
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          content: '',
+          role: 'assistant',
+          timestamp: new Date(),
+        };
+
+        appendMessage(assistantMessage);
+        let fullContent = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            setIsLoading(false);
+            break;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+
+          for (let i = 0; i < lines.length - 1; i++) {
+            const line = lines[i].trim();
+            if (line.startsWith('0:')) {
+              try {
+                const jsonStr = line.substring(2);
+                const text = JSON.parse(jsonStr);
+                fullContent += text;
+                updateLastMessage(fullContent);
+              } catch (error) {
+                console.log('Parsing error:', error);
+              }
+            }
+          }
+
+          buffer = lines[lines.length - 1];
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        setIsLoading(false);
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          content: 'Sorry, something went wrong. Please try again.',
+          role: 'assistant',
+          timestamp: new Date(),
+        };
+        appendMessage(errorMessage);
+      }
+    },
+    [previewImages, selectedModel, messages, appendMessage, updateLastMessage, mode, onPageModification, selectedProvider, articleContext]
+  );
+
   return (
     <div
       className={`unified-chatbot flex flex-col bg-white ${mode === "standalone" ? "h-full" : "h-full"
@@ -616,43 +657,8 @@ Please respond in the same language as the user's question.`,
                 </div>
               )}
 
-              {messages.length === 0 && (
-                <div className="text-center py-12 pt-16">
-                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <span className="text-2xl">🤖</span>
-                  </div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    Start a conversation
-                  </h3>
-                  <p className="text-gray-500">
-                    Ask me anything or type a command to get started.
-                  </p>
-                </div>
-              )}
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.role === "user" ? "justify-end" : "justify-end"
-                    }`}
-                >
-                  <div
-                    className={`py-1 ${message.role === "user"
-                        ? mode === "standalone"
-                          ? "bg-blue-600 text-white max-w-[85%] px-4 py-3 rounded-2xl"
-                          : "bg-blue-600 text-white max-w-[80%] lg:max-w-[70%] px-4 py-3 rounded-2xl"
-                        : "w-full text-gray-900 px-1"
-                      }`}
-                  >
-                    {renderMessageContent(message.content)}
-                    <div
-                      className={`text-xs mt-2 opacity-70 ${message.role === "user" ? "text-blue-100" : "text-gray-500"
-                        }`}
-                    >
-                      {new Date(message.timestamp).toLocaleTimeString()}
-                    </div>
-                  </div>
-                </div>
-              ))}
+              {MessageList}
+
               {isLoading && (
                 <div className={`flex justify-end`}>
                   <div
@@ -688,8 +694,6 @@ Please respond in the same language as the user's question.`,
             }`}
         >
           <ChatInput
-            input={input}
-            setInput={setInput}
             onSubmit={handleSubmit}
             isLoading={isLoading}
             previewImages={previewImages}
@@ -705,8 +709,6 @@ Please respond in the same language as the user's question.`,
         </div>
       ) : (
         <ChatInput
-          input={input}
-          setInput={setInput}
           onSubmit={handleSubmit}
           isLoading={isLoading}
           previewImages={previewImages}

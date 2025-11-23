@@ -20,8 +20,14 @@ export default function DebugPage() {
     setEnvInfo(
       JSON.stringify(
         {
-          config,
-          serviceConfig,
+          config: {
+            url: config.url ? "Present" : "Missing",
+            anonKey: config.anonKey ? "Present" : "Missing",
+          },
+          serviceConfig: {
+            url: serviceConfig.url ? "Present" : "Missing",
+            serviceRoleKey: serviceConfig.serviceRoleKey ? "Present" : "Missing",
+          },
           processEnv: {
             NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL
               ? "Present"

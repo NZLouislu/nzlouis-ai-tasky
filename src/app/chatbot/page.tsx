@@ -74,7 +74,11 @@ export default function ChatbotPage() {
     const handleResize = () => {
       const mobile = window.innerWidth < 1024;
       setIsMobile(mobile);
-      if (mobile) {
+      // On desktop, sidebar should be open by default
+      // On mobile/tablet, it should be closed
+      if (!mobile) {
+        setSidebarOpen(true);
+      } else {
         setSidebarOpen(false);
       }
     };
@@ -277,9 +281,8 @@ export default function ChatbotPage() {
     return title || 'New Chat';
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() && previewImages.length === 0) return;
+  const handleSubmit = async (text: string) => {
+    if (!text.trim() && previewImages.length === 0) return;
     if (!selectedModel) return;
 
     let sessionId = currentSessionId;
@@ -290,7 +293,7 @@ export default function ChatbotPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            title: generateSessionTitle(input),
+            title: generateSessionTitle(text),
             provider: selectedProvider || 'google',
             model: selectedModel,
           }),
@@ -307,15 +310,13 @@ export default function ChatbotPage() {
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: input,
+      content: text,
       images: previewImages.length > 0 ? previewImages : undefined,
       timestamp: new Date(),
     };
 
     addMessage(userMessage);
-    const currentInput = input;
     const currentImages = [...previewImages];
-    setInput('');
     setPreviewImages([]);
     setIsLoading(true);
     setHasUnsavedChanges(false);
@@ -329,7 +330,7 @@ export default function ChatbotPage() {
 
       chatMessages.push({
         role: 'user',
-        content: currentInput,
+        content: text,
         ...(currentImages.length > 0 ? { images: currentImages } : {}),
       });
 
@@ -603,140 +604,142 @@ export default function ChatbotPage() {
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden pt-16">
-      {isMobile && !sidebarOpen && (
+      {/* Mobile menu button - only show on mobile/tablet when sidebar is closed */}
+      {!sidebarOpen && (
         <button
           onClick={() => setSidebarOpen(true)}
-          className="fixed left-4 top-20 z-30 bg-white p-2 rounded-lg shadow-lg hover:bg-gray-50 transition-colors border border-gray-200"
+          className="fixed left-4 top-20 z-30 bg-white p-2 rounded-lg shadow-lg hover:bg-gray-50 transition-colors border border-gray-200 lg:hidden"
           title="Show Sidebar"
         >
           <MessageSquare size={24} className="text-gray-700" />
         </button>
       )}
 
-      {isMobile && sidebarOpen && (
+      {/* Mobile overlay - only on mobile/tablet when sidebar is open */}
+      {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40"
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {sidebarOpen && (
-        <div className={`bg-white border-r border-gray-200 flex flex-col flex-shrink-0 ${isMobile
-          ? 'fixed left-0 top-16 bottom-0 w-64 z-50'
-          : 'w-64'
-          }`}>
-          <div className="p-4 border-b border-gray-200 flex-shrink-0">
-            {isMobile && (
-              <div className="flex justify-end mb-2">
-                <button
-                  onClick={() => setSidebarOpen(false)}
-                  className="p-1 text-gray-500 hover:text-gray-700 rounded hover:bg-gray-100"
-                  title="Close Sidebar"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            )}
+      {/* Sidebar - always visible on desktop (lg+), toggleable on mobile/tablet */}
+      <div className={`bg-white border-r border-gray-200 flex flex-col flex-shrink-0 transition-transform duration-300 ${
+        isMobile
+          ? `fixed left-0 top-16 bottom-0 w-64 sm:w-72 md:w-80 z-50 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`
+          : 'w-64 xl:w-72'
+        }`}>
+        <div className="p-4 border-b border-gray-200 flex-shrink-0">
+          {/* Close button - only show on mobile/tablet */}
+          <div className="flex justify-end mb-2 lg:hidden">
             <button
-              onClick={createNewSession}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 mb-2"
+              onClick={() => setSidebarOpen(false)}
+              className="p-1 text-gray-500 hover:text-gray-700 rounded hover:bg-gray-100"
+              title="Close Sidebar"
             >
-              <Plus size={20} />
-              New Chat
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
-            <Link
-              href="/chatbot/settings"
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-            >
-              <Settings size={20} />
-              Settings
-            </Link>
           </div>
-          <div className="px-4 pb-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-              <input
-                type="text"
-                placeholder="Search sessions..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto p-2">
-            {sessions.length === 0 && (
-              <div className="text-center text-gray-500 text-sm p-4">
-                No chat sessions yet. Create one to get started!
-              </div>
-            )}
-            {filteredSessions.map((sess) => (
-              <div
-                key={sess.id}
-                className={`group relative rounded-lg mb-1 ${currentSessionId === sess.id
-                  ? 'bg-blue-50'
-                  : 'hover:bg-gray-100'
-                  }`}
-              >
-                {editingSessionId === sess.id ? (
-                  <div className="px-3 py-2">
-                    <input
-                      type="text"
-                      value={editingTitle}
-                      onChange={(e) => setEditingTitle(e.target.value)}
-                      onBlur={() => renameSession(sess.id, editingTitle)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          renameSession(sess.id, editingTitle);
-                        } else if (e.key === 'Escape') {
-                          setEditingSessionId(null);
-                        }
-                      }}
-                      autoFocus
-                      className="w-full px-2 py-1 text-sm border border-blue-500 rounded focus:outline-none"
-                    />
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => switchSession(sess.id)}
-                    className="w-full text-left px-3 py-2 flex items-center gap-2"
-                  >
-                    <MessageSquare size={16} className={currentSessionId === sess.id ? 'text-blue-600' : ''} />
-                    <span className={`truncate flex-1 ${currentSessionId === sess.id ? 'text-blue-600' : ''}`}>
-                      {sess.title}
-                    </span>
-                  </button>
-                )}
-                <div className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 flex gap-1">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingSessionId(sess.id);
-                      setEditingTitle(sess.title);
-                    }}
-                    className="p-1 hover:bg-gray-200 rounded"
-                    title="Rename"
-                  >
-                    <Edit2 size={14} />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteSession(sess.id);
-                    }}
-                    className="p-1 hover:bg-red-100 text-red-600 rounded"
-                    title="Delete"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
+          
+          <button
+            onClick={createNewSession}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 mb-2 transition-colors"
+          >
+            <Plus size={20} />
+            New Chat
+          </button>
+          <Link
+            href="/chatbot/settings"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            <Settings size={20} />
+            Settings
+          </Link>
+        </div>
+        <div className="px-4 pb-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+            <input
+              type="text"
+              placeholder="Search sessions..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
         </div>
-      )}
+        <div className="flex-1 overflow-y-auto p-2">
+          {sessions.length === 0 && (
+            <div className="text-center text-gray-500 text-sm p-4">
+              No chat sessions yet. Create one to get started!
+            </div>
+          )}
+          {filteredSessions.map((sess) => (
+            <div
+              key={sess.id}
+              className={`group relative rounded-lg mb-1 ${currentSessionId === sess.id
+                ? 'bg-blue-50'
+                : 'hover:bg-gray-100'
+                }`}
+            >
+              {editingSessionId === sess.id ? (
+                <div className="px-3 py-2">
+                  <input
+                    type="text"
+                    value={editingTitle}
+                    onChange={(e) => setEditingTitle(e.target.value)}
+                    onBlur={() => renameSession(sess.id, editingTitle)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        renameSession(sess.id, editingTitle);
+                      } else if (e.key === 'Escape') {
+                        setEditingSessionId(null);
+                      }
+                    }}
+                    autoFocus
+                    className="w-full px-2 py-1 text-sm border border-blue-500 rounded focus:outline-none"
+                  />
+                </div>
+              ) : (
+                <button
+                  onClick={() => switchSession(sess.id)}
+                  className="w-full text-left px-3 py-2 flex items-center gap-2"
+                >
+                  <MessageSquare size={16} className={currentSessionId === sess.id ? 'text-blue-600' : ''} />
+                  <span className={`truncate flex-1 ${currentSessionId === sess.id ? 'text-blue-600' : ''}`}>
+                    {sess.title}
+                  </span>
+                </button>
+              )}
+              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 flex gap-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditingSessionId(sess.id);
+                    setEditingTitle(sess.title);
+                  }}
+                  className="p-1 hover:bg-gray-200 rounded"
+                  title="Rename"
+                >
+                  <Edit2 size={14} />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteSession(sess.id);
+                  }}
+                  className="p-1 hover:bg-red-100 text-red-600 rounded"
+                  title="Delete"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <div className="flex-1 flex flex-col min-w-0">
         <div className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex-shrink-0">
@@ -933,8 +936,6 @@ export default function ChatbotPage() {
         </div>
 
         <ChatInput
-          input={input}
-          setInput={setInput}
           onSubmit={handleSubmit}
           isLoading={isLoading}
           previewImages={previewImages}

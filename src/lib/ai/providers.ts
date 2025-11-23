@@ -31,7 +31,7 @@ async function getUserAPIKey(userId: string, provider: string): Promise<string |
     apiKeyRecord.auth_tag
   );
 
-  console.log(`[getUserAPIKey] Successfully decrypted API key for ${provider}, key starts with: ${decrypted.substring(0, 10)}...`);
+  console.log(`[getUserAPIKey] Successfully decrypted API key for ${provider}`);
   return decrypted;
 }
 
@@ -118,7 +118,7 @@ export async function getAIProviderWithFallback(userId: string | undefined, prov
     throw new Error(`No API key available for provider: ${provider}`);
   }
 
-  console.log(`[getAIProviderWithFallback] Using fallback env API key for ${provider}, key starts with: ${apiKey.substring(0, 10)}...`);
+  console.log(`[getAIProviderWithFallback] Using fallback env API key for ${provider}`);
 
   switch (provider) {
     case 'openai':

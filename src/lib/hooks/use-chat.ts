@@ -42,7 +42,7 @@ export const useChat = (options?: UseChatOptions) => {
     const cacheIsValid = isCacheValid(entityId);
     const currentMeta = useChatStore.getState().contextChatsMeta[entityId];
     
-    if (!loadMore && cachedMessages && cachedMessages.length > 0 && cacheIsValid) {
+    if (!loadMore && cacheIsValid) {
       console.log('Using cached chat messages');
       return;
     }

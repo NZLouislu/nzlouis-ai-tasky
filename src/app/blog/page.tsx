@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Blog from "@/components/blog/Blog";
+import BlogSkeleton from "@/components/blog/BlogSkeleton";
 
 export default function BlogPage() {
   const router = useRouter();
@@ -34,11 +35,7 @@ export default function BlogPage() {
   }, [status, isAdmin, checking, router]);
 
   if (status === "loading" || checking) {
-    return (
-      <div className="h-screen flex items-center justify-center">
-        <div className="text-gray-500">Loading...</div>
-      </div>
-    );
+    return <BlogSkeleton />;
   }
 
   if (status === "unauthenticated" && !isAdmin) {
