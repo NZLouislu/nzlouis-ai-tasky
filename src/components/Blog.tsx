@@ -442,35 +442,36 @@ export default function Blog() {
     };
   }, []);
 
-  const handleDeletePost = async () => {
-    console.log("Attempting to delete post with ID:", activePostId);
+  const handleDeletePost = async (idOrEvent?: string | React.MouseEvent) => {
+    const targetId = typeof idOrEvent === "string" ? idOrEvent : activePostId;
+    console.log("Attempting to delete post with ID:", targetId);
     console.log("Current localPosts count:", localPosts.length);
 
-    if (!activePostId) {
-      console.error("No activePostId provided for deletion");
+    if (!targetId) {
+      console.error("No targetId provided for deletion");
       return;
     }
 
     // Use flexible UUID validation to support various test data formats
     const uuidRegex =
       /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-    if (!uuidRegex.test(activePostId)) {
-      console.error("Invalid UUID for post id:", activePostId);
+    if (!uuidRegex.test(targetId)) {
+      console.error("Invalid UUID for post id:", targetId);
       return;
     }
 
     try {
-      console.log("Calling deletePost with ID:", activePostId);
+      console.log("Calling deletePost with ID:", targetId);
       // Delete the post from the database
-      await deletePost(activePostId);
-      console.log("Successfully deleted post with ID:", activePostId);
+      await deletePost(targetId);
+      console.log("Successfully deleted post with ID:", targetId);
 
       // Update local state - no longer need manual updates as useBlogData hook handles it
       // Wait for hook to complete before setting activePostId
       setTimeout(() => {
         // Get current remaining posts
         const currentPosts = localPosts.filter(
-          (post) => post.id !== activePostId
+          (post) => post.id !== targetId
         );
         console.log("Remaining posts after deletion:", currentPosts.length);
         console.log("Remaining posts:", currentPosts);
@@ -480,11 +481,13 @@ export default function Blog() {
         console.log("Latest posts from hook:", latestPosts.length);
 
         if (latestPosts.length > 0) {
-          console.log(
-            "Setting active post to first remaining post:",
-            latestPosts[0].id
-          );
-          setActivePostId(latestPosts[0].id);
+          if (targetId === activePostId) {
+            console.log(
+              "Setting active post to first remaining post:",
+              latestPosts[0].id
+            );
+            setActivePostId(latestPosts[0].id);
+          }
         } else {
           console.log("No remaining posts, creating new post");
           createNewPost().catch((error) => {
@@ -497,7 +500,7 @@ export default function Blog() {
     } catch (error) {
       console.error("Error deleting post:", error);
       console.error("Error details:", {
-        postId: activePostId,
+        postId: targetId,
         errorName: (error as Error)?.name,
         errorMessage: (error as Error)?.message,
         errorStack: (error as Error)?.stack,
@@ -852,6 +855,7 @@ export default function Blog() {
             onAddPage={addNewPost}
             onAddSubPage={addNewSubPost}
             onUpdatePageTitle={updatePostTitle}
+            onDeletePage={handleDeletePost}
             onSelectPage={handleSetActivePostId}
             sidebarOpen={sidebarOpen && !(isChatbotVisible && isMobile)}
             className="top-16"
@@ -862,7 +866,7 @@ export default function Blog() {
           <div
             className="fixed h-full w-1 bg-gray-200 z-30"
             style={{
-              left: "64px",
+              left: "320px",
               top: "64px",
             }}
           ></div>
@@ -887,7 +891,7 @@ export default function Blog() {
         }`}
         style={{
           paddingTop: "64px",
-          marginLeft: sidebarCollapsed ? "0" : "64px",
+          marginLeft: sidebarCollapsed ? "0" : "320px",
         }}
       >
         <div className="md:hidden p-4 border-b border-gray-200">

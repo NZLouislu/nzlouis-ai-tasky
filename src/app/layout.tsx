@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   title: "NZLouis AI Tasky",
   description: "Smart Tasky with AI",
   icons: {
-    icon: "/favicon.ico",
+    icon: "/favicon.ico?v=2",
   },
 };
 

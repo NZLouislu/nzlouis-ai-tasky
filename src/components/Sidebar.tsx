@@ -6,6 +6,7 @@ import {
   FaChevronDown as ChevronDown,
   FaBars as PanelLeftClose,
 } from "react-icons/fa";
+import { Edit2, Trash2 } from "lucide-react";
 
 interface Page {
   id: string;
@@ -26,6 +27,7 @@ interface SidebarProps {
     pageId: string,
     newTitle: string
   ) => void | Promise<void>;
+  onDeletePage?: (pageId: string) => void | Promise<void>;
   onSelectPage: (pageId: string, href?: string) => void;
   sidebarOpen: boolean;
   // setSidebarOpen: (open: boolean) => void;
@@ -43,6 +45,7 @@ export default function Sidebar({
   onAddPage,
   onAddSubPage,
   onUpdatePageTitle,
+  onDeletePage,
   onSelectPage,
   sidebarOpen,
   // setSidebarOpen,
@@ -54,6 +57,8 @@ export default function Sidebar({
   const [localExpandedPages, setLocalExpandedPages] = useState<Set<string>>(
     new Set()
   );
+  const [editingPageId, setEditingPageId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
 
   const currentExpandedPages = expandedPages || localExpandedPages;
 
@@ -75,10 +80,18 @@ export default function Sidebar({
   };
 
   const handlePageClick = (pageId: string, href?: string) => {
+    if (editingPageId === pageId) return;
     onSelectPage(pageId, href);
     if (onToggleExpand) {
       onToggleExpand(pageId);
     }
+  };
+
+  const handleRename = async (pageId: string) => {
+    if (onUpdatePageTitle && editingTitle.trim() !== "") {
+      await onUpdatePageTitle(pageId, editingTitle);
+    }
+    setEditingPageId(null);
   };
 
   const renderPage = (page: Page, level = 0) => {
@@ -86,7 +99,7 @@ export default function Sidebar({
     const hasChildren = page.children && page.children.length > 0;
     const isActive = activePageId === page.id;
     // Increase indentation to make hierarchy more obvious
-    const paddingLeft = 12 + level * 20;
+    const paddingLeft = 12 + level * 12;
 
     return (
       <div key={page.id}>
@@ -98,6 +111,7 @@ export default function Sidebar({
           } rounded px-3 py-2 transition-colors cursor-pointer`}
           style={{ paddingLeft }}
           onClick={() => handlePageClick(page.id, page.href)}
+          title={page.title} // Show full title on hover
         >
           <div className="flex items-center flex-1 min-w-0">
             {hasChildren ? (
@@ -118,14 +132,23 @@ export default function Sidebar({
               // For pages without subpages, also display a placeholder icon to maintain alignment
               <div className="w-5 mr-1"></div>
             )}
-            {page.icon && <span className="mr-2">{page.icon}</span>}
-            {activePageId === page.id && onUpdatePageTitle ? (
+            {page.icon && <span className="mr-2 flex-shrink-0">{page.icon}</span>}
+            {editingPageId === page.id ? (
               <input
                 type="text"
-                value={page.title}
-                onChange={(e) => onUpdatePageTitle(page.id, e.target.value)}
+                value={editingTitle}
+                onChange={(e) => setEditingTitle(e.target.value)}
+                onBlur={() => handleRename(page.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleRename(page.id);
+                  } else if (e.key === "Escape") {
+                    setEditingPageId(null);
+                  }
+                }}
                 onClick={(e) => e.stopPropagation()}
-                className="flex-1 bg-transparent border-none focus:outline-none focus:ring-0 text-sm"
+                autoFocus
+                className="flex-1 bg-white border border-blue-500 rounded px-1 text-sm focus:outline-none focus:ring-0"
                 style={{ fontSize: "inherit" }}
               />
             ) : (
@@ -134,21 +157,52 @@ export default function Sidebar({
               </span>
             )}
           </div>
-          {onAddSubPage && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                const result = onAddSubPage(page.id);
-                if (result instanceof Promise) {
-                  result.catch(console.error);
-                }
-              }}
-              className="opacity-0 group-hover:opacity-100 p-1 text-green-600 hover:text-green-800 rounded transition-opacity"
-              title="Add sub-page"
-            >
-              <Plus size={12} />
-            </button>
-          )}
+          
+          {/* Action Buttons Group - Visible on Group Hover */}
+          <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity ml-2 gap-1 flex-shrink-0">
+            {onUpdatePageTitle && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingPageId(page.id);
+                  setEditingTitle(page.title);
+                }}
+                className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded"
+                title="Rename"
+              >
+                <Edit2 size={14} />
+              </button>
+            )}
+            {onDeletePage && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (window.confirm("Are you sure you want to delete this blog?")) {
+                    onDeletePage(page.id);
+                  }
+                }}
+                className="p-1 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded"
+                title="Delete"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+            {onAddSubPage && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const result = onAddSubPage(page.id);
+                  if (result instanceof Promise) {
+                    result.catch(console.error);
+                  }
+                }}
+                className="p-1 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded"
+                title="Add sub-blog"
+              >
+                <Plus size={14} />
+              </button>
+            )}
+          </div>
         </div>
 
         {hasChildren && isExpanded && (
@@ -165,7 +219,7 @@ export default function Sidebar({
   return (
     <div
       className={`fixed top-0 left-0 h-full bg-white border-r border-gray-200 flex flex-col transition-all duration-200 z-40 ${className} ${
-        sidebarOpen ? "w-64" : "w-0 overflow-hidden"
+        sidebarOpen ? "w-80" : "w-0 overflow-hidden"
       }`}
       style={{ paddingTop: "64px" }} // Account for header height
     >
@@ -191,7 +245,7 @@ export default function Sidebar({
             className="flex items-center text-sm text-green-600 hover:text-green-800 hover:bg-gray-100 px-3 py-2 rounded-lg w-full transition-colors"
           >
             <Plus size={16} className="mr-2 text-green-600" />
-            New Page
+            New Blog
           </button>
         </div>
       )}
