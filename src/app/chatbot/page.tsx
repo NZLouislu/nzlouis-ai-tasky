@@ -340,7 +340,13 @@ export default function ChatbotPage() {
     setHasUnsavedChanges(false);
 
     try {
-      const chatMessages = messages.map((msg) => ({
+      // Performance optimization: Limit message count to avoid exceeding token limits
+      const MAX_MESSAGES = 20; // Keep last 20 messages (about 10 conversation rounds)
+      const recentMessages = messages.slice(-MAX_MESSAGES);
+      
+      console.log(`[Performance] Total messages: ${messages.length}, Sending: ${recentMessages.length}`);
+      
+      const chatMessages = recentMessages.map((msg) => ({
         role: msg.role,
         content: msg.content,
         ...(msg.images && msg.images.length > 0
@@ -409,7 +415,8 @@ export default function ChatbotPage() {
 
       let accumulatedContent = "";
       let pendingUpdate = false;
-      let animationFrameId: number | null = null;
+      let lastUpdateTime = 0;
+      const UPDATE_INTERVAL = 50; // Performance optimization: Update every 50ms to reduce DOM operations
 
       const updateMessage = () => {
         updateLastMessage(accumulatedContent);
@@ -417,22 +424,22 @@ export default function ChatbotPage() {
           updateContextLastMessage(sessionId, accumulatedContent);
         }
         pendingUpdate = false;
-        animationFrameId = null;
+        lastUpdateTime = Date.now();
       };
 
       const scheduleUpdate = () => {
-        if (!pendingUpdate) {
+        const now = Date.now();
+        // Performance optimization: Time throttling to avoid excessive DOM updates
+        if (!pendingUpdate && now - lastUpdateTime >= UPDATE_INTERVAL) {
           pendingUpdate = true;
-          animationFrameId = requestAnimationFrame(updateMessage);
+          updateMessage();
         }
       };
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) {
-          if (animationFrameId !== null) {
-            cancelAnimationFrame(animationFrameId);
-          }
+          // Ensure final update
           updateMessage();
           setIsLoading(false);
           break;
@@ -709,7 +716,7 @@ export default function ChatbotPage() {
   );
 
   return (
-    <div className="flex h-screen bg-[#FDFBF7] overflow-hidden pt-16">
+    <div className="flex h-screen bg-[#FDFBF7] overflow-hidden overflow-x-hidden pt-16">
       {!sidebarOpen && (
         <button
           onClick={() => setSidebarOpen(true)}
@@ -891,7 +898,28 @@ export default function ChatbotPage() {
                 <p>Start a conversation by typing a message below.</p>
               </div>
             )}
-            {messages.map((message) => (
+            {/* Performance optimization: Only render recent messages to avoid DOM bloat and lag */}
+            {(() => {
+              const MAX_VISIBLE_MESSAGES = 50; // Only display last 50 messages
+              const visibleMessages = messages.slice(-MAX_VISIBLE_MESSAGES);
+              const hiddenCount = messages.length - visibleMessages.length;
+              
+              return (
+                <>
+                  {hiddenCount > 0 && (
+                    <div className="text-center my-4">
+                      <button
+                        onClick={() => {
+                          // Can add logic to load more historical messages here
+                          console.log(`${hiddenCount} older messages hidden for performance`);
+                        }}
+                        className="text-sm text-gray-500 hover:text-gray-700 px-4 py-2 rounded-lg border border-gray-300 hover:border-gray-400 transition-colors"
+                      >
+                        📜 {hiddenCount} older messages hidden (for performance)
+                      </button>
+                    </div>
+                  )}
+                  {visibleMessages.map((message) => (
               <div
                 key={message.id}
                 className={`flex mb-4 ${
@@ -1146,6 +1174,9 @@ export default function ChatbotPage() {
                 </div>
               </div>
             )}
+                  </>
+                );
+              })()}
           </div>
         </div>
 

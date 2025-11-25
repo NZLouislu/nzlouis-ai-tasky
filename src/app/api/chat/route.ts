@@ -5,6 +5,36 @@ import { taskyDb } from '@/lib/supabase/tasky-db-client';
 import { NextRequest } from 'next/server';
 import { getUserIdFromRequest } from '@/lib/admin-auth';
 
+// ============================================
+// Performance optimization: Memory cache
+// ============================================
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+// API key cache (5-minute TTL)
+const apiKeyCache = new Map<string, CacheEntry<string>>();
+// User settings cache (5-minute TTL)
+const settingsCache = new Map<string, CacheEntry<any>>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Clean expired cache entries
+function cleanExpiredCache<T>(cache: Map<string, CacheEntry<T>>) {
+  const now = Date.now();
+  for (const [key, entry] of cache.entries()) {
+    if (now - entry.timestamp > CACHE_TTL) {
+      cache.delete(key);
+    }
+  }
+}
+
+// Periodically clean cache (every minute)
+setInterval(() => {
+  cleanExpiredCache(apiKeyCache);
+  cleanExpiredCache(settingsCache);
+}, 60 * 1000);
+
 const MODEL_PROVIDER_MAP: Record<string, AIProvider> = {
   'gemini-2.5-flash': 'google',
   'gemini-3-pro-preview': 'google',
@@ -152,9 +182,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Parallelize database queries for better performance
+    // Performance optimization: Use cache to get user settings
     const settingsPromise = userId
-      ? getUserAISettings(userId)
+      ? (async () => {
+          const cacheKey = `settings:${userId}`;
+          const cached = settingsCache.get(cacheKey);
+          
+          if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+            console.log('[Performance] Settings loaded from cache');
+            return cached.data;
+          }
+          
+          const settings = await getUserAISettings(userId);
+          settingsCache.set(cacheKey, { data: settings, timestamp: Date.now() });
+          console.log('[Performance] Settings loaded from DB and cached');
+          return settings;
+        })()
       : Promise.resolve({
           defaultProvider: 'google' as AIProvider,
           defaultModel: 'gemini-2.5-flash',
@@ -186,9 +229,9 @@ export async function POST(req: NextRequest) {
     }
     const temperature = body.temperature ?? settings.temperature;
     let maxTokens = body.maxTokens ?? settings.maxTokens;
-    // Auto-upgrade legacy default limit
-    if (maxTokens === 1024) {
-      console.log('Upgrading legacy maxTokens 1024 to 4096');
+    // Ensure sufficient output tokens to avoid truncated responses
+    if (maxTokens < 4096) {
+      console.log(`Upgrading maxTokens ${maxTokens} to 4096 for better responses`);
       maxTokens = 4096;
     }
 
@@ -242,7 +285,8 @@ export async function POST(req: NextRequest) {
         if (images.length > 0) {
           const content: MessageContent[] = [];
           
-          for (const imageData of images) {
+          // Performance optimization: Process all images in parallel
+          const imageProcessingPromises = images.map(async (imageData) => {
             let base64Data = imageData;
             let mimeType = 'image/jpeg';
 
@@ -281,8 +325,12 @@ export async function POST(req: NextRequest) {
             const properDataUrl = `data:${mimeType};base64,${base64Data}`;
             const imageUrl = new URL(properDataUrl);
 
-            content.push({ type: 'image', image: imageUrl });
-          }
+            return { type: 'image' as const, image: imageUrl };
+          });
+          
+          // Wait for all images to be processed in parallel
+          const processedImages = await Promise.all(imageProcessingPromises);
+          content.push(...processedImages);
 
           if (msg.content && msg.content.trim()) {
             content.push({ type: 'text', text: msg.content });
@@ -465,26 +513,40 @@ export async function POST(req: NextRequest) {
 
     if (provider === 'google') {
       const apiKeyStartTime = Date.now();
-      const { decryptAPIKey } = await import('@/lib/encryption');
       
-      const { data: apiKeyRecord } = await taskyDb
-        .from('user_api_keys')
-        .select('key_encrypted, iv, auth_tag')
-        .eq('user_id', userId)
-        .eq('provider', 'google')
-        .single();
+      // Performance optimization: Use cache to get API key
+      const cacheKey = `apikey:${userId}:google`;
+      const cached = apiKeyCache.get(cacheKey);
+      
+      let apiKey: string;
+      
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        apiKey = cached.data;
+        console.log(`[Performance] API key loaded from cache in ${Date.now() - apiKeyStartTime}ms`);
+      } else {
+        const { decryptAPIKey } = await import('@/lib/encryption');
+        
+        const { data: apiKeyRecord } = await taskyDb
+          .from('user_api_keys')
+          .select('key_encrypted, iv, auth_tag')
+          .eq('user_id', userId)
+          .eq('provider', 'google')
+          .single();
 
-      if (!apiKeyRecord) {
-        throw new Error('Google API key not found');
+        if (!apiKeyRecord) {
+          throw new Error('Google API key not found');
+        }
+
+        apiKey = decryptAPIKey(
+          apiKeyRecord.key_encrypted,
+          apiKeyRecord.iv,
+          apiKeyRecord.auth_tag
+        );
+        
+        // Cache the decrypted key
+        apiKeyCache.set(cacheKey, { data: apiKey, timestamp: Date.now() });
+        console.log(`[Performance] API key retrieved, decrypted and cached in ${Date.now() - apiKeyStartTime}ms`);
       }
-
-      const apiKey = decryptAPIKey(
-        apiKeyRecord.key_encrypted,
-        apiKeyRecord.iv,
-        apiKeyRecord.auth_tag
-      );
-
-      console.log(`[Performance] API key retrieved and decrypted in ${Date.now() - apiKeyStartTime}ms`);
 
       const modelMap: Record<string, string> = {
         'gemini-2.5-flash': 'gemini-2.5-flash',

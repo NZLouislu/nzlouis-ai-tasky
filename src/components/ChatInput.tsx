@@ -160,7 +160,7 @@ export default function ChatInput({
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder={isMobile ? "Type message..." : placeholder}
-                  className="w-full resize-none border-0 pl-12 pr-14 sm:pr-16 pt-3 pb-10 text-sm sm:text-base focus:outline-none focus:ring-0"
+                  className="w-full resize-none border-0 pl-12 pr-14 sm:pr-16 pt-3 pb-10 focus:outline-none focus:ring-0"
                   rows={1}
                   onCompositionStart={() => setIsComposing(true)}
                   onCompositionEnd={() => setIsComposing(false)}
@@ -177,7 +177,9 @@ export default function ChatInput({
                     maxHeight: '200px',
                     boxSizing: 'border-box',
                     maxWidth: '100%',
-                    width: '100%'
+                    width: '100%',
+                    fontSize: '16px',
+                    WebkitTextSizeAdjust: '100%',
                   }}
                 />
                 <button
