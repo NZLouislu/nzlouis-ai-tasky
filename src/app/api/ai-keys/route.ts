@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const validProviders = ['openai', 'anthropic', 'google', 'openrouter', 'kilo'];
+    const validProviders = ['openai', 'anthropic', 'google', 'openrouter', 'tavily'];
     if (!validProviders.includes(provider)) {
       return NextResponse.json(
         { error: "Invalid provider" }, 

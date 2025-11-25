@@ -9,7 +9,7 @@ const PROVIDERS = [
   { id: 'openai', name: 'OpenAI' },
   { id: 'anthropic', name: 'Anthropic Claude' },
   { id: 'openrouter', name: 'OpenRouter' },
-  { id: 'kilo', name: 'Kilo' },
+  { id: 'tavily', name: 'Tavily Search' },
 ];
 
 const MODELS: Record<string, Array<{ id: string; name: string }>> = {
@@ -44,10 +44,7 @@ const MODELS: Record<string, Array<{ id: string; name: string }>> = {
     { id: 'deepseek/deepseek-r1-0528:free', name: 'DeepSeek R1 Free - Reasoning' },
     { id: 'qwen/qwen3-coder:free', name: 'Qwen3 Coder Free - Coding' },
   ],
-  kilo: [
-    { id: 'xai-grok-code-fast-1', name: 'Grok Code Fast - Fast Code' },
-    { id: 'claude-sonnet-4', name: 'Claude Sonnet 4 - Kilo' },
-  ],
+  tavily: [],
 };
 
 interface TestResult {
@@ -222,7 +219,9 @@ export default function ChatbotSettingsPage() {
     }));
 
     try {
-      const res = await fetch('/api/test-model', {
+      // Use different endpoint for Tavily
+      const endpoint = provider === 'tavily' ? '/api/test-tavily' : '/api/test-model';
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ modelId }),
@@ -307,7 +306,27 @@ export default function ChatbotSettingsPage() {
             </div>
             <div className="space-y-4">
               {PROVIDERS.map((provider) => (
-                <div key={provider.id}>
+                <div key={provider.id} className={provider.id === 'tavily' ? 'border-2 border-blue-200 rounded-lg p-4 bg-blue-50/30' : ''}>
+                  {provider.id === 'tavily' && (
+                    <div className="mb-3 pb-3 border-b border-blue-200">
+                      <h3 className="text-sm font-semibold text-blue-900 mb-2">🔍 Web Search API</h3>
+                      <p className="text-xs text-blue-800 mb-2">
+                        Tavily enables web search for non-Gemini models (Grok, Claude, etc.)
+                      </p>
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-blue-700">Free tier: 1000 searches/month</span>
+                        <span className="text-blue-400">•</span>
+                        <a
+                          href="https://tavily.com/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-700 underline font-medium"
+                        >
+                          Get API Key →
+                        </a>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex gap-2 items-center">
                     <input
                       type="password"
@@ -329,9 +348,55 @@ export default function ChatbotSettingsPage() {
                       <span className="text-green-600 text-sm font-medium">✓ Configured</span>
                     )}
                   </div>
-                  {configuredKeys.includes(provider.id) && (
+                  {configuredKeys.includes(provider.id) && provider.id !== 'tavily' && (
                     <div className="mt-2 text-xs text-gray-600">
                       Available models: {MODELS[provider.id]?.map(m => m.name).join(', ')}
+                    </div>
+                  )}
+                  {configuredKeys.includes(provider.id) && provider.id === 'tavily' && (
+                    <div className="mt-3 space-y-2">
+                      <button
+                        onClick={() => testModel('tavily', 'tavily-search')}
+                        disabled={testResults['tavily-tavily-search']?.status === 'testing'}
+                        className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+                      >
+                        {testResults['tavily-tavily-search']?.status === 'testing' ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            Testing...
+                          </>
+                        ) : (
+                          '🧪 Test Tavily API Key'
+                        )}
+                      </button>
+                      
+                      {testResults['tavily-tavily-search']?.status === 'success' && (
+                        <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <div className="flex items-start gap-2">
+                            <CheckCircle size={20} className="text-green-600 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <div className="text-sm font-medium text-green-900">Test Passed!</div>
+                              <div className="text-xs text-green-700 mt-1">
+                                {testResults['tavily-tavily-search'].response}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {testResults['tavily-tavily-search']?.status === 'error' && (
+                        <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <div className="flex items-start gap-2">
+                            <XCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <div className="text-sm font-medium text-red-900">Test Failed</div>
+                              <div className="text-xs text-red-700 mt-1">
+                                {testResults['tavily-tavily-search'].message}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
