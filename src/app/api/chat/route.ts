@@ -202,7 +202,7 @@ export async function POST(req: NextRequest) {
     const { getModel } = await import('@/lib/ai/models');
     const model = await getModel(userId, provider, modelName);
 
-    const defaultSystemPrompt = 'You are a helpful AI assistant with vision capabilities. You can see and analyze images provided by users. When comparing items or presenting structured data, ALWAYS use Markdown tables with proper formatting. Example:\n\n| Column 1 | Column 2 |\n|----------|----------|\n| Data 1   | Data 2   |\n\nUse this format for all comparisons and structured information.';
+    const defaultSystemPrompt = 'You are a helpful AI assistant with vision capabilities. You can see and analyze images provided by users.\\n\\n**Response Format Guidelines:**\\n- **Prefer natural text descriptions** for most responses to enhance readability\\n- **Use Markdown tables ONLY when:**\\n  1. The user explicitly requests a table or comparison\\n  2. Comparing multiple items with specific attributes (e.g., comparing products, features, specifications)\\n  3. Presenting data that is inherently tabular (e.g., schedules, pricing tiers)\\n- **For simple lists or explanations**, use bullet points or numbered lists instead of tables\\n- **Keep responses conversational and easy to read**\\n\\nWhen tables are necessary, use proper Markdown formatting:\\n| Column 1 | Column 2 |\\n|----------|----------|\\n| Data 1   | Data 2   |';
     
     // Force use of new system prompt with Markdown table instructions
     const systemMessage = defaultSystemPrompt;

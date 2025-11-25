@@ -43,6 +43,7 @@ export default function ChatInput({
 }: ChatInputProps) {
   const [input, setInput] = React.useState("");
   const [isSearchEnabled, setIsSearchEnabled] = useState(false);
+  const [isComposing, setIsComposing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const availableProviders = useMemo(() => {
@@ -161,15 +162,23 @@ export default function ChatInput({
                   placeholder={isMobile ? "Type message..." : placeholder}
                   className="w-full resize-none border-0 pl-12 pr-14 sm:pr-16 pt-3 pb-10 text-sm sm:text-base focus:outline-none focus:ring-0"
                   rows={1}
+                  onCompositionStart={() => setIsComposing(true)}
+                  onCompositionEnd={() => setIsComposing(false)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
+                    if (e.key === 'Enter' && !e.shiftKey && !isComposing && !isMobile) {
                       e.preventDefault();
                       if ((input.trim() || previewImages.length > 0) && selectedModel) {
                         handleSubmit(e);
                       }
                     }
                   }}
-                  style={{ minHeight: '80px', maxHeight: '200px' }}
+                  style={{ 
+                    minHeight: '80px', 
+                    maxHeight: '200px',
+                    boxSizing: 'border-box',
+                    maxWidth: '100%',
+                    width: '100%'
+                  }}
                 />
                 <button
                   type="submit"
@@ -190,7 +199,6 @@ export default function ChatInput({
               {availableModels.length > 0 && (
                 <div className="border-t border-gray-200 px-3 py-2 bg-gray-50/50">
                   <div className={`flex ${isMobile ? 'flex-col gap-2' : 'flex-row items-center gap-4'}`}>
-                    {/* Provider Select */}
                     <div className={`flex items-center gap-1.5 ${isMobile ? 'w-full' : ''}`}>
                       <span className="text-xs text-gray-500 whitespace-nowrap">Provider:</span>
                       <select
@@ -213,9 +221,7 @@ export default function ChatInput({
                       </select>
                     </div>
 
-                    {/* Wrapper for Model + Search: On mobile use flex row, on desktop use contents to flatten */}
                     <div className={`flex ${isMobile ? 'flex-row items-center justify-between w-full gap-2' : 'contents'}`}>
-                      {/* Model Select */}
                       <div className={`flex items-center gap-1.5 ${isMobile ? 'flex-1 min-w-0' : 'mr-4'}`}>
                         <span className="text-xs text-gray-500 whitespace-nowrap">Model:</span>
                         <select
@@ -233,7 +239,6 @@ export default function ChatInput({
                         </select>
                       </div>
 
-                      {/* Search Toggle */}
                       <div className={`${!isMobile ? 'ml-auto' : 'flex-shrink-0'}`}>
                         <button
                           type="button"
