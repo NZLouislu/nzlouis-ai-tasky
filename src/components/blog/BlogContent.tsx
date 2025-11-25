@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { PartialBlock } from "@blocknote/core";
 
 interface PostCover {
@@ -43,8 +43,17 @@ export default function BlogContent({
   isSaving,
   handleManualSave,
 }: BlogContentProps) {
+  const titleRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (titleRef.current) {
+      titleRef.current.style.height = 'auto';
+      titleRef.current.style.height = titleRef.current.scrollHeight + 'px';
+    }
+  }, [activePost?.title, activePostId]);
+
   return (
-    <div className="w-full max-w-[900px] mx-auto px-6">
+    <div className="w-full max-w-3xl md:max-w-4xl lg:max-w-5xl mx-auto px-2 sm:px-4 md:px-6">
       <div className="flex items-center justify-center mb-8">
         {activePost && activePost.icon && (
           <div className="relative mr-4">
@@ -57,16 +66,25 @@ export default function BlogContent({
           </div>
         )}
         <div className="flex-1 text-center">
-          <input
+          <textarea
+            ref={titleRef}
             id={`title-input-${activePostId}`}
-            type="text"
             value={activePost ? activePost.title : ""}
             onChange={async (e) => {
               const newTitle = e.target.value;
               await updatePostTitle(activePostId, newTitle);
+              e.target.style.height = 'auto';
+              e.target.style.height = e.target.scrollHeight + 'px';
+            }}
+            onInput={(e) => {
+              const target = e.target as HTMLTextAreaElement;
+              target.style.height = 'auto';
+              target.style.height = target.scrollHeight + 'px';
             }}
             placeholder="Untitled"
-            className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-4xl font-bold text-gray-800 placeholder-gray-400 text-center"
+            className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-4xl font-bold text-gray-800 placeholder-gray-400 text-center resize-none overflow-hidden"
+            rows={1}
+            style={{ minHeight: '1.2em' }}
           />
         </div>
       </div>

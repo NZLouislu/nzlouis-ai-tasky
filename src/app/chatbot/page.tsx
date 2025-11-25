@@ -850,7 +850,7 @@ export default function ChatbotPage() {
         </div>
 
         <div className="flex-1 overflow-y-auto chatbot-scrollbar">
-          <div className="w-full max-w-[800px] lg:max-w-[900px] mx-auto p-4 sm:p-6">
+          <div className="w-full max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto p-4 sm:p-6">
             {availableModels.length === 0 && !isCheckingAuth && (
               <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm">
                 No AI models configured. Please configure your API keys in

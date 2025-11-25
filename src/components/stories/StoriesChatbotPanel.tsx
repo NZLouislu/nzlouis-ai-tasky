@@ -126,6 +126,7 @@ export default function StoriesChatbotPanel({
             documentId={documentId}
             userId={userId}
             apiEndpoint="stories"
+            containerWidth={chatbotWidth}
           />
         </div>
       </div>

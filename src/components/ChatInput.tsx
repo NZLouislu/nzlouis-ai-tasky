@@ -80,7 +80,7 @@ export default function ChatInput({
 
   return (
     <div className="bg-white border-t border-gray-200 p-3 sm:p-4 flex-shrink-0">
-      <div className="max-w-[900px] mx-auto">
+      <div className="w-full max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto">
         {previewImages.length > 0 && (
           <div className="mb-3 p-3 bg-blue-50 border-2 border-blue-200 rounded-lg">
             <div className="flex flex-col gap-2">
@@ -169,7 +169,7 @@ export default function ChatInput({
 
               {availableModels.length > 0 && (
                 <div className="border-t border-gray-200 px-3 py-2 bg-gray-50/50">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                  <div className={`flex flex-col ${!isMobile ? 'sm:flex-row sm:items-center sm:gap-4' : ''} gap-2`}>
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-gray-500 whitespace-nowrap">Provider:</span>
                       <select
@@ -182,7 +182,7 @@ export default function ChatInput({
                             setSelectedModel(providerModels[0].id);
                           }
                         }}
-                        className="text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 transition-colors w-full sm:w-auto"
+                        className={`text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 transition-colors w-full ${!isMobile ? 'sm:w-auto' : ''}`}
                       >
                         {availableProviders.map(provider => (
                           <option key={provider} value={provider}>
@@ -197,7 +197,7 @@ export default function ChatInput({
                       <select
                         value={selectedModel}
                         onChange={(e) => setSelectedModel(e.target.value)}
-                        className="text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 transition-colors w-full sm:w-auto max-w-full sm:max-w-[200px]"
+                        className={`text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 transition-colors w-full ${!isMobile ? 'sm:w-auto max-w-full sm:max-w-[200px]' : ''}`}
                       >
                         {getModelsForProvider(selectedProvider).map(model => (
                           <option key={model.id} value={model.id}>

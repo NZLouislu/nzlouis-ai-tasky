@@ -34,6 +34,7 @@ interface UnifiedChatbotProps {
   userId?: string;
   apiEndpoint?: 'blog' | 'stories';
   articleContext?: ArticleContext;
+  containerWidth?: number;
 }
 
 export default function UnifiedChatbot({
@@ -45,6 +46,7 @@ export default function UnifiedChatbot({
   userId,
   apiEndpoint = 'blog',
   articleContext,
+  containerWidth,
 }: UnifiedChatbotProps) {
   // Use store for models
   const { 
@@ -135,14 +137,22 @@ export default function UnifiedChatbot({
   }, [availableModels.length, setAvailableModels, setSelectedModel, setSelectedProvider]);
 
   // Detect mobile
+  // Detect mobile based on window width OR container width
   useEffect(() => {
     const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
+      // If containerWidth is provided, use it to determine mobile layout
+      if (containerWidth !== undefined) {
+        setIsMobile(containerWidth < 500); // Threshold for mobile layout in panel
+      } else {
+        setIsMobile(window.innerWidth < 768);
+      }
     };
-    handleResize();
+    
+    handleResize(); // Initial check
+    
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [containerWidth]);
 
   const handleImageUpload = useCallback(async (files: FileList | File | null) => {
     if (!files) return;

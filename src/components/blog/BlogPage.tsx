@@ -1713,11 +1713,7 @@ export default function BlogPage() {
       <div
         className={`flex-1 flex flex-col h-screen transition-all duration-300 overflow-x-hidden ${isMobile
           ? "ml-0 w-full"  // 移动端：无左边距，全宽
-          : sidebarCollapsed
-            ? "ml-0"  // 侧边栏折叠：无左边距
-            : isChatbotVisible
-              ? "ml-0 lg:ml-80"  // Chatbot 打开：只在大屏显示侧边栏
-              : "ml-0 md:ml-80"  // 正常：中屏以上显示侧边栏
+          : "ml-0"         // 桌面端：由 Flex 布局自动处理 Sidebar 占位
           }`}
         style={{
           marginRight: isChatbotVisible && !isMobile ? `${chatbotWidth}px` : '0',
@@ -1729,7 +1725,7 @@ export default function BlogPage() {
         {/* Scrollable Content Container */}
         <div className="flex-1 overflow-y-auto">
           {activePost && (
-            <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div className="w-full max-w-full sm:max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 xl:px-16 py-6">
               {/* Move IconSelector and CoverOptions here to show above the title */}
               <IconSelector
                 showIconSelector={showIconSelector}

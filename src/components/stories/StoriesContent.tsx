@@ -412,7 +412,7 @@ export default function StoriesContent() {
       </div>
 
       <div className="flex-1 p-6 overflow-hidden">
-        <div className="h-full max-w-4xl mx-auto">
+        <div className="h-full w-full max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto">
           {documentData ? (
             <>
               {/* Document Actions Bar */}

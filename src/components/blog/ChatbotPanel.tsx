@@ -141,6 +141,7 @@ export default function ChatbotPanel({
             postId={postId}
             userId={userId}
             articleContext={articleContext}
+            containerWidth={chatbotWidth}
           />
         </div>
       </div>
