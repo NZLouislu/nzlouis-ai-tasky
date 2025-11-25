@@ -323,10 +323,11 @@ export default function UnifiedChatbot({
         table: ({ ...props }) => (
           <div
             style={{
-              margin: "2rem 0",
+              margin: "3rem 0 0 0",
               all: "initial",
               display: "block",
               fontFamily: "inherit",
+              width: "100%",
             }}
           >
             <div
@@ -339,13 +340,9 @@ export default function UnifiedChatbot({
                   "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)",
                 overflow: "hidden",
                 display: "block",
+                marginBottom: "3rem",
               }}
             >
-              <div className="px-5 py-3 bg-[#FDFBF7] border-b border-[#F5E6D3] flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-[#E5D5C0]"></div>
-                <div className="w-3 h-3 rounded-full bg-[#E5D5C0]"></div>
-                <div className="w-3 h-3 rounded-full bg-[#E5D5C0]"></div>
-              </div>
               <div className="p-5 overflow-x-auto">
                 <table
                   style={{

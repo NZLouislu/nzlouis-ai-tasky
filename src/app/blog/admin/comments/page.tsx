@@ -49,7 +49,7 @@ export default function BlogCommentsPage() {
     }
   };
 
-  const handleSelectPage = (pageId: string, href?: string) => {
+  const handleSelectPage = (_pageId: string, href?: string) => {
     if (href) {
       router.push(href);
     }

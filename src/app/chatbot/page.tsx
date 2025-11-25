@@ -27,7 +27,6 @@ export default function ChatbotPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-  // Zustand Store
   const {
     sessions,
     currentSessionId,
@@ -90,8 +89,6 @@ export default function ChatbotPage() {
     const handleResize = () => {
       const mobile = window.innerWidth < 1024;
       setIsMobile(mobile);
-      // On desktop, sidebar should be open by default
-      // On mobile/tablet, it should be closed
       if (!mobile) {
         setSidebarOpen(true);
       } else {
@@ -109,7 +106,6 @@ export default function ChatbotPage() {
 
   useEffect(() => {
     if (!isCheckingAuth && (session?.user || isAdmin)) {
-      // Only load if empty to prevent flash, or could implement a background refresh
       if (availableModels.length === 0) {
         loadAvailableModels();
       }
@@ -173,7 +169,6 @@ export default function ChatbotPage() {
             newImages.push(imageUrl);
           } catch (error) {
             console.error("Upload failed for file:", file.name, error);
-            // Fallback to base64
             const reader = new FileReader();
             await new Promise<void>((resolve) => {
               reader.onload = (e) => {
@@ -256,7 +251,6 @@ export default function ChatbotPage() {
       }
     } catch (error) {
       console.error("Failed to load AI models:", error);
-      // Don't clear models on error if we have cached ones
       if (availableModels.length === 0) {
         setAvailableModels([]);
       }
@@ -364,7 +358,6 @@ export default function ChatbotPage() {
       const hasImages = chatMessages.some(
         (m) => m.images && m.images.length > 0
       );
-      // Unified API endpoint for both text and vision
       const apiEndpoint = "/api/chat";
 
       console.log(
@@ -461,9 +454,7 @@ export default function ChatbotPage() {
         buffer = lines[lines.length - 1];
       }
 
-      // Save messages to database
       if (sessionId) {
-        // Prepare messages for saving - ensure images are handled correctly
         const messagesToSave = [
           ...messages,
           userMessage,
@@ -496,14 +487,10 @@ export default function ChatbotPage() {
       const newSessions = data.sessions || [];
       setSessions(newSessions);
 
-      // If we have a current session ID but it's not in the new list,
-      // or if we don't have a session ID but we have sessions,
-      // we need to update the current session.
       if (
         currentSessionId &&
         !newSessions.find((s: ChatSession) => s.id === currentSessionId)
       ) {
-        // Current session no longer exists
         if (newSessions.length > 0) {
           setCurrentSessionId(newSessions[0].id);
         } else {
@@ -511,7 +498,6 @@ export default function ChatbotPage() {
           setMessages([]);
         }
       } else if (!currentSessionId && newSessions.length > 0) {
-        // No current session selected, select the first one
         setCurrentSessionId(newSessions[0].id);
       }
     } catch (error) {
@@ -527,21 +513,15 @@ export default function ChatbotPage() {
 
   useEffect(() => {
     if (currentSessionId) {
-      // Check if we already have messages for this session in store?
-      // Actually, store only keeps messages for *current* session.
-      // So we should load messages when ID changes.
-      // But we can check if messages are already loaded for this ID if we stored session ID with messages.
-      // For now, let's just load. Optimizing this would require storing messages per session in Zustand.
       loadSessionMessages(currentSessionId);
     }
   }, [currentSessionId]);
 
   const loadSessionMessages = async (sessionId: string) => {
-    // 1. Try Cache first for immediate display
     if (contextChats[sessionId]) {
       setMessages(contextChats[sessionId]);
     } else {
-      setMessages([]); // Clear current view while loading if not in cache
+      setMessages([]);
     }
 
     try {
@@ -566,7 +546,7 @@ export default function ChatbotPage() {
           role: string;
           content: string;
           image_url?: string;
-          image_urls?: string[]; // New field for multiple images
+          image_urls?: string[];
           created_at: string;
         }
         const loadedMessages: Message[] = data.session.messages.map(
@@ -574,24 +554,21 @@ export default function ChatbotPage() {
             id: msg.id,
             role: msg.role as "user" | "assistant",
             content: msg.content,
-            image: msg.image_url || undefined, // Keep for backward compatibility
+            image: msg.image_url || undefined,
             images:
-              msg.image_urls || (msg.image_url ? [msg.image_url] : undefined), // Prefer images array
+              msg.image_urls || (msg.image_url ? [msg.image_url] : undefined),
             timestamp: new Date(msg.created_at),
           })
         );
         
         setMessages(loadedMessages);
-        setContextMessages(sessionId, loadedMessages); // Update cache
+        setContextMessages(sessionId, loadedMessages);
       } else {
         setMessages([]);
         setContextMessages(sessionId, []);
       }
     } catch (error) {
       console.error("Failed to load messages:", error);
-      // If cache exists, we keep showing it, but maybe show an error toast?
-      // For now, if fetch fails and we have cache, we are good.
-      // If no cache and fetch fails, clear messages.
       if (!contextChats[sessionId]) {
         setMessages([]);
       }
@@ -608,7 +585,7 @@ export default function ChatbotPage() {
             role: msg.role,
             content: msg.content,
             imageUrl: msg.image,
-            imageUrls: msg.images, // Save images array
+            imageUrls: msg.images,
           })),
         }),
       });
@@ -632,7 +609,7 @@ export default function ChatbotPage() {
       setCurrentSessionId(data.session.id);
       setMessages([]);
       setInput("");
-      setPreviewImages([]); // Changed from setPreviewImage
+      setPreviewImages([]);
       setHasUnsavedChanges(false);
       await loadSessions();
     } catch (error) {
@@ -649,12 +626,11 @@ export default function ChatbotPage() {
     }
     setCurrentSessionId(sessionId);
     setInput("");
-    setPreviewImages([]); // Changed from setPreviewImage
+    setPreviewImages([]);
     setHasUnsavedChanges(false);
   };
 
   const renameSession = async (sessionId: string, newTitle: string) => {
-    // Optimistic update
     const previousSessions = [...sessions];
     setSessions(
       sessions.map((s) =>
@@ -671,7 +647,6 @@ export default function ChatbotPage() {
       });
     } catch (error) {
       console.error("Failed to rename session:", error);
-      // Revert on error
       setSessions(previousSessions);
     }
   };
@@ -681,7 +656,6 @@ export default function ChatbotPage() {
       return;
     }
 
-    // Optimistic update
     const previousSessions = [...sessions];
     const previousCurrentId = currentSessionId;
     const previousMessages = [...messages];
@@ -699,7 +673,6 @@ export default function ChatbotPage() {
       });
     } catch (error) {
       console.error("Failed to delete session:", error);
-      // Revert on error
       setSessions(previousSessions);
       setCurrentSessionId(previousCurrentId);
       setMessages(previousMessages);
@@ -712,7 +685,6 @@ export default function ChatbotPage() {
 
   return (
     <div className="flex h-screen bg-[#FDFBF7] overflow-hidden pt-16">
-      {/* Mobile menu button - only show on mobile/tablet when sidebar is closed */}
       {!sidebarOpen && (
         <button
           onClick={() => setSidebarOpen(true)}
@@ -723,7 +695,6 @@ export default function ChatbotPage() {
         </button>
       )}
 
-      {/* Mobile overlay - only on mobile/tablet when sidebar is open */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
@@ -731,7 +702,6 @@ export default function ChatbotPage() {
         />
       )}
 
-      {/* Sidebar - always visible on desktop (lg+), toggleable on mobile/tablet */}
       <div
         className={`bg-white border-r border-gray-200 flex flex-col flex-shrink-0 transition-transform duration-300 ${
           isMobile
@@ -740,7 +710,6 @@ export default function ChatbotPage() {
         }`}
       >
         <div className="p-4 border-b border-gray-200 flex-shrink-0">
-          {/* Close button - only show on mobile/tablet */}
           <div className="flex justify-end mb-2 lg:hidden">
             <button
               onClick={() => setSidebarOpen(false)}
@@ -1000,10 +969,11 @@ export default function ChatbotPage() {
                             table: ({ ...props }) => (
                               <div
                                 style={{
-                                  margin: "2rem 0",
+                                  margin: "3rem 0 0 0",
                                   all: "initial",
                                   display: "block",
                                   fontFamily: "inherit",
+                                  width: "100%",
                                 }}
                               >
                                 <div
@@ -1016,13 +986,9 @@ export default function ChatbotPage() {
                                       "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)",
                                     overflow: "hidden",
                                     display: "block",
+                                    marginBottom: "3rem",
                                   }}
                                 >
-                                  <div className="px-5 py-3 bg-[#FDFBF7] border-b border-[#F5E6D3] flex items-center gap-2">
-                                    <div className="w-3 h-3 rounded-full bg-[#E5D5C0]"></div>
-                                    <div className="w-3 h-3 rounded-full bg-[#E5D5C0]"></div>
-                                    <div className="w-3 h-3 rounded-full bg-[#E5D5C0]"></div>
-                                  </div>
                                   <div className="p-5 overflow-x-auto">
                                     <table
                                       style={{
