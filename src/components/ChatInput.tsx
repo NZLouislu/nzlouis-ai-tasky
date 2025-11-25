@@ -71,13 +71,13 @@ export default function ChatInput({
     setPreviewImages(newImages);
   }, [previewImages, setPreviewImages]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if ((input.trim() || previewImages.length > 0) && selectedModel) {
       onSubmit(input, { searchWeb: isSearchEnabled });
       setInput("");
     }
-  };
+  }, [input, previewImages, selectedModel, onSubmit, isSearchEnabled]);
 
   return (
     <div className="bg-white border-t border-gray-200 p-3 sm:p-4 flex-shrink-0">

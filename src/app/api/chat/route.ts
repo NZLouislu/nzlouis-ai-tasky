@@ -35,7 +35,62 @@ const MODEL_PROVIDER_MAP: Record<string, AIProvider> = {
   'claude-sonnet-4': 'kilo',
 };
 
+// Helper function to perform web search using Tavily API
+async function performWebSearch(query: string): Promise<string> {
+  const tavilyApiKey = process.env.TAVILY_API_KEY;
+  
+  if (!tavilyApiKey) {
+    console.warn('[Search] Tavily API key not configured, skipping web search');
+    return '';
+  }
 
+  try {
+    console.log('[Search] Performing Tavily search for:', query);
+    
+    const response = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        api_key: tavilyApiKey,
+        query: query,
+        search_depth: 'basic',
+        include_answer: true,
+        max_results: 5,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('[Search] Tavily API error:', response.status);
+      return '';
+    }
+
+    const data = await response.json();
+    console.log('[Search] Tavily search completed, results:', data.results?.length || 0);
+
+    // Format search results
+    let searchContext = '\n\n**🔍 Web Search Results:**\n\n';
+    
+    if (data.answer) {
+      searchContext += `**Quick Answer:** ${data.answer}\n\n`;
+    }
+
+    if (data.results && data.results.length > 0) {
+      searchContext += '**Sources:**\n';
+      data.results.forEach((result: any, index: number) => {
+        searchContext += `${index + 1}. **${result.title}**\n`;
+        searchContext += `   ${result.url}\n`;
+        searchContext += `   ${result.content}\n\n`;
+      });
+    }
+
+    return searchContext;
+  } catch (error) {
+    console.error('[Search] Tavily search failed:', error);
+    return '';
+  }
+}
 
 async function getModelConfigFromId(userId: string | undefined, modelId: string) {
   const provider = MODEL_PROVIDER_MAP[modelId];
@@ -314,6 +369,32 @@ export async function POST(req: NextRequest) {
     console.log('First message (system):', JSON.stringify(promptMessages[0], null, 2));
 
     if (provider === 'openrouter') {
+      // If web search is enabled, perform search and add results to the last user message
+      if (body.searchWeb) {
+        const lastUserMessage = [...promptMessages].reverse().find(m => m.role === 'user');
+        if (lastUserMessage) {
+          const query = typeof lastUserMessage.content === 'string' 
+            ? lastUserMessage.content 
+            : lastUserMessage.content.find((c: any) => c.type === 'text')?.text || '';
+          
+          if (query) {
+            const searchResults = await performWebSearch(query);
+            if (searchResults) {
+              // Append search results to the last user message
+              if (typeof lastUserMessage.content === 'string') {
+                lastUserMessage.content += searchResults;
+              } else {
+                const textContent = lastUserMessage.content.find((c: any) => c.type === 'text');
+                if (textContent) {
+                  textContent.text += searchResults;
+                }
+              }
+              console.log('[Search] Search results added to prompt');
+            }
+          }
+        }
+      }
+
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -454,20 +535,28 @@ export async function POST(req: NextRequest) {
 
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${actualModel}:streamGenerateContent?key=${apiKey}`;
 
+      console.log(`[Search] Search enabled: ${body.searchWeb}`);
+
       const apiCallStartTime = Date.now();
+      const requestBody: any = {
+        contents: geminiContents,
+        generationConfig: {
+          temperature,
+          maxOutputTokens: maxTokens,
+        },
+      };
+
+      if (body.searchWeb) {
+        requestBody.tools = [{ google_search: {} }];
+        console.log('[Search] Google Search Grounding enabled');
+      }
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          contents: geminiContents,
-          generationConfig: {
-            temperature,
-            maxOutputTokens: maxTokens,
-          },
-          tools: body.searchWeb ? [{ googleSearch: {} }] : undefined,
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {

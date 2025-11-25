@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import Image from "next/image";
 import ChatInput from "@/components/ChatInput";
 import {
@@ -295,7 +296,7 @@ export default function ChatbotPage() {
     return title || "New Chat";
   };
 
-  const handleSubmit = async (text: string, options?: { searchWeb?: boolean }) => {
+  const handleSubmit = useCallback(async (text: string, options?: { searchWeb?: boolean }) => {
     if (!text.trim() && previewImages.length === 0) return;
     if (!selectedModel) return;
 
@@ -481,7 +482,25 @@ export default function ChatbotPage() {
       setIsLoading(false);
       updateLastMessage("Sorry, I encountered an error. Please try again.");
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    previewImages,
+    selectedModel,
+    currentSessionId,
+    messages,
+    selectedProvider,
+    setMessages,
+    setIsLoading,
+    setPreviewImages,
+    setCurrentSessionId,
+    // loadSessions is intentionally omitted to avoid circular dependency
+    addMessage,
+    addContextMessage,
+    updateLastMessage,
+    updateContextLastMessage,
+    setHasUnsavedChanges,
+    generateSessionTitle,
+  ]);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -916,6 +935,7 @@ export default function ChatbotPage() {
                     <div className="prose prose-slate max-w-none">
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
+                        rehypePlugins={[rehypeRaw]}
                         components={
                           {
                             p: ({ ...props }) => (
@@ -1040,6 +1060,9 @@ export default function ChatbotPage() {
                                   backgroundColor: "#FFF8F0",
                                   borderBottom: "2px solid #F5E6D3",
                                   display: "table-cell",
+                                  whiteSpace: "pre-wrap",
+                                  wordBreak: "break-word",
+                                  verticalAlign: "top",
                                 }}
                                 {...props}
                               />
@@ -1054,6 +1077,10 @@ export default function ChatbotPage() {
                                   borderBottom:
                                     "1px solid rgba(245, 230, 211, 0.4)",
                                   display: "table-cell",
+                                  whiteSpace: "pre-wrap",
+                                  wordBreak: "break-word",
+                                  verticalAlign: "top",
+                                  maxWidth: "600px",
                                 }}
                                 {...props}
                               />
