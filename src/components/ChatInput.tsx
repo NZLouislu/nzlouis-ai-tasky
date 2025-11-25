@@ -1,6 +1,6 @@
 "use client";
-import React, { useRef, useMemo, useCallback } from 'react';
-import { Send, Paperclip } from 'lucide-react';
+import React, { useRef, useMemo, useCallback, useState } from 'react';
+import { Send, Paperclip, Globe } from 'lucide-react';
 import Image from 'next/image';
 
 interface AIModel {
@@ -13,7 +13,7 @@ interface AIModel {
 }
 
 interface ChatInputProps {
-  onSubmit: (text: string) => void;
+  onSubmit: (text: string, options?: { searchWeb?: boolean }) => void;
   isLoading: boolean;
   previewImages: string[];
   setPreviewImages: (value: string[]) => void;
@@ -42,6 +42,7 @@ export default function ChatInput({
   isMobile = false,
 }: ChatInputProps) {
   const [input, setInput] = React.useState("");
+  const [isSearchEnabled, setIsSearchEnabled] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const availableProviders = useMemo(() => {
@@ -49,9 +50,9 @@ export default function ChatInput({
     return Array.from(providers);
   }, [availableModels]);
 
-  const getModelsForProvider = useCallback((provider: string) => {
-    return availableModels.filter(m => m.provider === provider);
-  }, [availableModels]);
+  const currentProviderModels = useMemo(() => {
+    return availableModels.filter(m => m.provider === selectedProvider);
+  }, [availableModels, selectedProvider]);
 
   const getProviderName = useCallback((provider: string) => {
     const names: Record<string, string> = {
@@ -73,7 +74,7 @@ export default function ChatInput({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if ((input.trim() || previewImages.length > 0) && selectedModel) {
-      onSubmit(input);
+      onSubmit(input, { searchWeb: isSearchEnabled });
       setInput("");
     }
   };
@@ -161,28 +162,36 @@ export default function ChatInput({
                 <button
                   type="submit"
                   disabled={(!input.trim() && previewImages.length === 0) || !selectedModel || isLoading}
-                  className="absolute right-3 top-3 bg-teal-500 text-white rounded-full p-2 hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className={`absolute right-3 top-3 bg-teal-500 text-white rounded-full p-2 hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2 ${isLoading && isSearchEnabled ? 'pl-3 pr-4 w-auto' : 'w-9 h-9 justify-center'}`}
                 >
-                  <Send size={18} />
+                  {isLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      {isSearchEnabled && <span className="text-xs font-medium">Searching...</span>}
+                    </>
+                  ) : (
+                    <Send size={18} />
+                  )}
                 </button>
               </div>
 
               {availableModels.length > 0 && (
                 <div className="border-t border-gray-200 px-3 py-2 bg-gray-50/50">
-                  <div className={`flex flex-col ${!isMobile ? 'sm:flex-row sm:items-center sm:gap-4' : ''} gap-2`}>
-                    <div className="flex items-center gap-1.5">
+                  <div className={`flex ${isMobile ? 'flex-col gap-2' : 'flex-row items-center gap-4'}`}>
+                    {/* Provider Select */}
+                    <div className={`flex items-center gap-1.5 ${isMobile ? 'w-full' : ''}`}>
                       <span className="text-xs text-gray-500 whitespace-nowrap">Provider:</span>
                       <select
                         value={selectedProvider}
                         onChange={(e) => {
                           const newProvider = e.target.value;
                           setSelectedProvider(newProvider);
-                          const providerModels = getModelsForProvider(newProvider);
+                          const providerModels = availableModels.filter(m => m.provider === newProvider);
                           if (providerModels.length > 0) {
                             setSelectedModel(providerModels[0].id);
                           }
                         }}
-                        className={`text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 transition-colors w-full ${!isMobile ? 'sm:w-auto' : ''}`}
+                        className={`text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 transition-colors ${isMobile ? 'flex-1' : 'w-auto'}`}
                       >
                         {availableProviders.map(provider => (
                           <option key={provider} value={provider}>
@@ -192,24 +201,46 @@ export default function ChatInput({
                       </select>
                     </div>
 
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-gray-500 whitespace-nowrap">Model:</span>
-                      <select
-                        value={selectedModel}
-                        onChange={(e) => setSelectedModel(e.target.value)}
-                        className={`text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 transition-colors w-full ${!isMobile ? 'sm:w-auto max-w-full sm:max-w-[200px]' : ''}`}
-                      >
-                        {getModelsForProvider(selectedProvider).map(model => (
-                          <option key={model.id} value={model.id}>
-                            {model.tested === true && model.working === true && '✓ '}
-                            {model.tested === true && model.working === false && '✗ '}
-                            {model.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    {/* Wrapper for Model + Search: On mobile use flex row, on desktop use contents to flatten */}
+                    <div className={`flex ${isMobile ? 'flex-row items-center justify-between w-full gap-2' : 'contents'}`}>
+                      {/* Model Select */}
+                      <div className={`flex items-center gap-1.5 ${isMobile ? 'flex-1 min-w-0' : 'mr-4'}`}>
+                        <span className="text-xs text-gray-500 whitespace-nowrap">Model:</span>
+                        <select
+                          value={selectedModel}
+                          onChange={(e) => setSelectedModel(e.target.value)}
+                          className={`text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 transition-colors ${isMobile ? 'flex-1 w-full' : 'w-auto max-w-[200px]'}`}
+                        >
+                          {currentProviderModels.map(model => (
+                            <option key={model.id} value={model.id}>
+                              {model.tested === true && model.working === true && '✓ '}
+                              {model.tested === true && model.working === false && '✗ '}
+                              {model.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-                    {/* Status icon removed as per request */}
+                      {/* Search Toggle */}
+                      <div className={`${!isMobile ? 'ml-auto' : 'flex-shrink-0'}`}>
+                        <button
+                          type="button"
+                          onClick={() => setIsSearchEnabled(!isSearchEnabled)}
+                          className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium transition-colors ${
+                            isSearchEnabled 
+                              ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                          title={selectedProvider === 'google' ? "Enable Google Search Grounding" : "Web search (only supported on some models)"}
+                        >
+                          <Globe size={14} />
+                          <span className={`${isMobile ? 'hidden sm:inline' : 'inline'}`}>Search</span>
+                          <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${isSearchEnabled ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                            <div className={`w-3 h-3 bg-white rounded-full shadow-sm transform transition-transform ${isSearchEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                          </div>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

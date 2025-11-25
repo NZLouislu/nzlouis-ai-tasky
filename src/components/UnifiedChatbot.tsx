@@ -507,7 +507,7 @@ export default function UnifiedChatbot({
   ), [messages, mode, renderMessageContent]);
 
   const handleSubmit = useCallback(
-    async (text: string) => {
+    async (text: string, options?: { searchWeb?: boolean }) => {
       if (!text.trim() && previewImages.length === 0) return;
       if (!selectedModel) return;
 
@@ -635,7 +635,7 @@ Please respond in the same language as the user's question.`,
         // For all other providers (like OpenRouter), use /api/chat which handles vision correctly.
         const apiEndpoint = (hasImages && selectedProvider === 'google') ? '/api/chat-vision' : '/api/chat';
 
-        console.log('Using API:', apiEndpoint, 'Has images:', hasImages, 'Model:', selectedModel, 'Provider:', selectedProvider);
+        console.log('Using API:', apiEndpoint, 'Has images:', hasImages, 'Model:', selectedModel, 'Provider:', selectedProvider, 'Search:', options?.searchWeb);
 
         const response = await fetch(apiEndpoint, {
           method: 'POST',
@@ -645,6 +645,7 @@ Please respond in the same language as the user's question.`,
           body: JSON.stringify({
             messages: chatMessages,
             modelId: selectedModel,
+            searchWeb: options?.searchWeb,
           }),
         });
 

@@ -76,6 +76,7 @@ interface ChatRequest {
   temperature?: number;
   maxTokens?: number;
   sessionId?: string;
+  searchWeb?: boolean;
 }
 
 export async function POST(req: NextRequest) {
@@ -464,13 +465,19 @@ export async function POST(req: NextRequest) {
           generationConfig: {
             temperature,
             maxOutputTokens: maxTokens,
-          }
+          },
+          tools: body.searchWeb ? [{ googleSearch: {} }] : undefined,
         })
       });
 
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Gemini API error:', response.status, errorText);
+        
+        if (response.status === 429) {
+          throw new Error('Google Gemini API rate limit exceeded. Please wait a moment or switch to a different model/provider.');
+        }
+        
         throw new Error(`Gemini API error: ${response.status}`);
       }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Plus,
   MessageSquare,
@@ -257,16 +257,16 @@ export default function ChatbotPage() {
     }
   };
 
-  const getAvailableProviders = () => {
+  const availableProviders = useMemo(() => {
     const providers = new Set(availableModels.map((m) => m.provider));
     return Array.from(providers);
-  };
+  }, [availableModels]);
 
-  const getModelsForProvider = (provider: string) => {
+  const getModelsForProvider = useCallback((provider: string) => {
     return availableModels.filter((m) => m.provider === provider);
-  };
+  }, [availableModels]);
 
-  const getProviderName = (provider: string) => {
+  const getProviderName = useCallback((provider: string) => {
     const names: Record<string, string> = {
       google: "Google Gemini",
       openai: "OpenAI",
@@ -275,7 +275,7 @@ export default function ChatbotPage() {
       kilo: "Kilo",
     };
     return names[provider] || provider;
-  };
+  }, []);
 
   const generateSessionTitle = (firstMessage: string) => {
     const cleanMessage = firstMessage.trim();
@@ -295,7 +295,7 @@ export default function ChatbotPage() {
     return title || "New Chat";
   };
 
-  const handleSubmit = async (text: string) => {
+  const handleSubmit = async (text: string, options?: { searchWeb?: boolean }) => {
     if (!text.trim() && previewImages.length === 0) return;
     if (!selectedModel) return;
 
@@ -366,7 +366,9 @@ export default function ChatbotPage() {
         "Has images:",
         hasImages,
         "Model:",
-        selectedModel
+        selectedModel,
+        "Search:",
+        options?.searchWeb
       );
 
       const response = await fetch(apiEndpoint, {
@@ -377,6 +379,7 @@ export default function ChatbotPage() {
         body: JSON.stringify({
           messages: chatMessages,
           modelId: selectedModel,
+          searchWeb: options?.searchWeb,
         }),
       });
 
@@ -517,9 +520,12 @@ export default function ChatbotPage() {
     }
   }, [currentSessionId]);
 
-  const loadSessionMessages = async (sessionId: string) => {
-    if (contextChats[sessionId]) {
+  const loadSessionMessages = useCallback(async (sessionId: string) => {
+    // If we have cached messages, use them immediately
+    if (contextChats[sessionId] && contextChats[sessionId].length > 0) {
       setMessages(contextChats[sessionId]);
+      // Still fetch in background to ensure we have latest data
+      // but don't block the UI
     } else {
       setMessages([]);
     }
@@ -573,7 +579,7 @@ export default function ChatbotPage() {
         setMessages([]);
       }
     }
-  };
+  }, [contextChats, setMessages, setContextMessages, setCurrentSessionId, loadSessions]);
 
   const saveMessages = async (sessionId: string, messagesToSave: Message[]) => {
     try {
