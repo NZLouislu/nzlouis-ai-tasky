@@ -1,5 +1,5 @@
 "use client";
-import React, { useRef, useMemo, useCallback, useState } from 'react';
+import React, { useRef, useMemo, useCallback, useState, useEffect } from 'react';
 import { Send, Paperclip, Globe, Settings } from 'lucide-react';
 import Image from 'next/image';
 
@@ -44,7 +44,9 @@ export default function ChatInput({
   const [input, setInput] = React.useState("");
   const [isSearchEnabled, setIsSearchEnabled] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
+  const [containerWidth, setContainerWidth] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const availableProviders = useMemo(() => {
     const providers = new Set(availableModels.map(m => m.provider));
@@ -54,6 +56,28 @@ export default function ChatInput({
   const currentProviderModels = useMemo(() => {
     return availableModels.filter(m => m.provider === selectedProvider);
   }, [availableModels, selectedProvider]);
+
+  useEffect(() => {
+    const updateWidth = () => {
+      if (containerRef.current) {
+        setContainerWidth(containerRef.current.offsetWidth);
+      }
+    };
+
+    updateWidth();
+
+    const resizeObserver = new ResizeObserver(updateWidth);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
+
+  const isNarrowContainer = containerWidth > 0 && containerWidth < 500;
+  const shouldStackControls = isMobile || isNarrowContainer;
 
   const getProviderName = useCallback((provider: string) => {
     const names: Record<string, string> = {
@@ -82,7 +106,7 @@ export default function ChatInput({
 
   return (
     <div className="bg-white border-t border-gray-200 p-3 sm:p-4 flex-shrink-0">
-      <div className="w-full max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto">
+      <div ref={containerRef} className="w-full max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto">
         {previewImages.length > 0 && (
           <div className="mb-3 p-3 bg-blue-50 border-2 border-blue-200 rounded-lg">
             <div className="flex flex-col gap-2">
@@ -159,13 +183,13 @@ export default function ChatInput({
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder={isMobile ? "Type message..." : placeholder}
+                  placeholder={shouldStackControls ? "Type message..." : placeholder}
                   className="w-full resize-none border-0 pl-12 pr-14 sm:pr-16 pt-3 pb-10 focus:outline-none focus:ring-0"
                   rows={1}
                   onCompositionStart={() => setIsComposing(true)}
                   onCompositionEnd={() => setIsComposing(false)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey && !isComposing && !isMobile) {
+                    if (e.key === 'Enter' && !e.shiftKey && !isComposing && !shouldStackControls) {
                       e.preventDefault();
                       if ((input.trim() || previewImages.length > 0) && selectedModel) {
                         handleSubmit(e);
@@ -200,9 +224,9 @@ export default function ChatInput({
 
               {availableModels.length > 0 && (
                 <div className="border-t border-gray-200 px-3 py-2 bg-gray-50/50">
-                  <div className={`flex ${isMobile ? 'flex-col gap-2' : 'flex-row items-center gap-4'}`}>
-                    <div className={`flex items-center gap-1.5 ${isMobile ? 'w-full' : ''}`}>
-                      <span className="text-xs text-gray-500 whitespace-nowrap">Provider:</span>
+                  <div className={`flex ${shouldStackControls ? 'flex-col gap-2' : 'flex-row items-center gap-3'}`}>
+                    <div className={`flex items-center gap-1.5 ${shouldStackControls ? 'w-full' : 'flex-shrink-0'}`}>
+                      <span className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">Provider:</span>
                       <select
                         value={selectedProvider}
                         onChange={(e) => {
@@ -213,7 +237,7 @@ export default function ChatInput({
                             setSelectedModel(providerModels[0].id);
                           }
                         }}
-                        className={`text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 transition-colors ${isMobile ? 'flex-1' : 'w-auto'}`}
+                        className={`text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 transition-colors ${shouldStackControls ? 'flex-1 min-w-0' : 'w-auto'}`}
                       >
                         {availableProviders.map(provider => (
                           <option key={provider} value={provider}>
@@ -223,13 +247,13 @@ export default function ChatInput({
                       </select>
                     </div>
 
-                    <div className={`flex ${isMobile ? 'flex-row items-center justify-between w-full gap-2' : 'contents'}`}>
-                      <div className={`flex items-center gap-1.5 ${isMobile ? 'flex-1 min-w-0' : 'mr-4'}`}>
-                        <span className="text-xs text-gray-500 whitespace-nowrap">Model:</span>
+                    <div className={`flex ${shouldStackControls ? 'flex-row items-center justify-between w-full gap-2' : 'contents'}`}>
+                      <div className={`flex items-center gap-1.5 ${shouldStackControls ? 'flex-1 min-w-0' : 'flex-shrink-0'}`}>
+                        <span className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">Model:</span>
                         <select
                           value={selectedModel}
                           onChange={(e) => setSelectedModel(e.target.value)}
-                          className={`text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 transition-colors ${isMobile ? 'flex-1 w-full' : 'w-auto max-w-[200px]'}`}
+                          className={`text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:border-gray-400 transition-colors ${shouldStackControls ? 'flex-1 min-w-0' : 'w-auto max-w-[200px]'}`}
                         >
                           {currentProviderModels.map(model => (
                             <option key={model.id} value={model.id}>
@@ -241,7 +265,7 @@ export default function ChatInput({
                         </select>
                       </div>
 
-                      <div className={`${!isMobile ? 'ml-auto' : 'flex-shrink-0'}`}>
+                      <div className="flex-shrink-0">
                         <button
                           type="button"
                           onClick={() => setIsSearchEnabled(!isSearchEnabled)}
@@ -253,7 +277,7 @@ export default function ChatInput({
                           title={selectedProvider === 'google' ? "Enable Google Search Grounding" : "Web search (requires Tavily API key)"}
                         >
                           <Globe size={14} />
-                          <span className={`${isMobile ? 'hidden sm:inline' : 'inline'}`}>Search</span>
+                          <span className={`${shouldStackControls ? 'hidden sm:inline' : 'inline'}`}>Search</span>
                           <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${isSearchEnabled ? 'bg-blue-500' : 'bg-gray-300'}`}>
                             <div className={`w-3 h-3 bg-white rounded-full shadow-sm transform transition-transform ${isSearchEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
                           </div>

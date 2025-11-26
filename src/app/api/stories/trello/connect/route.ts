@@ -6,7 +6,7 @@ import { encrypt } from '@/lib/encryption';
 interface TrelloConnectionRequest {
   trelloKey: string;
   trelloToken: string;
-  trelloBoardId: string;
+  trelloBoardId?: string;
   configName?: string;
 }
 
@@ -24,22 +24,19 @@ export async function POST(request: NextRequest) {
     const body: TrelloConnectionRequest = await request.json();
     const { trelloKey, trelloToken, trelloBoardId, configName = 'Default' } = body;
 
-    // Validate required fields
-    if (!trelloKey || !trelloToken || !trelloBoardId) {
+    if (!trelloKey || !trelloToken) {
       return NextResponse.json(
-        { error: 'Missing required fields: trelloKey, trelloToken, trelloBoardId' },
+        { error: 'Missing required fields: trelloKey, trelloToken' },
         { status: 400 }
       );
     }
 
-    // Encrypt credentials
     const encryptedKey = encrypt(trelloKey);
     const encryptedToken = encrypt(trelloToken);
 
-    // Test Trello connection with specific board
     try {
       const testResponse = await fetch(
-        `https://api.trello.com/1/boards/${trelloBoardId}?key=${trelloKey}&token=${trelloToken}`,
+        `https://api.trello.com/1/members/me/boards?key=${trelloKey}&token=${trelloToken}`,
         {
           headers: {
             'Accept': 'application/json',
@@ -49,14 +46,13 @@ export async function POST(request: NextRequest) {
 
       if (!testResponse.ok) {
         return NextResponse.json(
-          { error: 'Failed to connect to Trello. Please check your credentials and board ID.' },
+          { error: 'Failed to connect to Trello. Please check your API key and token.' },
           { status: 400 }
         );
       }
 
-      const boardData = await testResponse.json();
+      const boards = await testResponse.json();
       
-      // Save configuration to database
       const { data, error } = await taskyDb
         .from('user_platform_configs')
         .upsert({
@@ -64,7 +60,7 @@ export async function POST(request: NextRequest) {
           platform: 'trello',
           trello_key_encrypted: encryptedKey,
           trello_token_encrypted: encryptedToken,
-          trello_board_id: trelloBoardId,
+          trello_board_id: trelloBoardId || null,
           config_name: configName,
           is_active: true,
           updated_at: new Date().toISOString(),
@@ -81,15 +77,14 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Update platform connection status
       await taskyDb
         .from('stories_platform_connections')
         .upsert({
           user_id: session.user.id,
           platform: 'trello',
           google_account_email: session.user.email || '',
-          platform_user_id: boardData.id,
-          platform_username: boardData.name,
+          platform_user_id: session.user.id,
+          platform_username: session.user.name || session.user.email || '',
           connection_status: 'connected',
           last_verified_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -100,11 +95,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         message: 'Trello connection established successfully',
+        boards: boards,
         config: {
           id: data?.[0]?.id,
           platform: 'trello',
           trelloBoardId,
-          boardName: boardData.name,
           configName,
           createdAt: data?.[0]?.created_at,
           updatedAt: data?.[0]?.updated_at,
@@ -114,7 +109,7 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       console.error('Trello connection test failed:', error);
       return NextResponse.json(
-        { error: 'Failed to connect to Trello. Please check your credentials and board ID.' },
+        { error: 'Failed to connect to Trello. Please check your API key and token.' },
         { status: 400 }
       );
     }

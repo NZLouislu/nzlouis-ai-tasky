@@ -45,6 +45,7 @@ export default function StoriesSidebar({
   const [showTrelloConnectDialog, setShowTrelloConnectDialog] = useState(false);
   const [showTrelloBoardDialog, setShowTrelloBoardDialog] = useState(false);
   const [showTrelloHelpDialog, setShowTrelloHelpDialog] = useState(false);
+  const [expandedPlatforms, setExpandedPlatforms] = useState<Set<string>>(new Set(['jira', 'trello']));
 
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -75,6 +76,18 @@ export default function StoriesSidebar({
       default:
         return <div className="w-2 h-2 bg-gray-400 rounded-full" />;
     }
+  };
+
+  const togglePlatformExpansion = (platformId: string) => {
+    setExpandedPlatforms(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(platformId)) {
+        newSet.delete(platformId);
+      } else {
+        newSet.add(platformId);
+      }
+      return newSet;
+    });
   };
 
   const handlePlatformClick = (platform: any) => {
@@ -190,10 +203,7 @@ export default function StoriesSidebar({
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...credentials,
-          trelloBoardId: 'TEMP',
-        }),
+        body: JSON.stringify(credentials),
       });
 
       const result = await response.json();
@@ -329,10 +339,15 @@ export default function StoriesSidebar({
               {filteredPlatforms.map((platform) => (
                 <div key={platform.id} className="border-b border-gray-100">
                   <button
-                    onClick={() => handlePlatformClick(platform)}
+                    onClick={() => togglePlatformExpansion(platform.id)}
                     className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
                   >
                     <div className="flex items-center space-x-3">
+                      {expandedPlatforms.has(platform.id) ? (
+                        <ChevronDown className="w-4 h-4 text-gray-500" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-gray-500" />
+                      )}
                       {getConnectionStatusIcon(platform.connectionStatus)}
                       <span className="font-medium text-gray-800">
                         {platform.displayName}
@@ -345,71 +360,75 @@ export default function StoriesSidebar({
                     )}
                   </button>
 
-                  {platform.projects.length > 0 && (
-                    <div className="pl-4">
-                      {platform.projects.map((project) => (
-                        <div key={project.id} className="border-l border-gray-200">
-                          <button
-                            onClick={() => toggleProjectExpansion(project.id)}
-                            className="w-full flex items-center justify-between p-3 hover:bg-gray-100 cursor-pointer transition-colors">
-                              <div className="flex items-center space-x-2">
-                                {expandedProjects.has(project.id) ? (
-                                  <ChevronDown className="w-4 h-4 text-gray-500" />
-                                ) : (
-                                  <ChevronRight className="w-4 h-4 text-gray-500" />
+                  {expandedPlatforms.has(platform.id) && (
+                    <>
+                      {platform.projects.length > 0 && (
+                        <div className="pl-4">
+                          {platform.projects.map((project) => (
+                            <div key={project.id} className="border-l border-gray-200">
+                              <button
+                                onClick={() => toggleProjectExpansion(project.id)}
+                                className="w-full flex items-center justify-between p-3 hover:bg-gray-100 cursor-pointer transition-colors">
+                                  <div className="flex items-center space-x-2">
+                                    {expandedProjects.has(project.id) ? (
+                                      <ChevronDown className="w-4 h-4 text-gray-500" />
+                                    ) : (
+                                      <ChevronRight className="w-4 h-4 text-gray-500" />
+                                    )}
+                                    <span className="font-medium truncate">{project.projectName}</span>
+                                  </div>
+                                </button>
+
+                                {expandedProjects.has(project.id) && (
+                                  <div className="pl-8">
+                                    {project.documents.map((document) => (
+                                      <button
+                                        key={document.id}
+                                        onClick={() => handleDocumentClick(document.id)}
+                                        className={`w-full text-left p-2 text-sm hover:bg-gray-50 transition-colors rounded-md mx-2 my-1 ${
+                                          activeDocumentId === document.id 
+                                            ? 'bg-blue-50 text-blue-700 border-l-2 border-blue-500' 
+                                            : 'text-gray-600'
+                                        }`}
+                                      >
+                                        <div className="truncate">{document.title}</div>
+                                        <div className="text-xs text-gray-400 truncate">
+                                          {document.fileName}
+                                        </div>
+                                      </button>
+                                    ))}
+                                  </div>
                                 )}
-                                <span className="font-medium truncate">{project.projectName}</span>
                               </div>
-                            </button>
+                          ))}
+                        </div>
+                      )}
 
-                            {expandedProjects.has(project.id) && (
-                              <div className="pl-8">
-                                {project.documents.map((document) => (
-                                  <button
-                                    key={document.id}
-                                    onClick={() => handleDocumentClick(document.id)}
-                                    className={`w-full text-left p-2 text-sm hover:bg-gray-50 transition-colors rounded-md mx-2 my-1 ${
-                                      activeDocumentId === document.id 
-                                        ? 'bg-blue-50 text-blue-700 border-l-2 border-blue-500' 
-                                        : 'text-gray-600'
-                                    }`}
-                                  >
-                                    <div className="truncate">{document.title}</div>
-                                    <div className="text-xs text-gray-400 truncate">
-                                      {document.fileName}
-                                    </div>
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {platform.connectionStatus === 'disconnected' && (
-                    <div className="pl-8 pb-2 pt-2">
-                      <button 
-                        onClick={(e) => handleConnectPlatform(platform.name, e)}
-                        disabled={connectingPlatform === platform.name}
-                        className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-700 disabled:text-blue-400 transition-colors"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>{connectingPlatform === platform.name ? 'Connecting...' : `Connect ${platform.displayName}`}</span>
-                      </button>
-                    </div>
-                  )}
-                  
-                  {platform.connectionStatus === 'connected' && (
-                    <div className="pl-8 pb-2">
-                      <button 
-                        onClick={(e) => handleNewProject(platform.id, e)}
-                        className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-700 transition-colors"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>{platform.name === 'trello' ? 'Add Board' : 'New Project'}</span>
-                      </button>
-                    </div>
+                      {platform.connectionStatus === 'disconnected' && (
+                        <div className="pl-8 pb-2 pt-2">
+                          <button 
+                            onClick={(e) => handleConnectPlatform(platform.name, e)}
+                            disabled={connectingPlatform === platform.name}
+                            className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-700 disabled:text-blue-400 transition-colors"
+                          >
+                            <Plus className="w-4 h-4" />
+                            <span>{connectingPlatform === platform.name ? 'Connecting...' : `Connect ${platform.displayName}`}</span>
+                          </button>
+                        </div>
+                      )}
+                      
+                      {platform.connectionStatus === 'connected' && (
+                        <div className="pl-8 pb-2">
+                          <button 
+                            onClick={(e) => handleNewProject(platform.id, e)}
+                            className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-700 transition-colors"
+                          >
+                            <Plus className="w-4 h-4" />
+                            <span>{platform.name === 'trello' ? 'Add Board' : 'New Project'}</span>
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               ))}

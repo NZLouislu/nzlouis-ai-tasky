@@ -117,7 +117,7 @@ export default function TrelloBoardSelectDialog({
           </button>
         </div>
 
-        <div className="p-6 border-b border-gray-200">
+        <div className="p-6 border-b border-gray-200 space-y-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
@@ -128,6 +128,14 @@ export default function TrelloBoardSelectDialog({
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+          
+          <button
+            onClick={handleGoToTrello}
+            className="w-full flex items-center justify-center space-x-2 p-2 border border-dashed border-gray-300 rounded-md text-gray-600 hover:bg-gray-50 hover:border-gray-400 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add New Board</span>
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
@@ -156,33 +164,26 @@ export default function TrelloBoardSelectDialog({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredBoards.map((board) => {
-                const isAdded = addedBoardIds.has(board.id);
-                return (
+              {filteredBoards
+                .filter(board => !addedBoardIds.has(board.id))
+                .map((board) => (
                   <button
                     key={board.id}
                     onClick={() => handleSelectBoard(board)}
-                    disabled={isSelecting || isAdded}
-                    className={`p-4 border rounded-lg transition-colors text-left ${
-                      isAdded 
-                        ? 'border-gray-300 bg-gray-100 text-gray-500 cursor-not-allowed'
-                        : 'border-gray-200 hover:border-blue-500 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed'
-                    }`}
-                    style={{
-                      backgroundColor: !isAdded && board.prefs?.backgroundColor
-                        ? `${board.prefs.backgroundColor}20`
-                        : undefined,
-                    }}
+                    disabled={isSelecting}
+                    className="group relative p-5 border-2 border-blue-200 rounded-xl transition-all text-left hover:border-blue-500 hover:shadow-lg hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-br from-blue-50 to-white"
                   >
-                    <h3 className={`font-medium truncate mb-2 ${
-                      isAdded ? 'text-gray-500' : 'text-gray-800'
-                    }`}>
-                      {board.name} {isAdded && '(Already Added)'}
+                    <div className="absolute top-3 right-3 w-5 h-5 border-2 border-blue-400 rounded group-hover:bg-blue-500 group-hover:border-blue-500 transition-all flex items-center justify-center">
+                      <svg className="w-3 h-3 text-white opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    
+                    <h3 className="font-semibold text-gray-900 truncate mb-2 pr-8 text-base">
+                      {board.name}
                     </h3>
                     {board.desc && (
-                      <p className={`text-sm line-clamp-2 ${
-                        isAdded ? 'text-gray-400' : 'text-gray-600'
-                      }`}>
+                      <p className="text-sm text-gray-600 line-clamp-2 mb-3">
                         {board.desc}
                       </p>
                     )}
@@ -190,31 +191,47 @@ export default function TrelloBoardSelectDialog({
                       href={board.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`text-xs hover:underline mt-2 inline-block ${
-                        isAdded ? 'text-gray-400' : 'text-blue-600'
-                      }`}
+                      className="text-xs text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      View in Trello →
+                      View in Trello
+                      <ExternalLink className="w-3 h-3" />
                     </a>
                   </button>
-                );
-              })}
-              
-              <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 flex flex-col items-center justify-center text-center">
-                <Plus className="w-8 h-8 text-gray-400 mb-2" />
-                <h3 className="font-medium text-gray-700 mb-2">Add New Board</h3>
-                <p className="text-sm text-gray-500 mb-3">
-                  Create a new board in Trello, then refresh this page to see it here.
-                </p>
-                <button
-                  onClick={handleGoToTrello}
-                  className="flex items-center space-x-1 px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
-                >
-                  <span>Go to Trello</span>
-                  <ExternalLink className="w-4 h-4" />
-                </button>
-              </div>
+                ))}
+
+              {filteredBoards
+                .filter(board => addedBoardIds.has(board.id))
+                .map((board) => (
+                  <div
+                    key={board.id}
+                    className="p-5 border-2 border-gray-200 rounded-xl bg-gray-50 text-left opacity-60 cursor-not-allowed"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <h3 className="font-medium text-gray-500 truncate pr-2">
+                        {board.name}
+                      </h3>
+                      <span className="text-xs bg-gray-300 text-gray-600 px-2 py-1 rounded-full whitespace-nowrap">
+                        Already Added
+                      </span>
+                    </div>
+                    {board.desc && (
+                      <p className="text-sm text-gray-400 line-clamp-2 mb-3">
+                        {board.desc}
+                      </p>
+                    )}
+                    <a
+                      href={board.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-gray-400 hover:text-gray-600 hover:underline inline-flex items-center gap-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      View in Trello
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                ))}
             </div>
           )}
         </div>
