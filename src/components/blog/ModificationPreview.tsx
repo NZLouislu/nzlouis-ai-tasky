@@ -12,6 +12,8 @@ interface ModificationPreviewProps {
   onAccept: () => void;
   onReject: () => void;
   onEdit: (editedBlocks: PartialBlock[]) => void;
+  originalTitle?: string;
+  modifiedTitle?: string;
 }
 
 export function ModificationPreview({
@@ -21,6 +23,8 @@ export function ModificationPreview({
   onAccept,
   onReject,
   onEdit,
+  originalTitle,
+  modifiedTitle,
 }: ModificationPreviewProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(
@@ -92,37 +96,67 @@ export function ModificationPreview({
               />
             </div>
           ) : (
-            <div className="overflow-hidden rounded-lg border border-gray-200">
-              <ReactDiffViewer
-                oldValue={originalText}
-                newValue={modifiedText}
-                splitView={true}
-                showDiffOnly={false}
-                leftTitle="Before"
-                rightTitle="After"
-                styles={{
-                  variables: {
-                    light: {
-                      diffViewerBackground: '#ffffff',
-                      addedBackground: '#e6ffed',
-                      removedBackground: '#ffeef0',
-                      wordAddedBackground: '#acf2bd',
-                      wordRemovedBackground: '#fdb8c0',
-                      addedGutterBackground: '#cdffd8',
-                      removedGutterBackground: '#ffdce0',
-                      gutterBackground: '#f7f7f7',
-                      gutterBackgroundDark: '#f3f3f3',
-                      highlightBackground: '#fffbdd',
-                      highlightGutterBackground: '#fff5b1',
+            <div>
+              {/* Title Comparison - Show only if title changed */}
+              {originalTitle && modifiedTitle && originalTitle !== modifiedTitle && (
+                <div className="mb-6 overflow-hidden rounded-lg border border-gray-200">
+                  <div className="grid grid-cols-2 gap-0">
+                    {/* Before Title */}
+                    <div className="border-r border-gray-200 bg-gray-50 p-4">
+                      <div className="text-xs font-semibold text-gray-500 uppercase mb-2">
+                        Before
+                      </div>
+                      <div className="text-lg font-semibold text-gray-900 bg-red-50 px-3 py-2 rounded border border-red-200">
+                        {originalTitle}
+                      </div>
+                    </div>
+                    
+                    {/* After Title */}
+                    <div className="bg-gray-50 p-4">
+                      <div className="text-xs font-semibold text-gray-500 uppercase mb-2">
+                        After
+                      </div>
+                      <div className="text-lg font-semibold text-gray-900 bg-green-50 px-3 py-2 rounded border border-green-200">
+                        {modifiedTitle}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Content Comparison */}
+              <div className="overflow-hidden rounded-lg border border-gray-200">
+                <ReactDiffViewer
+                  oldValue={originalText}
+                  newValue={modifiedText}
+                  splitView={true}
+                  showDiffOnly={false}
+                  leftTitle="Before"
+                  rightTitle="After"
+                  styles={{
+                    variables: {
+                      light: {
+                        diffViewerBackground: '#ffffff',
+                        addedBackground: '#e6ffed',
+                        removedBackground: '#ffeef0',
+                        wordAddedBackground: '#acf2bd',
+                        wordRemovedBackground: '#fdb8c0',
+                        addedGutterBackground: '#cdffd8',
+                        removedGutterBackground: '#ffdce0',
+                        gutterBackground: '#f7f7f7',
+                        gutterBackgroundDark: '#f3f3f3',
+                        highlightBackground: '#fffbdd',
+                        highlightGutterBackground: '#fff5b1',
+                      },
                     },
-                  },
-                  line: {
-                    padding: '10px 2px',
-                    fontSize: '14px',
-                    lineHeight: '1.6',
-                  },
-                }}
-              />
+                    line: {
+                      padding: '10px 2px',
+                      fontSize: '14px',
+                      lineHeight: '1.6',
+                    },
+                  }}
+                />
+              </div>
             </div>
           )}
         </div>

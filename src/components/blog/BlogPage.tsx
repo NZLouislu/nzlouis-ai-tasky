@@ -1685,6 +1685,8 @@ export default function BlogPage() {
               originalBlocks={pendingModification.original}
               modifiedBlocks={pendingModification.modified}
               explanation={pendingModification.explanation}
+              originalTitle={activePost?.title}
+              modifiedTitle={pendingModification.title || activePost?.title}
               onAccept={() => {
                 console.log("✅ Accepting modification");
                 updateLocalPostContent(pendingModification.modified);
