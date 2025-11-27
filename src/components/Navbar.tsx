@@ -9,6 +9,7 @@ import { useSession, signOut } from "next-auth/react";
 export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
+  const [userImage, setUserImage] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
@@ -38,10 +39,13 @@ export default function Navbar() {
   useEffect(() => {
     if (session?.user?.name) {
       setUsername(session.user.name);
+      setUserImage(session.user.image || null);
     } else if (isAdmin) {
       setUsername("Admin");
+      setUserImage(null);
     } else {
       setUsername(null);
+      setUserImage(null);
     }
   }, [session, isAdmin]);
 
@@ -151,6 +155,22 @@ export default function Navbar() {
 
           {username && (
             <div className="flex items-center gap-4 border-l border-gray-200 pl-6">
+              {/* User Avatar */}
+              {userImage ? (
+                <Image
+                  src={userImage}
+                  alt={username}
+                  width={32}
+                  height={32}
+                  className="rounded-full"
+                  unoptimized
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm font-semibold">
+                  {username.charAt(0).toUpperCase()}
+                </div>
+              )}
+              
               <span className="text-sm text-gray-700 font-medium">
                 {username}
               </span>
@@ -200,8 +220,26 @@ export default function Navbar() {
 
             {username ? (
               <div className="flex flex-col gap-1 pt-2 border-t border-gray-200 mt-2">
-                <div className="text-sm text-gray-700 font-medium px-2 py-1">
-                  {username}
+                <div className="flex items-center gap-3 px-2 py-1">
+                  {/* User Avatar */}
+                  {userImage ? (
+                    <Image
+                      src={userImage}
+                      alt={username}
+                      width={32}
+                      height={32}
+                      className="rounded-full"
+                      unoptimized
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm font-semibold">
+                      {username.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  
+                  <div className="text-sm text-gray-700 font-medium">
+                    {username}
+                  </div>
                 </div>
 
                 {isAdmin && (

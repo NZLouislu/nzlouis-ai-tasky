@@ -55,16 +55,7 @@ export default function BlogContent({
   return (
     <div className="w-full max-w-3xl md:max-w-4xl lg:max-w-5xl mx-auto px-2 sm:px-4 md:px-6">
       <div className="flex items-center justify-center mb-8">
-        {activePost && activePost.icon && (
-          <div className="relative mr-4">
-            <span
-              className="text-3xl cursor-pointer hover:bg-gray-100 p-2 rounded-lg transition-colors"
-              onClick={() => {}}
-            >
-              {activePost.icon}
-            </span>
-          </div>
-        )}
+
         <div className="flex-1 text-center">
           <textarea
             ref={titleRef}

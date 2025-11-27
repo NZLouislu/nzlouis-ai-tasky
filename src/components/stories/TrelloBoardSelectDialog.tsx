@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { X, Search, Plus, ExternalLink } from "lucide-react";
+import { X, Search, Plus, ExternalLink, CheckCircle2 } from "lucide-react";
 import { useStoriesStore } from "@/lib/stores/stories-store";
 
 interface TrelloBoard {
@@ -100,6 +100,21 @@ export default function TrelloBoardSelectDialog({
     window.open('https://trello.com/', '_blank');
   };
 
+  const getBoardIconColor = (boardName: string): string => {
+    const colors = [
+      '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
+      '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B739', '#52B788',
+      '#E74C3C', '#3498DB', '#9B59B6', '#1ABC9C', '#F39C12',
+      '#E67E22', '#16A085', '#27AE60', '#2980B9', '#8E44AD'
+    ];
+    const index = boardName.charCodeAt(0) % colors.length;
+    return colors[index];
+  };
+
+  const getBoardInitial = (boardName: string): string => {
+    return boardName.charAt(0).toUpperCase();
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -163,7 +178,7 @@ export default function TrelloBoardSelectDialog({
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
               {filteredBoards
                 .filter(board => !addedBoardIds.has(board.id))
                 .map((board) => (
@@ -171,32 +186,27 @@ export default function TrelloBoardSelectDialog({
                     key={board.id}
                     onClick={() => handleSelectBoard(board)}
                     disabled={isSelecting}
-                    className="group relative p-5 border-2 border-blue-200 rounded-xl transition-all text-left hover:border-blue-500 hover:shadow-lg hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-br from-blue-50 to-white"
+                    className="w-full p-4 border border-gray-200 rounded-lg text-left transition-colors hover:border-blue-500 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <div className="absolute top-3 right-3 w-5 h-5 border-2 border-blue-400 rounded group-hover:bg-blue-500 group-hover:border-blue-500 transition-all flex items-center justify-center">
-                      <svg className="w-3 h-3 text-white opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
+                    <div className="flex items-start space-x-3">
+                      <div 
+                        className="w-10 h-10 rounded flex-shrink-0 flex items-center justify-center text-white font-bold text-lg"
+                        style={{ backgroundColor: getBoardIconColor(board.name) }}
+                      >
+                        {getBoardInitial(board.name)}
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-gray-800 truncate">
+                          {board.name}
+                        </h3>
+                        {board.desc && (
+                          <p className="text-sm text-gray-600 line-clamp-2 mt-1">
+                            {board.desc}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    
-                    <h3 className="font-semibold text-gray-900 truncate mb-2 pr-8 text-base">
-                      {board.name}
-                    </h3>
-                    {board.desc && (
-                      <p className="text-sm text-gray-600 line-clamp-2 mb-3">
-                        {board.desc}
-                      </p>
-                    )}
-                    <a
-                      href={board.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      View in Trello
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
                   </button>
                 ))}
 
@@ -205,41 +215,50 @@ export default function TrelloBoardSelectDialog({
                 .map((board) => (
                   <div
                     key={board.id}
-                    className="p-5 border-2 border-gray-200 rounded-xl bg-gray-50 text-left opacity-60 cursor-not-allowed"
+                    className="w-full p-4 border border-gray-200 rounded-lg bg-gray-100 opacity-60 cursor-not-allowed"
                   >
-                    <div className="flex items-start justify-between mb-2">
-                      <h3 className="font-medium text-gray-500 truncate pr-2">
-                        {board.name}
-                      </h3>
-                      <span className="text-xs bg-gray-300 text-gray-600 px-2 py-1 rounded-full whitespace-nowrap">
-                        Already Added
-                      </span>
+                    <div className="flex items-start space-x-3">
+                      <div 
+                        className="w-10 h-10 rounded flex-shrink-0 flex items-center justify-center text-white font-bold text-lg grayscale"
+                        style={{ backgroundColor: getBoardIconColor(board.name) }}
+                      >
+                        {getBoardInitial(board.name)}
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2">
+                          <h3 className="font-medium text-gray-500 truncate">
+                            {board.name}
+                          </h3>
+                          <span className="flex items-center text-xs text-green-600">
+                            <CheckCircle2 className="w-4 h-4 mr-1" />
+                            Connected
+                          </span>
+                        </div>
+                        {board.desc && (
+                          <p className="text-sm text-gray-400 line-clamp-2 mt-1">
+                            {board.desc}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    {board.desc && (
-                      <p className="text-sm text-gray-400 line-clamp-2 mb-3">
-                        {board.desc}
-                      </p>
-                    )}
-                    <a
-                      href={board.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-gray-400 hover:text-gray-600 hover:underline inline-flex items-center gap-1"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      View in Trello
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
                   </div>
                 ))}
             </div>
           )}
         </div>
 
-        <div className="p-6 border-t border-gray-200">
+        <div className="p-6 border-t border-gray-200 flex justify-between items-center">
+          <button
+            onClick={handleGoToTrello}
+            className="text-sm text-blue-600 hover:underline flex items-center space-x-1"
+          >
+            <ExternalLink className="w-4 h-4" />
+            <span>Open Trello</span>
+          </button>
           <button
             onClick={onClose}
-            className="w-full px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+            className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
             disabled={isSelecting}
           >
             Cancel

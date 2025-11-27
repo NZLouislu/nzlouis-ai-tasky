@@ -2,6 +2,8 @@
 import React, { useRef, useMemo, useCallback, useState, useEffect } from 'react';
 import { Send, Paperclip, Globe, Settings } from 'lucide-react';
 import Image from 'next/image';
+import TavilyKeyWarning from './TavilyKeyWarning';
+import { useTavilyKeyStatus } from '@/lib/hooks/useTavilyKeyStatus';
 
 interface AIModel {
   id: string;
@@ -45,12 +47,18 @@ export default function ChatInput({
   const [isSearchEnabled, setIsSearchEnabled] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [warningDismissed, setWarningDismissed] = useState(false);
+  const [userTriedSearch, setUserTriedSearch] = useState(false); // Track if user tried to enable search
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { hasTavilyKey, isChecking } = useTavilyKeyStatus();
 
   const availableProviders = useMemo(() => {
     const providers = new Set(availableModels.map(m => m.provider));
-    return Array.from(providers);
+    const providerArray = Array.from(providers);
+    console.log('[ChatInput] Available models:', availableModels);
+    console.log('[ChatInput] Available providers:', providerArray);
+    return providerArray;
   }, [availableModels]);
 
   const currentProviderModels = useMemo(() => {
@@ -75,6 +83,21 @@ export default function ChatInput({
       resizeObserver.disconnect();
     };
   }, []);
+
+  // Auto-disable search when no Tavily key and not Google provider
+  useEffect(() => {
+    if (!isChecking && hasTavilyKey === false && isSearchEnabled && selectedProvider !== 'google') {
+      console.log('[Search] Auto-disabling search: Tavily API key not configured');
+      setIsSearchEnabled(false);
+      setUserTriedSearch(true); // Mark that user tried to enable search
+    }
+  }, [isChecking, hasTavilyKey, isSearchEnabled, selectedProvider]);
+
+  // Reset warning states when provider changes
+  useEffect(() => {
+    setUserTriedSearch(false);
+    setWarningDismissed(false);
+  }, [selectedProvider]);
 
   const isNarrowContainer = containerWidth > 0 && containerWidth < 500;
   const shouldStackControls = isMobile || isNarrowContainer;
@@ -153,6 +176,13 @@ export default function ChatInput({
               Go to Settings
             </a>
           </div>
+        )}
+        {!isChecking && hasTavilyKey === false && !warningDismissed && (
+          // For Google: show info if search is enabled
+          // For others: only show warning if user tried to enable search
+          (selectedProvider === 'google' && isSearchEnabled) || (selectedProvider !== 'google' && userTriedSearch)
+        ) && (
+          <TavilyKeyWarning provider={selectedProvider} onDismiss={() => setWarningDismissed(true)} />
         )}
 
         <form onSubmit={handleSubmit}>

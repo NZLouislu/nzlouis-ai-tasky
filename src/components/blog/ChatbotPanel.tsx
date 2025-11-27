@@ -1,6 +1,7 @@
 import React from "react";
-import { FaTimes as X, FaComments as MessageCircle } from "react-icons/fa";
+import { FaTimes as X, FaComments as MessageCircle, FaRobot } from "react-icons/fa";
 import dynamic from "next/dynamic";
+import { PartialBlock } from "@blocknote/core";
 
 const UnifiedChatbot = dynamic(() => import("../UnifiedChatbot"), {
   loading: () => <div className="h-full flex items-center justify-center text-gray-400">Loading chat interface...</div>,
@@ -34,6 +35,10 @@ interface ChatbotPanelProps {
   postId?: string;
   userId?: string;
   articleContext?: ArticleContext;
+  currentContent?: PartialBlock[];
+  currentTitle?: string;
+  onApplySuggestion?: (suggestion: any) => void;
+  onRestoreVersion?: (content: PartialBlock[]) => void;
 }
 
 export default function ChatbotPanel({
@@ -49,6 +54,7 @@ export default function ChatbotPanel({
   userId,
   articleContext,
 }: ChatbotPanelProps) {
+
   if (!isChatbotVisible) {
     return (
       <button
@@ -123,18 +129,20 @@ export default function ChatbotPanel({
       >
         <div className="p-4 border-b border-gray-200 flex-shrink-0 relative bg-white">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold">AI Blog Assistant</h3>
+            <h3 className="font-semibold text-lg flex items-center gap-2">
+              <FaRobot className="text-blue-500" /> AI Assistant
+            </h3>
             <button
               onClick={() => setIsChatbotVisible(false)}
               className="p-1 text-gray-500 hover:text-gray-700 rounded hover:bg-gray-100 transition-colors"
-              title="Close Chatbot"
+              title="Close Panel"
             >
               <X size={20} />
             </button>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto bg-gray-50">
           <UnifiedChatbot
             mode="workspace"
             onPageModification={handlePageModification}

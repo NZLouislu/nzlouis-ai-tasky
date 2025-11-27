@@ -132,7 +132,9 @@ export default function Sidebar({
               // For pages without subpages, also display a placeholder icon to maintain alignment
               <div className="w-5 mr-1"></div>
             )}
-            {page.icon && <span className="mr-2 flex-shrink-0">{page.icon}</span>}
+            {page.icon && (!page.title || !page.title.trim().startsWith(page.icon)) && (
+              <span className="mr-2 flex-shrink-0">{page.icon}</span>
+            )}
             {editingPageId === page.id ? (
               <input
                 type="text"

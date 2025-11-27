@@ -79,6 +79,9 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
 
+    console.log('[API /ai-keys GET] User ID:', userId);
+    console.log('[API /ai-keys GET] Keys from DB:', keys);
+
     return NextResponse.json({ keys: keys || [] });
   } catch (error) {
     console.error('Error fetching API keys:', error);

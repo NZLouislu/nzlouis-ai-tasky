@@ -108,7 +108,14 @@ export default function ChatbotSettingsPage() {
       const res = await fetch('/api/ai-settings');
       const data = await res.json();
       if (data.settings) {
-        setSettings(data.settings);
+        // Map snake_case from DB to camelCase for state
+        setSettings({
+          defaultProvider: data.settings.default_provider || 'google',
+          defaultModel: data.settings.default_model || 'gemini-2.5-flash',
+          temperature: data.settings.temperature ?? 0.8,
+          maxTokens: data.settings.max_tokens ?? 1024,
+          systemPrompt: data.settings.system_prompt || 'You are a helpful AI assistant.',
+        });
       }
     } catch (error) {
       console.error('Failed to load settings:', error);

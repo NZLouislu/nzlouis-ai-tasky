@@ -106,11 +106,14 @@ export default function UnifiedChatbot({
   // Load available models if not loaded
   useEffect(() => {
     const loadAvailableModels = async () => {
-      if (availableModels.length > 0) return; // Already loaded
+      // Always fetch latest models to ensure new providers are shown
+      // if (availableModels.length > 0) return; 
 
       try {
         const res = await fetch('/api/ai-models');
         const data = await res.json();
+
+        console.log('[UnifiedChatbot] Fetched models from API:', data.models);
 
         if (data.models && data.models.length > 0) {
           const sortedModels = data.models.sort((a: any, b: any) => {
@@ -118,6 +121,9 @@ export default function UnifiedChatbot({
             if (a.provider !== 'google' && b.provider === 'google') return 1;
             return 0;
           });
+
+          console.log('[UnifiedChatbot] Setting available models:', sortedModels);
+          console.log('[UnifiedChatbot] Available providers:', [...new Set(sortedModels.map((m: any) => m.provider))]);
 
           setAvailableModels(sortedModels);
           
@@ -127,6 +133,8 @@ export default function UnifiedChatbot({
             setSelectedProvider(firstProvider);
             setSelectedModel(sortedModels[0].id);
           }
+        } else {
+          console.warn('[UnifiedChatbot] No models returned from API');
         }
       } catch (error) {
         console.error('Failed to load AI models:', error);
@@ -134,7 +142,7 @@ export default function UnifiedChatbot({
     };
 
     loadAvailableModels();
-  }, [availableModels.length, setAvailableModels, setSelectedModel, setSelectedProvider]);
+  }, [setAvailableModels, setSelectedModel, setSelectedProvider]);
 
   // Detect mobile
   // Detect mobile based on window width OR container width
@@ -511,12 +519,12 @@ export default function UnifiedChatbot({
       if (!text.trim() && previewImages.length === 0) return;
       if (!selectedModel) return;
 
-      // Check if this is a Blog modification request
+      // Check if this is a modification request - if so, call API directly
       if (mode === "workspace" && onPageModification) {
-        // Detect if the user wants to modify the blog content
         const modificationKeywords = [
-          'modify', 'change', 'replace', 'add', 'insert', 'delete', 'improve',
-          'can you', 'please', 'help me', '修改', '改成', '添加', '插入', '删除'
+          'modify', 'change', 'replace', 'add', 'insert', 'delete', 'improve', 'update', 'edit', 'write',
+          'can you', 'please', 'help me',
+          '修改', '改成', '添加', '插入', '删除', '新增', '增加', '写', '更新', '编辑', '重写', '详细', '扩展'
         ];
 
         const isModificationRequest = modificationKeywords.some(keyword =>
@@ -524,9 +532,8 @@ export default function UnifiedChatbot({
         );
 
         if (isModificationRequest) {
-          console.log('🔧 Detected modification request:', text);
+          console.log('🔧 Detected modification request, calling API directly:', text);
 
-          // This is a modification request, handle it specially
           const userMessage: Message = {
             id: uuidv4(),
             content: text,
@@ -538,16 +545,14 @@ export default function UnifiedChatbot({
           setIsLoading(true);
 
           try {
-            console.log('🔧 Calling onPageModification with instruction:', text);
-
-            // Pass the instruction text directly
+            // Call the modification API directly - it will show the preview window
             const result = await onPageModification({
               type: 'modify',
-              content: text,  // This is the instruction
-              title: text,    // Also pass as title for compatibility
+              content: text,
+              title: text,
             });
 
-            console.log('🔧 Modification result:', result);
+            console.log('✅ Modification result:', result);
 
             const assistantMessage: Message = {
               id: uuidv4(),
@@ -557,7 +562,7 @@ export default function UnifiedChatbot({
             };
             appendMessage(assistantMessage);
           } catch (error) {
-            console.error('🔧 Modification error:', error);
+            console.error('❌ Modification error:', error);
             const errorMessage: Message = {
               id: uuidv4(),
               content: `❌ Failed to apply modification: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -607,15 +612,11 @@ ${articleContext.content || '(Article is empty)'}
 
 ---
 
-You are an AI assistant helping to edit this blog article. You can help the user:
-1. View and understand the current article content
-2. Modify the article title
-3. Add new content to the article
-4. Update existing content
-5. Delete specific paragraphs or sections
-6. Reorganize the article structure
-
-When the user asks you to modify the article, provide clear instructions on what changes should be made.
+You are an AI assistant helping with this blog article. You can:
+- Answer questions about the article
+- Provide suggestions and ideas
+- Help with research and fact-checking
+- Discuss content improvements
 
 Please respond in the same language as the user's question.`,
             images: undefined
@@ -630,9 +631,6 @@ Please respond in the same language as the user's question.`,
         });
 
         const hasImages = chatMessages.some(m => m.images && m.images.length > 0);
-        // Use chat-vision only for Google provider when images are present, 
-        // as it supports env var API keys which chat/route.ts might not for Google.
-        // For all other providers (like OpenRouter), use /api/chat which handles vision correctly.
         const apiEndpoint = (hasImages && selectedProvider === 'google') ? '/api/chat-vision' : '/api/chat';
 
         console.log('Using API:', apiEndpoint, 'Has images:', hasImages, 'Model:', selectedModel, 'Provider:', selectedProvider, 'Search:', options?.searchWeb);
@@ -674,7 +672,6 @@ Please respond in the same language as the user's question.`,
           const { done, value } = await reader.read();
           if (done) {
             setIsLoading(false);
-            // Save the full message to the database
             if (mode === "workspace" && (postId || documentId) && userId) {
               const completedMessage = {
                 ...assistantMessage,

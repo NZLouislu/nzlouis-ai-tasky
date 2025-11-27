@@ -107,11 +107,11 @@ export default function ChatbotPage() {
 
   useEffect(() => {
     if (!isCheckingAuth && (session?.user || isAdmin)) {
-      if (availableModels.length === 0) {
-        loadAvailableModels();
-      }
+      // Always reload models to ensure we have the latest configured providers
+      loadAvailableModels();
     }
-  }, [session, isAdmin, isCheckingAuth, availableModels.length]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, isAdmin, isCheckingAuth]);
 
   useEffect(() => {
     if (input.trim()) {

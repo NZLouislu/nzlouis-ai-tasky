@@ -15,6 +15,10 @@ import { CoverPicker } from "./CoverPicker";
 import CoverOptions from "./CoverOptions";
 import ChatbotPanel from "./ChatbotPanel";
 import { useSession } from "next-auth/react";
+import { ModificationPreview } from "./ModificationPreview";
+import { QualityDashboard } from "./QualityDashboard";
+import { VersionHistory } from "./VersionHistory";
+import { SuggestionEngine } from "@/lib/blog/suggestion-engine";
 
 interface PageModification {
   type: string;
@@ -441,6 +445,18 @@ export default function BlogPage() {
   const unsavedChanges = useRef<Map<string, Post>>(new Map());
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isCreatingPost = useRef<boolean>(false);
+
+  // Modification Preview State
+  const [pendingModification, setPendingModification] = useState<{
+    original: PartialBlock[];
+    modified: PartialBlock[];
+    explanation: string;
+    title?: string;
+    modObject: PageModification;
+  } | null>(null);
+
+  // Sidebar Tabs State
+  const [rightSidebarTab, setRightSidebarTab] = useState<'chat' | 'quality' | 'history'>('chat');
 
   const createNewPost = useCallback(async () => {
     try {
@@ -1166,23 +1182,53 @@ export default function BlogPage() {
 
           // Apply modifications
           console.log("Applying modifications:", data.modifications);
-          let appliedCount = 0;
+          
+          // Process all modifications to extract title and content changes
+          if (data.modifications.length > 0) {
+            let modifiedContent: PartialBlock[] = [...(currentPost.content || [])];
+            let newTitle: string | undefined = undefined;
+            
+            // Helper to convert string content to PartialBlock array
+            const stringToBlocks = (content: string): PartialBlock[] => {
+              const lines = content.split('\n').filter(line => line.trim());
+              return lines.map(line => ({
+                type: 'paragraph',
+                content: [{ type: 'text', text: line, styles: {} }],
+                props: {}
+              } as PartialBlock));
+            };
 
-          for (const mod of data.modifications) {
-            try {
-              await applyModification(mod, data.explanation);
-              appliedCount++;
-            } catch (modError) {
-              console.error("Failed to apply modification:", modError);
+            // Process all modifications
+            for (const mod of data.modifications) {
+              if (mod.type === 'update_title' && mod.title) {
+                newTitle = mod.title;
+                console.log('📝 Title will be updated to:', newTitle);
+              } else if (mod.type === 'replace' && mod.content) {
+                modifiedContent = stringToBlocks(mod.content);
+                console.log('🔄 Content will be replaced');
+              } else if (mod.type === 'append' && mod.content) {
+                modifiedContent = [...modifiedContent, ...stringToBlocks(mod.content)];
+                console.log('➕ Content will be appended');
+              } else if (mod.type === 'insert' && mod.content && typeof mod.position === 'number') {
+                const newBlocks = stringToBlocks(mod.content);
+                modifiedContent.splice(mod.position, 0, ...newBlocks);
+                console.log('📌 Content will be inserted at position:', mod.position);
+              }
             }
+            
+            // Set pending modification to show preview
+            setPendingModification({
+              original: currentPost.content || [],
+              modified: modifiedContent,
+              explanation: data.explanation || 'AI generated modification',
+              title: newTitle, // This will be the new title if update_title was in modifications
+              modObject: data.modifications[0] // Keep the first mod for compatibility
+            });
+            
+            return "👀 Previewing changes... Please review and accept in the dialog.";
           }
 
-          if (appliedCount === 0) {
-            return "⚠️ Modifications were generated but failed to apply. Please try again.";
-          }
-
-          // Show success message with option to view history
-          return `✅ Successfully applied ${appliedCount} modification(s)!\n\n${data.explanation || ''}\n\n💡 AI-modified content is highlighted in yellow.`;
+          return "⚠️ No modifications to apply.";
         } catch (fetchError) {
           clearTimeout(timeoutId);
           if (fetchError instanceof Error && fetchError.name === 'AbortError') {
@@ -1580,6 +1626,25 @@ export default function BlogPage() {
     }
   };
 
+  const handleRestoreVersion = useCallback((content: PartialBlock[]) => {
+    if (window.confirm("Are you sure you want to restore this version? Current changes will be lost.")) {
+      updateLocalPostContent(content);
+      // Save as a new version to prevent data loss
+      if (activePostId && userId) {
+        // We could call version control save here
+      }
+    }
+  }, [updateLocalPostContent, activePostId, userId]);
+
+  const handleApplySuggestion = useCallback((suggestion: any) => {
+    // Open chatbot and ask AI to fix it
+    setIsChatbotVisible(true);
+    // TODO: Send message to chatbot
+    // This requires exposing a method from UnifiedChatbot or using a store
+    console.log("Apply suggestion:", suggestion);
+    alert("Please ask the AI Assistant to help fix this issue: " + suggestion.message);
+  }, []);
+
   // Find active post
   const activePost = findPostById(localPosts, activePostId);
 
@@ -1612,6 +1677,47 @@ export default function BlogPage() {
 
   return (
     <div className="flex min-h-screen bg-gray-50 overflow-x-hidden w-full">
+      {/* Modification Preview Dialog */}
+      {pendingModification && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <ModificationPreview
+              originalBlocks={pendingModification.original}
+              modifiedBlocks={pendingModification.modified}
+              explanation={pendingModification.explanation}
+              onAccept={() => {
+                console.log("✅ Accepting modification");
+                updateLocalPostContent(pendingModification.modified);
+                
+                // Update title if present
+                if (pendingModification.title) {
+                  console.log("📝 Updating title to:", pendingModification.title);
+                  updateLocalPostTitle(activePostId, pendingModification.title);
+                }
+                
+                // Add to AI history
+                setAiModifications(prev => [{
+                  timestamp: Date.now(),
+                  type: pendingModification.modObject.type,
+                  blockIds: [], 
+                  explanation: pendingModification.explanation
+                }, ...prev]);
+                
+                setPendingModification(null);
+              }}
+              onReject={() => {
+                console.log("❌ Rejecting modification");
+                setPendingModification(null);
+              }}
+              onEdit={() => {
+                // For now, just close and let user edit manually
+                setPendingModification(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Sidebar Toggle Button - Shows when sidebar is collapsed or on mobile */}
       {(sidebarCollapsed || isMobile) && !sidebarOpen && (
         <button
@@ -1727,6 +1833,26 @@ export default function BlogPage() {
           {activePost && (
             <div className="w-full max-w-full sm:max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 xl:px-16 py-6">
               {/* Move IconSelector and CoverOptions here to show above the title */}
+              {/* Post Icon Display */}
+              <div className="flex justify-center mb-6">
+                {activePost.icon ? (
+                  <button
+                    onClick={() => setShowIconSelector(!showIconSelector)}
+                    className="text-6xl hover:bg-gray-100 p-4 rounded-xl transition-colors animate-in fade-in zoom-in duration-200"
+                    title="Click to change icon"
+                  >
+                    {activePost.icon}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setShowIconSelector(!showIconSelector)}
+                    className="flex items-center gap-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors text-sm"
+                  >
+                    <span>😀 Add Icon</span>
+                  </button>
+                )}
+              </div>
+
               <IconSelector
                 showIconSelector={showIconSelector}
                 setShowIconSelector={setShowIconSelector}
@@ -1878,6 +2004,10 @@ export default function BlogPage() {
             coverType: activePost.cover?.type,
             coverValue: activePost.cover?.value,
           } : undefined}
+          currentContent={activePost?.content as PartialBlock[]}
+          currentTitle={activePost?.title}
+          onApplySuggestion={handleApplySuggestion}
+          onRestoreVersion={handleRestoreVersion}
         />
       </div>
     </div>

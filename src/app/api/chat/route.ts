@@ -162,6 +162,7 @@ interface ChatRequest {
   maxTokens?: number;
   sessionId?: string;
   searchWeb?: boolean;
+  userId?: string; // Allow callers to pass userId
 }
 
 export async function POST(req: NextRequest) {
@@ -170,10 +171,13 @@ export async function POST(req: NextRequest) {
     console.log('[Performance] Chat API request started');
 
     const session = await auth();
-    const userId = getUserIdFromRequest(session?.user?.id, req);
-
+    
     const body: ChatRequest = await req.json();
     const { messages, modelId } = body;
+    
+    // Prefer userId from body (for internal API calls), fallback to session
+    const userId = body.userId || getUserIdFromRequest(session?.user?.id, req);
+    console.log('[Chat API] Using userId:', userId ? 'present' : 'undefined');
 
     if (!messages || messages.length === 0) {
       return new Response(
@@ -524,28 +528,43 @@ export async function POST(req: NextRequest) {
         apiKey = cached.data;
         console.log(`[Performance] API key loaded from cache in ${Date.now() - apiKeyStartTime}ms`);
       } else {
-        const { decryptAPIKey } = await import('@/lib/encryption');
+        // Try to get user's API key from database
+        let userApiKey: string | null = null;
         
-        const { data: apiKeyRecord } = await taskyDb
-          .from('user_api_keys')
-          .select('key_encrypted, iv, auth_tag')
-          .eq('user_id', userId)
-          .eq('provider', 'google')
-          .single();
+        if (userId) {
+          const { decryptAPIKey } = await import('@/lib/encryption');
+          
+          const { data: apiKeyRecord } = await taskyDb
+            .from('user_api_keys')
+            .select('key_encrypted, iv, auth_tag')
+            .eq('user_id', userId)
+            .eq('provider', 'google')
+            .single();
 
-        if (!apiKeyRecord) {
-          throw new Error('Google API key not found');
+          if (apiKeyRecord) {
+            userApiKey = decryptAPIKey(
+              apiKeyRecord.key_encrypted,
+              apiKeyRecord.iv,
+              apiKeyRecord.auth_tag
+            );
+            console.log(`[Performance] User API key retrieved and decrypted in ${Date.now() - apiKeyStartTime}ms`);
+          }
         }
 
-        apiKey = decryptAPIKey(
-          apiKeyRecord.key_encrypted,
-          apiKeyRecord.iv,
-          apiKeyRecord.auth_tag
-        );
+        // Fallback to environment variable if user doesn't have their own key
+        if (userApiKey) {
+          apiKey = userApiKey;
+        } else {
+          const envKey = process.env.GOOGLE_GEMINI_API_KEY;
+          if (!envKey) {
+            throw new Error('Google API key not found in user settings or environment variables');
+          }
+          apiKey = envKey;
+          console.log(`[Performance] Using fallback env API key in ${Date.now() - apiKeyStartTime}ms`);
+        }
         
-        // Cache the decrypted key
+        // Cache the key
         apiKeyCache.set(cacheKey, { data: apiKey, timestamp: Date.now() });
-        console.log(`[Performance] API key retrieved, decrypted and cached in ${Date.now() - apiKeyStartTime}ms`);
       }
 
       const modelMap: Record<string, string> = {

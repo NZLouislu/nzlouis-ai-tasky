@@ -32,6 +32,7 @@ function detectLanguage(text: string): string {
   if (/[\u0400-\u04FF]/.test(text)) return 'Russian';
   return 'English';
 }
+
 function blocksToText(blocks: PartialBlock[]): string {
   return blocks.map(block => {
     if (typeof block.content === 'string') {
@@ -106,6 +107,8 @@ ${structureInfo}
 - append: Append content at the end (recommended for adding detailed content)
 - insert: Insert content at specific position
 - add_section: Add new section
+- delete: Delete specific paragraph or section
+- replace_paragraph: Replace specific paragraph content
 
 **Content Quality Requirements:**
 - If user requests "detailed", "more", "expand": generate at least 300-500 words
@@ -202,7 +205,8 @@ Now generate the JSON for modification operations.`;
             const text = JSON.parse(jsonStr);
             fullResponse += text;
           } catch (error) {
-            console.error('Error parsing line:', error);
+            // Silently skip parsing errors - they're expected in streaming responses
+            // The final response will be parsed after all chunks are received
           }
         }
       }
@@ -390,6 +394,57 @@ Looking to the future, ${topic} is still full of infinite possibilities. With te
 Therefore, continuing to pay attention to and research ${topic} will not only help us better understand the world but also provide valuable insights and guidance for addressing future challenges.`;
 }
 
+// Generate paragraph content for "add" operations (not full article)
+function generateParagraphContent(topic: string, language: string): string {
+  const topicLower = topic.toLowerCase();
+  
+  // SpaceX / Elon Musk / Mars specific content
+  if (topicLower.includes('spacex') || topicLower.includes('马斯克') || topicLower.includes('elon') || 
+      (topicLower.includes('火星') && (topicLower.includes('计划') || topicLower.includes('探索') || topicLower.includes('plan')))) {
+    
+    if (language === 'Chinese') {
+      return `## SpaceX的火星探索计划
+
+埃隆·马斯克（Elon Musk）创立的SpaceX公司，将人类移民火星作为其终极目标。马斯克多次公开表示，他希望在2050年之前在火星上建立一个自给自足的城市，容纳至少100万人口。
+
+SpaceX的火星计划核心是Starship（星舰）超重型运载火箭系统。这个完全可重复使用的航天器高约120米，直径9米，设计运载能力可达100-150吨。Starship已经完成多次测试飞行，2024年6月实现了首次成功的软着陆回收。
+
+根据马斯克的时间表，SpaceX计划在2026年发射首批无人Starship前往火星，测试着陆技术和生命支持系统。如果成功，2028-2030年将发送更多无人任务，建立燃料生产设施（利用火星大气中的CO2和地下水制造甲烷燃料）。首次载人任务预计在2033年左右进行。
+
+这个宏伟计划面临巨大挑战：火星之旅单程需要6-9个月，宇航员将面临辐射、微重力、心理压力等问题。火星表面温度极低（平均-63°C），大气稀薄（仅为地球的1%），需要建造加压栖息地。但马斯克坚信，成为"多行星物种"是人类文明延续的关键。`;
+    } else {
+      return `## SpaceX's Mars Exploration Plan
+
+SpaceX, founded by Elon Musk, has made human colonization of Mars its ultimate goal. Musk has publicly stated multiple times that he hopes to establish a self-sustaining city on Mars by 2050, housing at least 1 million people.
+
+The core of SpaceX's Mars plan is the Starship super-heavy launch system. This fully reusable spacecraft stands about 120 meters tall with a 9-meter diameter, designed to carry 100-150 tons of payload. Starship has completed multiple test flights, achieving its first successful soft landing and recovery in June 2024.
+
+According to Musk's timeline, SpaceX plans to launch the first uncrewed Starships to Mars in 2026 to test landing technology and life support systems. If successful, more uncrewed missions will follow in 2028-2030 to establish fuel production facilities (using CO2 from Mars' atmosphere and underground water to produce methane fuel). The first crewed mission is expected around 2033.
+
+This ambitious plan faces enormous challenges: the journey to Mars takes 6-9 months one way, and astronauts will face radiation, microgravity, and psychological stress. Mars' surface temperature is extremely cold (average -63°C), with a thin atmosphere (only 1% of Earth's), requiring pressurized habitats. However, Musk firmly believes that becoming a "multi-planetary species" is key to the continuation of human civilization.`;
+    }
+  }
+  
+  // Generic paragraph content for other topics
+  if (language === 'Chinese') {
+    return `## 关于${topic}
+
+${topic}是一个值得深入探讨的重要主题。在当今快速发展的时代，理解${topic}的本质和影响变得越来越重要。
+
+从历史角度来看，${topic}的发展经历了多个重要阶段。早期的研究和实践为我们今天的理解奠定了基础。随着时间的推移，人们对${topic}的认识不断深化，新的发现和理论不断涌现，推动着这个领域向前发展。
+
+在实践层面，${topic}已经在多个领域产生了深远的影响。它不仅改变了我们的工作方式和生活方式，还为解决许多复杂问题提供了新的思路和方法。`;
+  } else {
+    return `## About ${topic}
+
+${topic} is an important subject worthy of in-depth exploration. In today's rapidly evolving era, understanding the nature and impact of ${topic} has become increasingly important.
+
+From a historical perspective, the development of ${topic} has gone through several important stages. Early research and practice laid the foundation for our understanding today. Over time, people's understanding of ${topic} has continued to deepen, with new discoveries and theories constantly emerging.
+
+At the practical level, ${topic} has had a profound impact in multiple areas. It has not only changed the way we work and live but also provided new ideas and methods for solving many complex problems.`;
+  }
+}
+
 function generateDefaultModifications(
   instruction: string,
   currentTitle: string,
@@ -569,13 +624,11 @@ function generateDefaultModifications(
     if (hasAddKeyword) {
       const topic = extractTopic(instruction);
       
-      // Generate detailed content based on topic
-      const defaultContent = language === 'Chinese'
-        ? topic 
-          ? generateDetailedChineseContent(topic)
-          : '这是根据您的指令添加的新内容。\n\n本节内容将为您的文章增添更多深度和细节。我们建议您根据具体需求进一步编辑和扩展这些内容，以确保文章的完整性和专业性。\n\n您可以添加更多的事实、数据、案例研究或个人见解，使内容更加丰富和有价值。'
-        : topic
-          ? generateDetailedEnglishContent(topic)
+      // Generate paragraph content (not full article) based on topic
+      const defaultContent = topic 
+        ? generateParagraphContent(topic, language)
+        : language === 'Chinese'
+          ? '这是根据您的指令添加的新内容。\n\n本节将为您的文章增加更多深度和细节。我们建议您根据具体需求进一步编辑和扩展此内容，以确保文章的完整性和专业性。\n\n您可以添加更多事实、数据、案例研究或个人见解，使内容更加丰富和有价值。'
           : 'This is new content added based on your instruction.\n\nThis section will add more depth and detail to your article. We recommend that you further edit and expand this content according to your specific needs to ensure the completeness and professionalism of the article.\n\nYou can add more facts, data, case studies, or personal insights to make the content richer and more valuable.';
       
       modifications.push({
@@ -605,19 +658,12 @@ function generateDefaultModifications(
 }
 
 export async function POST(request: NextRequest) {
-  console.log('=== AI Modify API Called ===');
-
   try {
-    
+    // Get user authentication
     const session = await auth();
-    console.log('Session:', session ? 'exists' : 'null');
-
-    // Check both NextAuth session and admin token
     const userId = getUserIdFromRequest(session?.user?.id, request);
-    console.log('User ID:', userId ? 'exists' : 'null');
 
-    if (!userId) {
-      console.log('No user ID, returning 401');
+    if (!session && !userId) {
       return NextResponse.json(
         { error: 'Unauthorized', details: 'Please log in to use this feature.' },
         { status: 401 }

@@ -49,6 +49,7 @@ interface StoriesState {
   syncStatus: SyncStatus;
   searchQuery: string;
   expandedProjects: Set<string>;
+  lastFetchTime: number | null;
 }
 
 interface StoriesActions {
@@ -66,11 +67,13 @@ interface StoriesActions {
   setSyncStatus: (status: Partial<SyncStatus>) => void;
   setSearchQuery: (query: string) => void;
   toggleProjectExpansion: (projectId: string) => void;
-  fetchProjects: () => Promise<void>;
+  fetchProjects: (forceRefresh?: boolean) => Promise<void>;
   reset: () => void;
 }
 
 type StoriesStore = StoriesState & StoriesActions;
+
+const CACHE_DURATION = 5 * 60 * 1000;
 
 const initialState: StoriesState = {
   userId: "00000000-0000-0000-0000-000000000000",
@@ -97,7 +100,8 @@ const initialState: StoriesState = {
     message: ''
   },
   searchQuery: '',
-  expandedProjects: new Set()
+  expandedProjects: new Set(),
+  lastFetchTime: null,
 };
 
 export const useStoriesStore = create<StoriesStore>()(
@@ -113,7 +117,20 @@ export const useStoriesStore = create<StoriesStore>()(
         set({ platforms });
       },
 
-      fetchProjects: async () => {
+      fetchProjects: async (forceRefresh = false) => {
+        const state = get();
+        const now = Date.now();
+        
+        if (
+          !forceRefresh &&
+          state.platforms.some(p => p.projects.length > 0) &&
+          state.lastFetchTime &&
+          now - state.lastFetchTime < CACHE_DURATION
+        ) {
+          console.log("Using cached projects data");
+          return;
+        }
+
         try {
           const response = await fetch('/api/stories/projects');
           const result = await response.json();
@@ -167,7 +184,7 @@ export const useStoriesStore = create<StoriesStore>()(
               }
             }
 
-            set({ platforms: Array.from(platformsMap.values()) });
+            set({ platforms: Array.from(platformsMap.values()), lastFetchTime: now });
           }
         } catch (error) {
           console.error('Failed to fetch projects:', error);
@@ -334,7 +351,8 @@ export const useStoriesStore = create<StoriesStore>()(
       partialize: (state) => ({
         userId: state.userId,
         platforms: state.platforms,
-        expandedProjects: Array.from(state.expandedProjects)
+        expandedProjects: Array.from(state.expandedProjects),
+        lastFetchTime: state.lastFetchTime,
       }),
       onRehydrateStorage: () => (state) => {
         if (state && Array.isArray(state.expandedProjects)) {

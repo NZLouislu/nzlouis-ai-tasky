@@ -8,6 +8,7 @@
     "build:analyze": "cross-env ANALYZE=1 NODE_OPTIONS='--max_old_space_size=6144' next build",
     "build:fast": "cross-env NODE_OPTIONS='--max_old_space_size=6144' next build --experimental-build-mode=compile",
     "start": "next start",
+    "stop": "powershell -ExecutionPolicy Bypass -File ./scripts/stop-dev.ps1",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
     "type-check": "tsc --noEmit",

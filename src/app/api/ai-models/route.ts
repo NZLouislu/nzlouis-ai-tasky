@@ -58,6 +58,9 @@ export async function GET(req: NextRequest) {
         if (error) throw error;
 
         const configuredProviders = keys?.map(k => k.provider) || [];
+        
+        console.log('[API /ai-models] User ID:', userId);
+        console.log('[API /ai-models] Configured providers from DB:', configuredProviders);
 
         const testResultsMap = new Map();
         try {
@@ -82,7 +85,9 @@ export async function GET(req: NextRequest) {
         }
 
         const models = configuredProviders.flatMap(provider => {
+            console.log('[API /ai-models] Processing provider:', provider);
             const providerModels = MODEL_CONFIGS[provider as keyof typeof MODEL_CONFIGS] || [];
+            console.log('[API /ai-models] Models for', provider, ':', providerModels.length, 'models');
             return providerModels.map(model => {
                 const testResult = testResultsMap.get(model.id);
                 return {
@@ -94,6 +99,9 @@ export async function GET(req: NextRequest) {
                 };
             });
         });
+
+        console.log('[API /ai-models] Total models to return:', models.length);
+        console.log('[API /ai-models] Models:', models);
 
         return NextResponse.json({ models });
     } catch (error) {
