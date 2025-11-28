@@ -251,8 +251,18 @@ export async function POST(req: NextRequest) {
 
     const defaultSystemPrompt = 'You are a helpful AI assistant with vision capabilities. You can see and analyze images provided by users.\\n\\n**Response Format Guidelines:**\\n- **Prefer natural text descriptions** for most responses to enhance readability\\n- **Use Markdown tables ONLY when:**\\n  1. The user explicitly requests a table or comparison\\n  2. Comparing multiple items with specific attributes (e.g., comparing products, features, specifications)\\n  3. Presenting data that is inherently tabular (e.g., schedules, pricing tiers)\\n- **For simple lists or explanations**, use bullet points or numbered lists instead of tables\\n- **Keep responses conversational and easy to read**\\n\\nWhen tables are necessary, use proper Markdown formatting:\\n| Column 1 | Column 2 |\\n|----------|----------|\\n| Data 1   | Data 2   |';
     
-    // Force use of new system prompt with Markdown table instructions
-    const systemMessage = defaultSystemPrompt;
+    // Check if a system message is provided in the messages array
+    const providedSystemMessage = messages.find(m => m.role === 'system')?.content;
+    
+    // Use provided system message if available, otherwise use default
+    // This allows specific features (like AI Blog Modify) to override the system prompt
+    const systemMessage = typeof providedSystemMessage === 'string' ? providedSystemMessage : defaultSystemPrompt;
+    
+    if (providedSystemMessage) {
+      console.log('🎯 Using provided system prompt from request');
+    } else {
+      console.log('ℹ️ Using default system prompt');
+    }
 
     type MessageContent =
       | { type: 'text'; text: string }
@@ -417,6 +427,21 @@ export async function POST(req: NextRequest) {
       promptMessages = simpleMessages as any;
     }
 
+    // ============================================
+    // CRITICAL: Limit message history to prevent Out of Memory errors
+    // ============================================
+    const MAX_MESSAGES = 20; // Keep last 20 messages + system message
+    if (promptMessages.length > MAX_MESSAGES + 1) {
+      console.log(`⚠️ Message history too long (${promptMessages.length} messages). Limiting to ${MAX_MESSAGES} recent messages.`);
+      
+      // Keep system message (first) and last N messages
+      const systemMessage = promptMessages[0];
+      const recentMessages = promptMessages.slice(-MAX_MESSAGES);
+      
+      promptMessages = [systemMessage, ...recentMessages];
+      console.log(`✅ Reduced to ${promptMessages.length} messages`);
+    }
+
     console.log('Prompt messages count:', promptMessages.length);
     console.log('First message (system):', JSON.stringify(promptMessages[0], null, 2));
 
@@ -427,7 +452,7 @@ export async function POST(req: NextRequest) {
         if (lastUserMessage) {
           const query = typeof lastUserMessage.content === 'string' 
             ? lastUserMessage.content 
-            : lastUserMessage.content.find((c: any) => c.type === 'text')?.text || '';
+            : (lastUserMessage.content as any[]).find((c: any) => c.type === 'text')?.text || '';
           
           if (query) {
             const searchResults = await performWebSearch(query);
@@ -435,9 +460,9 @@ export async function POST(req: NextRequest) {
               // Append search results to the last user message
               if (typeof lastUserMessage.content === 'string') {
                 lastUserMessage.content += searchResults;
-              } else {
+              } else if (Array.isArray(lastUserMessage.content)) {
                 const textContent = lastUserMessage.content.find((c: any) => c.type === 'text');
-                if (textContent) {
+                if (textContent && 'text' in textContent) {
                   textContent.text += searchResults;
                 }
               }

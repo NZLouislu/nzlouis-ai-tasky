@@ -5,7 +5,8 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const postId = searchParams.get('postId');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    // CRITICAL: Reduce default limit to prevent OOM
+    const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 20); // Max 20 messages
     const offset = parseInt(searchParams.get('offset') || '0');
 
     if (!postId) {
@@ -23,6 +24,8 @@ export async function GET(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    console.log(`📨 Fetching chat messages: postId=${postId}, limit=${limit}, offset=${offset}`);
 
     // Optimize: 
     // 1. Remove count: 'exact' which is slow on large tables
@@ -55,6 +58,8 @@ export async function GET(request: NextRequest) {
     // This matches the UI expectation where messages are appended/prepended
     messages.reverse();
 
+    console.log(`✅ Fetched ${messages.length} messages`);
+
     return NextResponse.json({ 
       messages,
       total: 0, // Deprecated: counting is too slow
@@ -83,6 +88,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // CRITICAL: Prevent extremely large messages
+    const MAX_CONTENT_LENGTH = 50000; // 50KB
+    if (content.length > MAX_CONTENT_LENGTH) {
+      console.warn(`⚠️ Message content too large: ${content.length} bytes`);
+      return NextResponse.json(
+        { 
+          error: 'Message content too large', 
+          details: `Maximum allowed: ${MAX_CONTENT_LENGTH} bytes, received: ${content.length} bytes` 
+        },
+        { status: 400 }
+      );
+    }
+
     const supabaseClient = supabase;
 
     if (!supabaseClient) {
@@ -91,6 +109,8 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    console.log(`💾 Saving chat message: postId=${postId}, role=${role}, length=${content.length}`);
 
     const { data, error } = await supabaseClient
       .from('blog_chat_messages')
@@ -107,10 +127,12 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('Error saving chat message:', error);
       return NextResponse.json(
-        { error: 'Failed to save chat message' },
+        { error: 'Failed to save chat message', details: error.message },
         { status: 500 }
       );
     }
+
+    console.log(`✅ Saved message: ${data.id}`);
 
     return NextResponse.json({ message: data });
   } catch (error) {

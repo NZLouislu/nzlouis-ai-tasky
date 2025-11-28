@@ -126,36 +126,54 @@ export function ModificationPreview({
               
               {/* Content Comparison */}
               <div className="overflow-hidden rounded-lg border border-gray-200">
-                <ReactDiffViewer
-                  oldValue={originalText}
-                  newValue={modifiedText}
-                  splitView={true}
-                  showDiffOnly={false}
-                  leftTitle="Before"
-                  rightTitle="After"
-                  styles={{
-                    variables: {
-                      light: {
-                        diffViewerBackground: '#ffffff',
-                        addedBackground: '#e6ffed',
-                        removedBackground: '#ffeef0',
-                        wordAddedBackground: '#acf2bd',
-                        wordRemovedBackground: '#fdb8c0',
-                        addedGutterBackground: '#cdffd8',
-                        removedGutterBackground: '#ffdce0',
-                        gutterBackground: '#f7f7f7',
-                        gutterBackgroundDark: '#f3f3f3',
-                        highlightBackground: '#fffbdd',
-                        highlightGutterBackground: '#fff5b1',
+                {(originalText.length > 50000 || modifiedText.length > 50000) ? (
+                  <div className="p-8 text-center bg-yellow-50">
+                    <h3 className="text-lg font-medium text-yellow-800 mb-2">⚠️ Preview Too Large</h3>
+                    <p className="text-yellow-700 mb-4">
+                      The modification is too large to show a visual diff ({Math.max(originalText.length, modifiedText.length)} characters).
+                      Rendering it might crash your browser.
+                    </p>
+                    <div className="flex justify-center gap-4">
+                      <button
+                        onClick={() => setIsEditing(true)}
+                        className="px-4 py-2 bg-white border border-yellow-300 text-yellow-800 rounded hover:bg-yellow-100"
+                      >
+                        View/Edit Raw Content
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <ReactDiffViewer
+                    oldValue={originalText}
+                    newValue={modifiedText}
+                    splitView={true}
+                    showDiffOnly={false}
+                    leftTitle="Before"
+                    rightTitle="After"
+                    styles={{
+                      variables: {
+                        light: {
+                          diffViewerBackground: '#ffffff',
+                          addedBackground: '#e6ffed',
+                          removedBackground: '#ffeef0',
+                          wordAddedBackground: '#acf2bd',
+                          wordRemovedBackground: '#fdb8c0',
+                          addedGutterBackground: '#cdffd8',
+                          removedGutterBackground: '#ffdce0',
+                          gutterBackground: '#f7f7f7',
+                          gutterBackgroundDark: '#f3f3f3',
+                          highlightBackground: '#fffbdd',
+                          highlightGutterBackground: '#fff5b1',
+                        },
                       },
-                    },
-                    line: {
-                      padding: '10px 2px',
-                      fontSize: '14px',
-                      lineHeight: '1.6',
-                    },
-                  }}
-                />
+                      line: {
+                        padding: '10px 2px',
+                        fontSize: '14px',
+                        lineHeight: '1.6',
+                      },
+                    }}
+                  />
+                )}
               </div>
             </div>
           )}

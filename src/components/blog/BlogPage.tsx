@@ -19,6 +19,7 @@ import { ModificationPreview } from "./ModificationPreview";
 import { QualityDashboard } from "./QualityDashboard";
 import { VersionHistory } from "./VersionHistory";
 import { SuggestionEngine } from "@/lib/blog/suggestion-engine";
+import { useAISettings } from "@/lib/useAISettings";
 
 interface PageModification {
   type: string;
@@ -27,6 +28,22 @@ interface PageModification {
   title?: string;
   position?: number;
   paragraphIndex?: number;
+}
+
+function blocksToText(blocks: PartialBlock[]): string {
+  return blocks.map(block => {
+    if (typeof block.content === 'string') {
+      return block.content;
+    }
+    if (Array.isArray(block.content)) {
+      return block.content.map(item => {
+        if (typeof item === 'string') return item;
+        if (typeof item === 'object' && 'text' in item) return item.text;
+        return '';
+      }).join('');
+    }
+    return '';
+  }).filter(text => text.trim()).join('\n\n');
 }
 
 // Use different Editor imports in Storybook environment and other environments
@@ -324,6 +341,8 @@ const mockBlogPosts = [
 ];
 
 export default function BlogPage() {
+  const { getCurrentModel } = useAISettings();
+
   // Check if we're in a Storybook environment
   const isStorybook =
     typeof window !== "undefined" &&
@@ -1127,7 +1146,7 @@ export default function BlogPage() {
 
         // Call AI modification API with timeout
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 second timeout (increased for complex AI processing)
 
         try {
           console.log("Sending request to /api/blog/ai-modify");
@@ -1148,6 +1167,7 @@ export default function BlogPage() {
               currentContent: currentPost.content || [],
               currentTitle: currentPost.title || 'Untitled',
               instruction: instruction.trim(),
+              modelId: getCurrentModel()?.id, // ✅ Pass the user's selected model
             }),
             signal: controller.signal,
           });
@@ -1176,6 +1196,13 @@ export default function BlogPage() {
 
           // Check if modifications were generated
           if (!data.modifications || data.modifications.length === 0) {
+            // Check if AI provided suggestions in the explanation
+            if (data.explanation && data.explanation.length > 50) {
+              // AI provided detailed suggestions
+              return `${data.explanation}`;
+            }
+            
+            // Generic message if no suggestions
             const message = data.message || 'No modifications were generated.';
             return `⚠️ ${message}\n\nSuggestions:\n- Be more specific (e.g., "Add a paragraph about...")\n- Try shorter instructions\n- Simplify your request\n- Make sure the article has some content`;
           }
@@ -1217,6 +1244,8 @@ export default function BlogPage() {
             }
             
             // Set pending modification to show preview
+            console.log(`📝 Setting pending modification. Original length: ${blocksToText(currentPost.content || []).length}, Modified length: ${blocksToText(modifiedContent).length}`);
+            
             setPendingModification({
               original: currentPost.content || [],
               modified: modifiedContent,
@@ -1243,7 +1272,7 @@ export default function BlogPage() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [activePostId, localPosts, findPostById]
+    [activePostId, localPosts, findPostById, getCurrentModel]
   );
 
   // Track AI modifications for highlighting

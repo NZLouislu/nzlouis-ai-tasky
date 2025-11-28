@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AIModel, getModelById } from "./aiConfig";
 
 interface DefaultApiKeys {
@@ -94,9 +94,9 @@ export function useAISettings() {
     return "";
   };
 
-  const getCurrentModel = (): AIModel | undefined => {
+  const getCurrentModel = useCallback((): AIModel | undefined => {
     return getModelById(settings.selectedModel);
-  };
+  }, [settings.selectedModel]);
 
   const setSelectedModel = (modelId: string) => {
     const model = getModelById(modelId);
