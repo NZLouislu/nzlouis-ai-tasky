@@ -28,6 +28,9 @@ interface PageModification {
   title?: string;
   position?: number;
   paragraphIndex?: number;
+  model?: string;
+  provider?: string;
+  searchEnabled?: boolean;
 }
 
 function blocksToText(blocks: PartialBlock[]): string {
@@ -1144,30 +1147,34 @@ export default function BlogPage() {
           return "⚠️ Please provide a more detailed instruction (at least 5 characters).";
         }
 
-        // Call AI modification API with timeout
+        // Call AI assist API (new agentic pipeline) with timeout
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 second timeout (increased for complex AI processing)
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 second timeout
 
         try {
-          console.log("Sending request to /api/blog/ai-modify");
+          console.log("Sending request to /api/blog/ai-assist (Agentic Pipeline)");
           console.log("Request body:", {
-            postId: activePostId,
-            currentContent: currentPost.content || [],
-            currentTitle: currentPost.title || 'Untitled',
-            instruction: instruction.trim(),
+            post_id: activePostId,
+            current_content: currentPost.content || [],
+            current_title: currentPost.title || 'Untitled',
+            message: instruction.trim(),
+            model: typeof mod !== 'string' ? mod.model : undefined,
+            provider: typeof mod !== 'string' ? mod.provider : undefined,
+            search_enabled: typeof mod !== 'string' ? mod.searchEnabled : undefined,
           });
 
-          const response = await fetch('/api/blog/ai-modify', {
+          const response = await fetch('/api/blog/ai-assist', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
+            credentials: 'include', // ✅ Ensure cookies are sent for authentication
             body: JSON.stringify({
-              postId: activePostId,
-              currentContent: currentPost.content || [],
-              currentTitle: currentPost.title || 'Untitled',
-              instruction: instruction.trim(),
-              modelId: getCurrentModel()?.id, // ✅ Pass the user's selected model
+              post_id: activePostId,
+              current_content: currentPost.content || [],
+              current_title: currentPost.title || 'Untitled',
+              message: instruction.trim(),
+              conversation_id: `blog-${activePostId}`, // Use post ID as conversation context
             }),
             signal: controller.signal,
           });
@@ -1186,47 +1193,69 @@ export default function BlogPage() {
           }
 
           const data = await response.json();
-          console.log("AI response data:", data);
+          console.log("AI assist response data:", data);
 
           if (!response.ok) {
             const errorMsg = data.error || 'Failed to get AI modifications';
-            const details = data.details || '';
-            return `❌ Error: ${errorMsg}${details ? '\n' + details : ''}\n\nTips:\n- Try a simpler request\n- Check your API quota\n- Wait a moment and try again`;
+            const message = data.message || '';
+            return `❌ Error: ${errorMsg}${message ? '\n' + message : ''}\n\nTips:\n- Try a simpler request\n- Check your API quota\n- Wait a moment and try again`;
+          }
+
+          // Check if this is a clarification request
+          if (data.reply?.type === 'clarification') {
+            return `❓ ${data.reply.content}\n\nPlease clarify your request.`;
           }
 
           // Check if modifications were generated
-          if (!data.modifications || data.modifications.length === 0) {
-            // Check if AI provided suggestions in the explanation
-            if (data.explanation && data.explanation.length > 50) {
+          if (!data.modification_preview || !data.modification_preview.modifications || 
+              data.modification_preview.modifications.length === 0) {
+            // Check if AI provided suggestions in the reply
+            if (data.reply?.content && data.reply.content.length > 50) {
               // AI provided detailed suggestions
-              return `${data.explanation}`;
+              return `${data.reply.content}`;
             }
             
             // Generic message if no suggestions
-            const message = data.message || 'No modifications were generated.';
-            return `⚠️ ${message}\n\nSuggestions:\n- Be more specific (e.g., "Add a paragraph about...")\n- Try shorter instructions\n- Simplify your request\n- Make sure the article has some content`;
+            return `⚠️ No modifications were generated.\n\nSuggestions:\n- Be more specific (e.g., "Add a paragraph about...")\n- Try shorter instructions\n- Simplify your request\n- Make sure the article has some content`;
           }
 
-          // Apply modifications
-          console.log("Applying modifications:", data.modifications);
+          // Apply modifications from the new agentic pipeline
+          console.log("Applying modifications from agentic pipeline:", data.modification_preview.modifications);
           
           // Process all modifications to extract title and content changes
-          if (data.modifications.length > 0) {
+          const modifications = data.modification_preview.modifications;
+          if (modifications.length > 0) {
             let modifiedContent: PartialBlock[] = [...(currentPost.content || [])];
             let newTitle: string | undefined = undefined;
             
             // Helper to convert string content to PartialBlock array
+            // Supports Markdown headings (##, ###) and converts them to BlockNote heading blocks
             const stringToBlocks = (content: string): PartialBlock[] => {
               const lines = content.split('\n').filter(line => line.trim());
-              return lines.map(line => ({
-                type: 'paragraph',
-                content: [{ type: 'text', text: line, styles: {} }],
-                props: {}
-              } as PartialBlock));
+              return lines.map(line => {
+                // Check if line is a Markdown heading
+                const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+                if (headingMatch) {
+                  const level = headingMatch[1].length; // Number of # symbols
+                  const text = headingMatch[2].trim();
+                  return {
+                    type: 'heading',
+                    content: [{ type: 'text', text, styles: {} }],
+                    props: { level: Math.min(level, 3) } // BlockNote supports levels 1-3
+                  } as PartialBlock;
+                }
+                
+                // Regular paragraph
+                return {
+                  type: 'paragraph',
+                  content: [{ type: 'text', text: line, styles: {} }],
+                  props: {}
+                } as PartialBlock;
+              });
             };
 
             // Process all modifications
-            for (const mod of data.modifications) {
+            for (const mod of modifications) {
               if (mod.type === 'update_title' && mod.title) {
                 newTitle = mod.title;
                 console.log('📝 Title will be updated to:', newTitle);
@@ -1249,9 +1278,9 @@ export default function BlogPage() {
             setPendingModification({
               original: currentPost.content || [],
               modified: modifiedContent,
-              explanation: data.explanation || 'AI generated modification',
+              explanation: data.modification_preview.explanation || data.reply?.content || 'AI generated modification',
               title: newTitle, // This will be the new title if update_title was in modifications
-              modObject: data.modifications[0] // Keep the first mod for compatibility
+              modObject: modifications[0] // Keep the first mod for compatibility
             });
             
             return "👀 Previewing changes... Please review and accept in the dialog.";
@@ -1320,14 +1349,29 @@ export default function BlogPage() {
       };
 
       // Helper to convert string content to PartialBlock array
+      // Supports Markdown headings (##, ###) and converts them to BlockNote heading blocks
       const stringToBlocks = (content: string): PartialBlock[] => {
-        // Split content by lines and create paragraph blocks
         const lines = content.split('\n').filter(line => line.trim());
-        return lines.map(line => ({
-          type: 'paragraph',
-          content: [{ type: 'text', text: line, styles: {} }],
-          props: {}
-        } as PartialBlock));
+        return lines.map(line => {
+          // Check if line is a Markdown heading
+          const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+          if (headingMatch) {
+            const level = headingMatch[1].length; // Number of # symbols
+            const text = headingMatch[2].trim();
+            return {
+              type: 'heading',
+              content: [{ type: 'text', text, styles: {} }],
+              props: { level: Math.min(level, 3) } // BlockNote supports levels 1-3
+            } as PartialBlock;
+          }
+          
+          // Regular paragraph
+          return {
+            type: 'paragraph',
+            content: [{ type: 'text', text: line, styles: {} }],
+            props: {}
+          } as PartialBlock;
+        });
       };
 
       // Helper to mark blocks as AI-modified (only for new modifications)

@@ -12,7 +12,7 @@ interface BlogCoverProps {
   activePostId: string;
 }
 
-export default function BlogCover({
+const BlogCover = React.memo(function BlogCover({
   activePost,
   showCoverActions,
   setShowCoverActions,
@@ -20,13 +20,8 @@ export default function BlogCover({
   removePostCover,
   activePostId,
 }: BlogCoverProps) {
+  // Removed console.log to reduce performance overhead
   if (!activePost) return null;
-
-  console.log("🖼️ BlogCover render:", {
-    activePostId,
-    hasCover: !!activePost.cover,
-    cover: activePost.cover
-  });
 
   // Show "Add Cover" button if no cover exists
   if (!activePost.cover) {
@@ -95,4 +90,6 @@ export default function BlogCover({
       </div>
     </div>
   );
-}
+});
+
+export default BlogCover;

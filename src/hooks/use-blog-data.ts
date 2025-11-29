@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useBlogStore } from "@/lib/stores/blog-store";
+import { useBlogStore, BlogPost as StoreBlogPost } from "@/lib/stores/blog-store";
 import type { PartialBlock } from "@blocknote/core";
 
 interface PostCover {
@@ -29,175 +29,91 @@ export const useBlogData = () => {
     createPost,
     updatePostContent,
     deletePostContent,
-    userId, // Get userId from store
-    setUserId, // Get setUserId from store
+    userId,
+    setUserId,
+    isLoading: storeLoading,
+    error: storeError,
   } = useBlogStore();
-  const [localPosts, setLocalPosts] = useState<BlogPost[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Position convertPost function at the beginning to ensure it can be accessed in useEffect
-  const convertPost = useCallback((post: BlogPost): BlogPost => {
+  // Helper to convert store posts to component format
+  const convertPost = useCallback((post: StoreBlogPost): BlogPost => {
     let content: PartialBlock[] = [];
-    if (
-      post.content &&
-      typeof post.content === "object" &&
-      Array.isArray(post.content)
-    ) {
-      content = post.content as PartialBlock[];
-    } else if (post.content && typeof post.content === "string") {
-      try {
-        const parsed = JSON.parse(post.content);
-        if (Array.isArray(parsed)) {
-          content = parsed as PartialBlock[];
-        } else {
-          // Handle case where content is a stringified object
-          content = [parsed] as PartialBlock[];
+    
+    // Handle content conversion safely
+    if (post.content) {
+      if (typeof post.content === "object" && Array.isArray(post.content)) {
+        content = post.content as unknown as PartialBlock[];
+      } else if (typeof post.content === "string") {
+        try {
+          const parsed = JSON.parse(post.content);
+          if (Array.isArray(parsed)) {
+            content = parsed as PartialBlock[];
+          } else {
+            content = [parsed] as PartialBlock[];
+          }
+        } catch {
+          content = [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "text",
+                  text: post.content,
+                  styles: {},
+                },
+              ],
+            },
+          ] as PartialBlock[];
         }
-      } catch {
-        content = [
-          {
-            type: "paragraph",
-            content: [
-              {
-                type: "text",
-                text: post.content as string,
-                styles: {},
-              },
-            ],
-          },
-        ] as PartialBlock[];
       }
-    } else if (post.content === null || post.content === undefined) {
-      // Handle null or undefined content
-      content = [];
     }
 
-    // Validate and convert cover object
     let cover: PostCover | undefined = undefined;
     if (post.cover && typeof post.cover === "object") {
-      const coverType = post.cover.type;
+      const coverType = (post.cover as any).type;
       if (coverType === "color" || coverType === "image") {
         cover = {
           type: coverType,
-          value: post.cover.value || "",
+          value: (post.cover as any).value || "",
         };
       }
     }
 
     return {
-      id: post.id,
-      user_id: post.user_id,
-      title: post.title,
+      ...post,
       content,
-      icon: post.icon || undefined,
       cover,
-      published: post.published,
-      created_at: post.created_at,
-      updated_at: post.updated_at,
-      parent_id: post.parent_id,
-      children: post.children ? post.children.map(convertPost) : [],
-    };
+      children: post.children ? post.children.map((child: StoreBlogPost) => convertPost(child)) : [],
+    } as BlogPost;
   }, []);
 
+  // Memoize converted posts to prevent unnecessary re-renders
+  // We use the store's posts directly, but apply the safety conversion
+  const posts = blogPosts.map(convertPost);
 
-
-
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const initializeBlogData = async () => {
-      // Only initialize if we have a valid userId (not the default one)
-      if (userId === "00000000-0000-0000-0000-000000000000") {
-        return;
-      }
-
-      try {
-        setIsLoading(true);
-        setIsInitialized(false); // Reset initialization when userId changes
-        
-        // Get user's posts
-        await fetchPosts(userId);
-        
-        // If user has no posts, initialize default welcome posts
-        if (isMounted && blogPosts.length === 0) {
-          console.log("No posts found, initializing welcome posts...");
-          try {
-            const response = await fetch('/api/blog/initialize-user', {
-              method: 'POST',
-            });
-            
-            if (response.ok) {
-              const result = await response.json();
-              if (result.created) {
-                console.log(`Created ${result.count} welcome posts`);
-                // Re-fetch posts
-                await fetchPosts(userId);
-              }
-            }
-          } catch (initError) {
-            console.error("Failed to initialize welcome posts:", initError);
-            // Continue even if initialization fails
-          }
-        }
-        
-        if (isMounted) {
-          setIsInitialized(true);
-        }
-      } catch (err) {
-        if (isMounted) {
-          console.error("Failed to load blog data:", err);
-          setError(
-            err instanceof Error ? err.message : "Failed to load blog data"
-          );
-          setIsInitialized(true);
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    initializeBlogData();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [fetchPosts, userId]); // Only re-initialize when userId changes
+  // SWR Pattern:
+  // 1. If we have posts, show them immediately (isLoading = false)
+  // 2. Fetch in background to update
+  // 3. If no posts and fetching, isLoading = true
+  
+  const isLoading = posts.length === 0 && storeLoading;
 
   useEffect(() => {
-    let isMounted = true;
-
-    if (isInitialized && localPosts.length === 0) {
-      // Only set localPosts if it's empty (initial load)
-      // Don't overwrite existing localPosts to preserve user modifications
-      if (blogPosts.length > 0) {
-        const convertedPosts = (blogPosts as unknown as BlogPost[]).map(
-          convertPost
-        );
-        if (isMounted) {
-          setLocalPosts(convertedPosts);
-        }
-      } else {
-        // If no posts found, just set empty array
-        if (isMounted) {
-          setLocalPosts([]);
-        }
-      }
-    }
-
-    return () => {
-      isMounted = false;
+    const init = async () => {
+      if (userId === "00000000-0000-0000-0000-000000000000") return;
+      
+      // Fetch posts (store handles caching logic)
+      await fetchPosts(userId);
     };
-  }, [blogPosts, isInitialized, convertPost, localPosts.length]);
+    
+    init();
+  }, [userId, fetchPosts]);
 
+  // Wrapper functions to maintain API compatibility
   const addNewPost = useCallback(async () => {
-    const newPostId = await createPost({
-      user_id: userId, // Use dynamic userId
-      title: `Post ${localPosts.length + 1}`,
+    return await createPost({
+      user_id: userId,
+      title: `Post ${posts.length + 1}`,
       content: null,
       published: false,
       parent_id: null,
@@ -205,328 +121,75 @@ export const useBlogData = () => {
       icon: null,
       cover: null,
     });
+  }, [posts.length, createPost, userId]);
 
-    return newPostId;
-  }, [localPosts.length, createPost, userId]); // Include userId in dependency array
+  const addNewSubPost = useCallback(async (parentId: string) => {
+    const parentPost = posts.find((p) => p.id === parentId);
+    const subPostCount = parentPost?.children?.length || 0;
+    
+    return await createPost({
+      user_id: userId,
+      title: `Sub post ${subPostCount + 1}`,
+      content: null,
+      published: false,
+      parent_id: parentId,
+      position: null,
+      icon: null,
+      cover: null,
+    });
+  }, [posts, createPost, userId]);
 
-  const addNewSubPost = useCallback(
-    async (parentId: string) => {
-      const parentPost = localPosts.find((p) => p.id === parentId);
-      if (!parentPost) return;
+  const updatePostTitle = useCallback(async (postId: string, newTitle: string) => {
+    // Optimistic update is handled by the store
+    await updatePostContent(postId, {
+      title: newTitle,
+      updated_at: new Date().toISOString(),
+    });
+  }, [updatePostContent]);
 
-      const subPostCount = parentPost?.children?.length || 0;
+  const updatePostContentLocal = useCallback(async (postId: string, newContent: PartialBlock[]) => {
+    await updatePostContent(postId, {
+      content: newContent,
+      updated_at: new Date().toISOString(),
+    });
+  }, [updatePostContent]);
 
-      // Create the new sub post and return its ID
-      const newSubPostId = await createPost({
-        user_id: userId, // Use dynamic userId
-        title: `Sub post ${subPostCount + 1}`,
-        content: null,
-        published: false,
-        parent_id: parentId,
-        position: null,
-        icon: null,
-        cover: null,
-      });
+  const setPostIcon = useCallback(async (postId: string, icon: string) => {
+    await updatePostContent(postId, {
+      icon,
+      updated_at: new Date().toISOString(),
+    });
+  }, [updatePostContent]);
 
-      return newSubPostId;
-    },
-    [localPosts, createPost, userId] // Include userId in dependency array
-  );
+  const removePostIcon = useCallback(async (postId: string) => {
+    await updatePostContent(postId, {
+      icon: null,
+      updated_at: new Date().toISOString(),
+    });
+  }, [updatePostContent]);
 
-  const updatePostTitle = useCallback(
-    async (postId: string, newTitle: string) => {
-      const updatePostRecursively = (posts: BlogPost[]): BlogPost[] => {
-        return posts.map((post) => {
-          if (post.id === postId) {
-            return {
-              ...post,
-              title: newTitle,
-              updated_at: new Date().toISOString(),
-            };
-          }
-          if (post.children && post.children.length > 0) {
-            const updatedChildren = updatePostRecursively(post.children);
-            const hasUpdatedChild = updatedChildren.some(
-              (child, index) => child !== post.children![index]
-            );
-            if (hasUpdatedChild) {
-              return {
-                ...post,
-                children: updatedChildren,
-                updated_at: new Date().toISOString(),
-              };
-            }
-            return { ...post, children: updatedChildren };
-          }
-          return post;
-        });
-      };
+  const setPostCover = useCallback(async (postId: string, cover: PostCover) => {
+    await updatePostContent(postId, {
+      cover,
+      updated_at: new Date().toISOString(),
+    });
+  }, [updatePostContent]);
 
-      setLocalPosts((prev) => updatePostRecursively(prev));
+  const removePostCover = useCallback(async (postId: string) => {
+    await updatePostContent(postId, {
+      cover: null,
+      updated_at: new Date().toISOString(),
+    });
+  }, [updatePostContent]);
 
-      try {
-        await updatePostContent(postId, {
-          title: newTitle,
-          updated_at: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error("Failed to update post title:", error);
-      }
-    },
-    [updatePostContent]
-  );
-
-  const updatePostContentLocal = useCallback(
-    async (postId: string, newContent: PartialBlock[]) => {
-      const contentCopy = JSON.parse(JSON.stringify(newContent));
-
-      const updatePostRecursively = (posts: BlogPost[]): BlogPost[] => {
-        return posts.map((post) => {
-          if (post.id === postId) {
-            return {
-              ...post,
-              content: contentCopy,
-              updated_at: new Date().toISOString(),
-            };
-          }
-          if (post.children && post.children.length > 0) {
-            const updatedChildren = updatePostRecursively(post.children);
-            const hasUpdatedChild = updatedChildren.some(
-              (child, index) => child !== post.children![index]
-            );
-            if (hasUpdatedChild) {
-              return {
-                ...post,
-                children: updatedChildren,
-                updated_at: new Date().toISOString(),
-              };
-            }
-            return { ...post, children: updatedChildren };
-          }
-          return post;
-        });
-      };
-
-      setLocalPosts((prev) => updatePostRecursively(prev));
-
-      try {
-        await updatePostContent(postId, {
-          content: contentCopy,
-          updated_at: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error("Failed to update post content:", error);
-      }
-    },
-    [updatePostContent]
-  );
-
-  const setPostIcon = useCallback(
-    async (postId: string, icon: string) => {
-      const updatePostRecursively = (posts: BlogPost[]): BlogPost[] => {
-        return posts.map((post) => {
-          if (post.id === postId) {
-            return { ...post, icon, updated_at: new Date().toISOString() };
-          }
-          if (post.children && post.children.length > 0) {
-            const updatedChildren = updatePostRecursively(post.children);
-            const hasUpdatedChild = updatedChildren.some(
-              (child, index) => child !== post.children![index]
-            );
-            if (hasUpdatedChild) {
-              return {
-                ...post,
-                children: updatedChildren,
-                updated_at: new Date().toISOString(),
-              };
-            }
-            return { ...post, children: updatedChildren };
-          }
-          return post;
-        });
-      };
-
-      setLocalPosts((prev) => updatePostRecursively(prev));
-
-      try {
-        await updatePostContent(postId, {
-          icon,
-          updated_at: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error("Failed to set post icon:", error);
-      }
-    },
-    [updatePostContent]
-  );
-
-  const removePostIcon = useCallback(
-    async (postId: string) => {
-      const updatePostRecursively = (posts: BlogPost[]): BlogPost[] => {
-        return posts.map((post) => {
-          if (post.id === postId) {
-            return { ...post, icon: undefined, updated_at: new Date().toISOString() };
-          }
-          if (post.children && post.children.length > 0) {
-            const updatedChildren = updatePostRecursively(post.children);
-            const hasUpdatedChild = updatedChildren.some(
-              (child, index) => child !== post.children![index]
-            );
-            if (hasUpdatedChild) {
-              return {
-                ...post,
-                children: updatedChildren,
-                updated_at: new Date().toISOString(),
-              };
-            }
-            return { ...post, children: updatedChildren };
-          }
-          return post;
-        });
-      };
-
-      setLocalPosts((prev) => updatePostRecursively(prev));
-
-      try {
-        await updatePostContent(postId, {
-          icon: null,
-          updated_at: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error("Failed to remove post icon:", error);
-      }
-    },
-    [updatePostContent]
-  );
-
-  const setPostCover = useCallback(
-    async (postId: string, cover: PostCover) => {
-      const updatePostRecursively = (posts: BlogPost[]): BlogPost[] => {
-        return posts.map((post) => {
-          if (post.id === postId) {
-            return { ...post, cover, updated_at: new Date().toISOString() };
-          }
-          if (post.children && post.children.length > 0) {
-            const updatedChildren = updatePostRecursively(post.children);
-            const hasUpdatedChild = updatedChildren.some(
-              (child, index) => child !== post.children![index]
-            );
-            if (hasUpdatedChild) {
-              return {
-                ...post,
-                children: updatedChildren,
-                updated_at: new Date().toISOString(),
-              };
-            }
-            return { ...post, children: updatedChildren };
-          }
-          return post;
-        });
-      };
-
-      setLocalPosts((prev) => updatePostRecursively(prev));
-
-      try {
-        await updatePostContent(postId, {
-          cover,
-          updated_at: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error("Failed to set post cover:", error);
-      }
-    },
-    [updatePostContent]
-  );
-
-  const removePostCover = useCallback(
-    async (postId: string) => {
-      const updatePostRecursively = (posts: BlogPost[]): BlogPost[] => {
-        return posts.map((post) => {
-          if (post.id === postId) {
-            return { ...post, cover: undefined, updated_at: new Date().toISOString() };
-          }
-          if (post.children && post.children.length > 0) {
-            const updatedChildren = updatePostRecursively(post.children);
-            const hasUpdatedChild = updatedChildren.some(
-              (child, index) => child !== post.children![index]
-            );
-            if (hasUpdatedChild) {
-              return {
-                ...post,
-                children: updatedChildren,
-                updated_at: new Date().toISOString(),
-              };
-            }
-            return { ...post, children: updatedChildren };
-          }
-          return post;
-        });
-      };
-
-      setLocalPosts((prev) => updatePostRecursively(prev));
-
-      try {
-        await updatePostContent(postId, {
-          cover: null,
-          updated_at: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error("Failed to remove post cover:", error);
-      }
-    },
-    [updatePostContent]
-  );
-
-  const deletePost = useCallback(
-    async (postId: string) => {
-      console.log("Hook deletePost called with ID:", postId);
-      console.log("Current userId:", userId);
-
-      // Use flexible UUID validation to support various test data formats
-      const uuidRegex =
-        /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-      if (!uuidRegex.test(postId)) {
-        const error = new Error("Invalid UUID for post id");
-        console.error("Invalid UUID for post id:", postId);
-        throw error;
-      }
-
-      try {
-        console.log("Optimistically removing post from local state:", postId);
-        // Optimistically remove from current local state
-        setLocalPosts((prev) => {
-          const removeRecursive = (posts: BlogPost[]) =>
-            posts.filter((post: BlogPost) => {
-              if (post.id === postId) return false;
-              if (post.children) post.children = removeRecursive(post.children);
-              return true;
-            });
-          return removeRecursive(prev);
-        });
-
-        console.log("Calling deletePostContent with ID:", postId);
-        await deletePostContent(postId);
-        console.log("Successfully deleted post from database:", postId);
-
-        // No need to re-fetch, store's deletePostContent has already updated the state
-      } catch (error) {
-        console.error("Failed to delete post:", error);
-        console.error("Error details:", {
-          postId: postId,
-          errorName: (error as Error)?.name,
-          errorMessage: (error as Error)?.message,
-          errorStack: (error as Error)?.stack,
-        });
-        throw error;
-      }
-    },
-    [deletePostContent, userId]
-  );
+  const deletePost = useCallback(async (postId: string) => {
+    await deletePostContent(postId);
+  }, [deletePostContent]);
 
   return {
-    posts: localPosts,
+    posts,
     isLoading,
-    error,
+    error: storeError,
     addNewPost,
     addNewSubPost,
     updatePostTitle,
@@ -538,8 +201,8 @@ export const useBlogData = () => {
     deletePost,
     createPost,
     deletePostContent,
-    fetchPosts, // Export fetchPosts
-    userId, // Export userId
-    setUserId, // Export function to set userId
+    fetchPosts,
+    userId,
+    setUserId,
   };
 };

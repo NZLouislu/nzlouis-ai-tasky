@@ -21,9 +21,18 @@ export class PlanningAgent {
     const userPrompt = this.buildPlanningUserPrompt(perception, userMessage);
 
     try {
+      console.log('🤖 Calling LLM for planning...');
       const response = await callLLM(systemPrompt, userPrompt);
-      const planningData = this.parsePlanningResponse(response);
+      console.log('📥 LLM response received, length:', response?.length || 0);
       
+      if (!response || response.trim().length === 0) {
+        console.warn('⚠️ Empty response from LLM, falling back to rule-based planning');
+        return this.generateFallbackPlan(perception, userMessage);
+      }
+
+      console.log('📝 LLM response preview (first 500 chars):', response.substring(0, 500));
+      
+      const planningData = this.parsePlanningResponse(response);
       return planningData;
     } catch (error) {
       console.error('Planning failed:', error);
@@ -38,29 +47,26 @@ export class PlanningAgent {
   private buildPlanningSystemPrompt(): string {
     return `You are a professional blog editing planning assistant.
 
-**Core Principle: Work with H2 paragraphs as the unit of modification!**
+**CRITICAL INSTRUCTIONS:**
+1. You MUST respond with ONLY a valid JSON object.
+2. Do not include any text before or after the JSON.
+3. The JSON must follow the structure below exactly.
 
 **Your Task:**
-1. **Locate target paragraph**: Find the H2 paragraph the user wants to modify
-2. **Analyze current state**: Current word count, whether it has H3 subheadings, content completeness
-3. **Plan modification approach**:
-   - If paragraph doesn't exist → Create new H2 paragraph
-   - If content is sparse → Expand content, add H3 subheadings
-   - If content is outdated → Search for latest information and update
-   - If structure is messy → Reorganize into H3 + Paragraph structure
-4. **Decide if search is needed**: If latest data or in-depth content is required, then search
-5. **Clarify unclear instructions**: If user hasn't specified paragraph, ask
+1. Analyze the user's request and the current document structure.
+2. Decide on the best course of action (add, modify, delete, etc.).
+3. Determine if web search is needed for accurate content.
 
-**Output JSON format:**
+**REQUIRED JSON Format:**
 {
-  "thought_process": "Detailed reasoning about what to do and why",
+  "thought_process": "Brief reasoning",
   "target_location": {
     "section_index": 1,
-    "section_title": "Target H2 Title",
-    "block_range": [3, 12]
+    "section_title": "Target H2 Title or New Title",
+    "block_range": [0, 0]
   },
   "action_plan": {
-    "type": "expand" | "rewrite" | "insert" | "delete" | "correct",
+    "type": "expand",
     "estimated_words": 400,
     "estimated_reading_time_increase": 2
   },
@@ -68,7 +74,7 @@ export class PlanningAgent {
   "search_queries": ["query 1", "query 2"],
   "clarification_needed": false,
   "clarification_questions": [],
-  "suggestions": ["suggestion 1", "suggestion 2"]
+  "suggestions": []
 }`;
   }
 
@@ -122,17 +128,140 @@ Please generate a detailed execution plan in JSON format.`;
   }
 
   /**
+   * Helper to repair malformed JSON strings
+   */
+  private repairJsonString(jsonStr: string): string {
+    let inString = false;
+    let escaped = false;
+    let result = '';
+
+    for (let i = 0; i < jsonStr.length; i++) {
+      const char = jsonStr[i];
+
+      if (char === '"' && !escaped) {
+        inString = !inString;
+        result += char;
+      } else if (inString && char === '\n') {
+        // If we are inside a string and see a newline, escape it
+        result += '\\n';
+      } else if (inString && char === '\r') {
+        // Skip carriage returns inside strings
+      } else if (inString && char === '\t') {
+        // Escape tabs
+        result += '\\t';
+      } else {
+        // Normal character
+        result += char;
+      }
+
+      // Update escaped state
+      if (char === '\\' && !escaped) {
+        escaped = true;
+      } else {
+        escaped = false;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Extracts JSON from LLM response that may contain explanatory text
+   */
+  private extractJSON(text: string): string | null {
+    // Try to find JSON object in the response
+    // First, try to match the outermost {}
+    const stack: string[] = [];
+    let start = -1;
+    let inString = false;
+    let escape = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+
+      if (escape) {
+        escape = false;
+        continue;
+      }
+
+      if (char === '\\') {
+        escape = true;
+        continue;
+      }
+
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
+
+      if (inString) continue;
+
+      if (char === '{') {
+        if (stack.length === 0) start = i;
+        stack.push('{');
+      } else if (char === '}') {
+        stack.pop();
+        if (stack.length === 0 && start !== -1) {
+          // Found complete JSON object
+          return text.substring(start, i + 1);
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Parses the LLM response into PlanningResult
    */
   private parsePlanningResponse(response: string): PlanningResult {
     try {
-      // Extract JSON from response
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
+      console.log('🔍 Parsing planning response...');
+      console.log('Raw response type:', typeof response);
+      console.log('Raw response length:', response?.length || 0);
+      
+      // Check if response is valid
+      if (!response || typeof response !== 'string' || response.trim().length === 0) {
+        console.error('❌ Invalid or empty response from LLM');
+        console.error('Response value:', response);
+        throw new Error('Empty or invalid response from LLM');
+      }
+      
+      // Clean up response (remove markdown code blocks)
+      let cleanedResponse = response
+        .replace(/```json\s*/g, '')
+        .replace(/```\s*/g, '')
+        .trim();
+
+      console.log('Cleaned response length:', cleanedResponse.length);
+      console.log('Cleaned response preview:', cleanedResponse.substring(0, 300));
+
+      // Try to extract JSON using improved extraction
+      let jsonStr = this.extractJSON(cleanedResponse);
+      
+      if (!jsonStr) {
+        // Fallback: try simple regex match
+        const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          jsonStr = jsonMatch[0];
+        }
+      }
+
+      if (!jsonStr) {
+        // If no JSON found, try to infer plan from text content
+        console.warn('No JSON found in planning response, triggering fallback');
+        console.warn('Full response:', response);
         throw new Error('No JSON found in response');
       }
 
-      const data = JSON.parse(jsonMatch[0]);
+      let data;
+      try {
+        data = JSON.parse(jsonStr);
+      } catch (e) {
+        console.warn('Standard JSON parse failed, attempting repair...', e);
+        const repairedStr = this.repairJsonString(jsonStr);
+        data = JSON.parse(repairedStr);
+      }
 
       return {
         thought_process: data.thought_process || 'Planning generated',
@@ -187,7 +316,7 @@ Please generate a detailed execution plan in JSON format.`;
     let actionType: 'expand' | 'rewrite' | 'insert' | 'delete' | 'correct' = 'expand';
     if (intent === 'delete_content') {
       actionType = 'delete';
-    } else if (intent === 'add_content') {
+    } else if (intent === 'add_content' || userMessage.includes('添加') || userMessage.includes('add')) {
       actionType = 'insert';
     } else if (userMessage.toLowerCase().includes('rewrite') || userMessage.includes('重写')) {
       actionType = 'rewrite';
@@ -197,10 +326,14 @@ Please generate a detailed execution plan in JSON format.`;
     const needsSearch = userMessage.toLowerCase().includes('search') ||
       userMessage.includes('搜索') ||
       userMessage.includes('最新') ||
-      userMessage.toLowerCase().includes('latest');
+      userMessage.toLowerCase().includes('latest') ||
+      actionType === 'insert'; // Always search for new content
+
+    // If inserting, we don't need a target section index (will append or insert at appropriate place)
+    const isInsert = actionType === 'insert';
 
     return {
-      thought_process: `Based on the user's request "${userMessage}", I will ${actionType} the content${targetSectionTitle ? ` in the "${targetSectionTitle}" section` : ''}.`,
+      thought_process: `Based on the user's request "${userMessage}", I will ${actionType} content. Fallback plan activated.`,
       target_location: {
         section_index: targetSectionIndex,
         section_title: targetSectionTitle,
@@ -213,8 +346,8 @@ Please generate a detailed execution plan in JSON format.`;
       },
       needs_search: needsSearch,
       search_queries: needsSearch ? [userMessage] : [],
-      clarification_needed: targetSectionIndex === null && paragraphAnalysis.scope !== 'full_article',
-      clarification_questions: targetSectionIndex === null ? [
+      clarification_needed: !isInsert && targetSectionIndex === null && paragraphAnalysis.scope !== 'full_article',
+      clarification_questions: (!isInsert && targetSectionIndex === null) ? [
         'Which paragraph would you like me to modify? Please specify the H2 section title.'
       ] : [],
       suggestions: [],

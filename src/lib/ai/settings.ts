@@ -17,9 +17,10 @@ export async function getUserAISettings(userId: string): Promise<UserAISettings>
     .single();
 
   if (error || !settings) {
+    console.warn(`⚠️ No AI settings found for user ${userId}, using defaults`);
     return {
       defaultProvider: 'google',
-      defaultModel: 'gemini-2.5-flash',
+      defaultModel: 'gemini-1.5-flash', // ✅ Fixed: was gemini-2.5-flash (doesn't exist)
       temperature: 0.8,
       maxTokens: 4096,
       systemPrompt: 'You are a helpful AI assistant with vision capabilities. You can see and analyze images provided by users. When comparing items or presenting structured data, please use Markdown tables for better readability.',
@@ -44,7 +45,7 @@ export async function updateUserAISettings(
     .upsert({
       user_id: userId,
       default_provider: settings.defaultProvider || 'google',
-      default_model: settings.defaultModel || 'gemini-2.5-flash',
+      default_model: settings.defaultModel || 'gemini-1.5-flash', // ✅ Fixed: was gemini-2.5-flash
       temperature: settings.temperature ?? 0.8,
       max_tokens: settings.maxTokens ?? 4096,
       system_prompt: settings.systemPrompt || 'You are a helpful AI assistant with vision capabilities. You can see and analyze images provided by users. When comparing items or presenting structured data, please use Markdown tables for better readability.',
@@ -87,7 +88,7 @@ export async function ensureUserAISettings(userId: string): Promise<UserAISettin
     .insert({
       user_id: userId,
       default_provider: 'google',
-      default_model: 'gemini-2.5-flash',
+      default_model: 'gemini-1.5-flash', // ✅ Fixed: was gemini-2.5-flash
       temperature: 0.8,
       max_tokens: 4096,
       system_prompt: 'You are a helpful AI assistant with vision capabilities. You can see and analyze images provided by users. When comparing items or presenting structured data, please use Markdown tables for better readability.',
@@ -96,9 +97,10 @@ export async function ensureUserAISettings(userId: string): Promise<UserAISettin
     .single();
 
   if (createError || !created) {
+    console.error('Failed to create AI settings for user:', userId, createError);
     return {
       defaultProvider: 'google',
-      defaultModel: 'gemini-2.5-flash',
+      defaultModel: 'gemini-1.5-flash', // ✅ Fixed: was gemini-2.5-flash
       temperature: 0.8,
       maxTokens: 4096,
       systemPrompt: 'You are a helpful AI assistant with vision capabilities. You can see and analyze images provided by users. When comparing items or presenting structured data, please use Markdown tables for better readability.',

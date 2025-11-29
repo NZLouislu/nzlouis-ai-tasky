@@ -73,9 +73,9 @@ export default function BlogContent({
               target.style.height = target.scrollHeight + 'px';
             }}
             placeholder="Untitled"
-            className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-4xl font-bold text-gray-800 placeholder-gray-400 text-center resize-none overflow-hidden"
+            className="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-4xl font-bold text-gray-800 dark:text-gray-200 placeholder-gray-400 text-center resize-none"
             rows={1}
-            style={{ minHeight: '1.2em' }}
+            style={{ minHeight: '1.2em', maxHeight: '6em', overflow: 'auto' }}
           />
         </div>
       </div>

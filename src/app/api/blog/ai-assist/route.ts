@@ -1,9 +1,3 @@
-/**
- * AI Assist API Route - New Agentic Blog Editor Endpoint
- * Implements the 6-stage pipeline for intelligent blog editing
- * Uses user-configured API keys from settings
- */
-
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserIdFromRequest } from '@/lib/admin-auth';
 import { AgentOrchestrator } from '@/lib/blog/agent-orchestrator';
@@ -12,9 +6,8 @@ import { getUserAISettings } from '@/lib/ai/settings';
 import { taskyDb } from '@/lib/supabase/tasky-db-client';
 import { decryptAPIKey } from '@/lib/encryption';
 
-/**
- * Get user's Tavily API key
- */
+import { auth } from '@/lib/auth-config';
+
 async function getUserTavilyKey(userId: string): Promise<string | null> {
   try {
     const { data: apiKeyRecord, error } = await taskyDb
@@ -42,9 +35,6 @@ async function getUserTavilyKey(userId: string): Promise<string | null> {
   }
 }
 
-/**
- * Get user's API key for their selected provider
- */
 async function getUserAPIKey(userId: string, provider: string): Promise<string | null> {
   try {
     const { data: apiKeyRecord, error } = await taskyDb
@@ -72,27 +62,26 @@ async function getUserAPIKey(userId: string, provider: string): Promise<string |
   }
 }
 
-/**
- * LLM caller function - supports all AI providers
- */
 async function callLLM(
   systemPrompt: string,
   userPrompt: string,
-  userId: string
+  userId: string,
+  overrideProvider?: string,
+  overrideModel?: string
 ): Promise<string> {
-  // Get user's AI settings
   const settings = await getUserAISettings(userId);
-  const provider = settings.defaultProvider;
-  const modelId = settings.defaultModel;
+  
+  const provider = overrideProvider || settings.defaultProvider;
+  const modelId = overrideModel || settings.defaultModel;
 
-  // Get user's API key for their selected provider
+  console.log(`🤖 [LLM Call] Using Provider: ${provider}, Model: ${modelId} ${overrideModel ? '(User Selected)' : '(Default)'}`);
+
   const apiKey = await getUserAPIKey(userId, provider);
   
   if (!apiKey) {
     throw new Error(`Please configure your ${provider.toUpperCase()} API key in Settings`);
   }
 
-  // Use AI SDK for unified interface across all providers
   const { generateText } = await import('ai');
   const { createOpenAI } = await import('@ai-sdk/openai');
   const { createGoogleGenerativeAI } = await import('@ai-sdk/google');
@@ -100,7 +89,6 @@ async function callLLM(
 
   let model: any;
 
-  // Create provider-specific model instance
   switch (provider) {
     case 'google': {
       const google = createGoogleGenerativeAI({ apiKey });
@@ -122,7 +110,6 @@ async function callLLM(
 
     case 'openrouter':
     case 'kilo': {
-      // OpenRouter and Kilo use OpenAI-compatible API
       const baseURL = provider === 'kilo' 
         ? 'https://api.kilo.ai/v1'
         : 'https://openrouter.ai/api/v1';
@@ -140,8 +127,7 @@ async function callLLM(
   }
 
   try {
-    // Use AI SDK's generateText for unified interface
-    const { text } = await generateText({
+    const { text, finishReason, usage } = await generateText({
       model,
       messages: [
         {
@@ -157,28 +143,50 @@ async function callLLM(
       maxTokens: settings.maxTokens,
     });
 
+    console.log(`📊 [LLM Response] finishReason: ${finishReason}, tokens: ${usage?.totalTokens || 'N/A'}, length: ${text?.length || 0}`);
+
+    if (!text || text.trim().length === 0) {
+      console.warn(`⚠️ [LLM] Empty response from ${provider}/${modelId}. finishReason: ${finishReason}`);
+      
+      if (modelId.includes(':free') || modelId.includes('free')) {
+        throw new Error(`The free model ${modelId} returned an empty response. This may be due to rate limits or model availability. Try again or switch to a paid model.`);
+      }
+      
+      throw new Error(`Empty response from ${provider}/${modelId}. The model may be temporarily unavailable.`);
+    }
+
     return text;
   } catch (error) {
     console.error(`LLM call failed for ${provider}/${modelId}:`, error);
-    throw new Error(`Failed to generate response using ${provider}. Please check your API key and model selection.`);
+    
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
+      throw new Error(`Rate limit exceeded for ${provider}. Please wait a moment and try again.`);
+    }
+    
+    if (errorMessage.includes('Empty response')) {
+      throw error;
+    }
+    
+    throw new Error(`Failed to generate response using ${provider}/${modelId}: ${errorMessage}`);
   }
 }
 
-/**
- * POST handler for AI assist requests
- */
 export async function POST(request: NextRequest) {
   try {
-    // Get user ID
-    const userId = getUserIdFromRequest(undefined, request);
+    const session = await auth();
+
+    const userId = getUserIdFromRequest(session?.user?.id, request);
+    
     if (!userId) {
+      console.error('❌ Authentication failed: No user ID found');
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    // Parse request body
     const body = await request.json();
     const {
       message,
@@ -186,9 +194,11 @@ export async function POST(request: NextRequest) {
       post_id,
       current_content,
       current_title,
+      model,
+      provider,
+      search_enabled
     } = body;
 
-    // Validate required fields
     if (!message || !post_id || !current_content || !current_title) {
       return NextResponse.json(
         { error: 'Missing required fields: message, post_id, current_content, current_title' },
@@ -196,25 +206,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user has configured their API keys
     const settings = await getUserAISettings(userId);
-    const apiKey = await getUserAPIKey(userId, settings.defaultProvider);
+    
+    const targetProvider = provider || settings.defaultProvider;
+    
+    console.log(`⚙️ [AI Settings] Processing request for user ${userId.substring(0, 8)}...`);
+    console.log(`   - Target Provider: ${targetProvider} ${provider ? '(User Override)' : '(Default)'}`);
+    console.log(`   - Target Model: ${model || settings.defaultModel} ${model ? '(User Override)' : '(Default)'}`);
+    console.log(`   - Search Enabled: ${search_enabled !== undefined ? search_enabled : 'Auto (Default)'}`);
+    
+    const apiKey = await getUserAPIKey(userId, targetProvider);
     
     if (!apiKey) {
       return NextResponse.json(
         { 
           error: 'API key not configured',
-          message: `Please configure your ${settings.defaultProvider.toUpperCase()} API key in Settings to use the AI Blog Assistant.`,
+          message: `Please configure your ${targetProvider.toUpperCase()} API key in Settings to use the AI Blog Assistant.`,
           requiresSetup: true,
         },
         { status: 400 }
       );
     }
 
-    // Get Tavily API key (optional for search)
     const tavilyKey = await getUserTavilyKey(userId);
     
-    // Create agent request
     const agentRequest: AgentRequest = {
       message,
       conversation_id,
@@ -224,19 +239,25 @@ export async function POST(request: NextRequest) {
       user_id: userId,
     };
 
-    // Create orchestrator and execute pipeline
     const orchestrator = new AgentOrchestrator();
+    
     const llmCaller = (systemPrompt: string, userPrompt: string) =>
-      callLLM(systemPrompt, userPrompt, userId);
+      callLLM(systemPrompt, userPrompt, userId, provider, model);
 
-    // Set Tavily key in environment for the orchestrator if available
-    if (tavilyKey) {
+    if (tavilyKey && search_enabled !== false) {
       process.env.TAVILY_API_KEY = tavilyKey;
+      console.log('🔍 [Search] Search enabled and key present');
+    } else {
+      if (!tavilyKey) {
+        console.log('⚠️ [Search] No Tavily API key found. Search disabled.');
+      } else {
+        console.log('🚫 [Search] Search explicitly disabled by user.');
+      }
+      delete process.env.TAVILY_API_KEY;
     }
 
     const response = await orchestrator.execute(agentRequest, llmCaller);
 
-    // Add metadata about search availability
     if (!tavilyKey && response.modification_preview) {
       response.modification_preview.metadata = {
         ...response.modification_preview.metadata,
@@ -245,12 +266,10 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    // Return response
     return NextResponse.json(response);
   } catch (error) {
     console.error('AI Assist API error:', error);
     
-    // Check if it's an API key error
     if (error instanceof Error && error.message.includes('API key')) {
       return NextResponse.json(
         {

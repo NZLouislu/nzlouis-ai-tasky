@@ -550,6 +550,10 @@ export default function UnifiedChatbot({
               type: 'modify',
               content: text,
               title: text,
+              // Pass selected model and search settings
+              model: selectedModel,
+              provider: selectedProvider,
+              searchEnabled: options?.searchWeb
             });
 
             console.log('✅ Modification result:', result);

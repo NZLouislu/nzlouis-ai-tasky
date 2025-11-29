@@ -10,7 +10,7 @@ interface PostCover {
   value: string;
 }
 
-type BlogPost = Omit<
+export type BlogPost = Omit<
   TaskyDatabase["public"]["Tables"]["blog_posts"]["Row"],
   "cover"
 > & {
