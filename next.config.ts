@@ -10,9 +10,7 @@ const nextConfig: NextConfig = {
   productionBrowserSourceMaps: false,
   
   // Skip lint and type checking during build for speed (run separately)
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -24,6 +22,18 @@ const nextConfig: NextConfig = {
         hostname: 'nkpgzczvxuhbqrifjuer.supabase.co',
         port: '',
         pathname: '/storage/v1/object/public/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+        port: '',
+        pathname: '**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'avatars.githubusercontent.com',
+        port: '',
+        pathname: '**',
       },
     ],
     formats: ['image/avif', 'image/webp'],

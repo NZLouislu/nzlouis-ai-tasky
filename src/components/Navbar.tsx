@@ -11,6 +11,7 @@ export default function Navbar() {
   const [username, setUsername] = useState<string | null>(null);
   const [userImage, setUserImage] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -40,12 +41,15 @@ export default function Navbar() {
     if (session?.user?.name) {
       setUsername(session.user.name);
       setUserImage(session.user.image || null);
+      setImageError(false);
     } else if (isAdmin) {
       setUsername("Admin");
       setUserImage(null);
+      setImageError(false);
     } else {
       setUsername(null);
       setUserImage(null);
+      setImageError(false);
     }
   }, [session, isAdmin]);
 
@@ -156,18 +160,21 @@ export default function Navbar() {
           {username && (
             <div className="flex items-center gap-4 border-l border-gray-200 pl-6">
               {/* User Avatar */}
-              {userImage ? (
-                <Image
-                  src={userImage}
-                  alt={username}
-                  width={32}
-                  height={32}
-                  className="rounded-full"
-                  unoptimized
-                />
+              {userImage && !imageError ? (
+                <div className="relative w-8 h-8 flex-shrink-0">
+                  <Image
+                    src={userImage}
+                    alt={username || ""}
+                    fill
+                    sizes="32px"
+                    className="rounded-full object-cover"
+                    unoptimized
+                    onError={() => setImageError(true)}
+                  />
+                </div>
               ) : (
                 <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm font-semibold">
-                  {username.charAt(0).toUpperCase()}
+                  {username?.charAt(0).toUpperCase()}
                 </div>
               )}
               
@@ -222,18 +229,21 @@ export default function Navbar() {
               <div className="flex flex-col gap-1 pt-2 border-t border-gray-200 mt-2">
                 <div className="flex items-center gap-3 px-2 py-1">
                   {/* User Avatar */}
-                  {userImage ? (
-                    <Image
-                      src={userImage}
-                      alt={username}
-                      width={32}
-                      height={32}
-                      className="rounded-full"
-                      unoptimized
-                    />
+                  {userImage && !imageError ? (
+                    <div className="relative w-8 h-8 flex-shrink-0">
+                      <Image
+                        src={userImage}
+                        alt={username || ""}
+                        fill
+                        sizes="32px"
+                        className="rounded-full object-cover"
+                        unoptimized
+                        onError={() => setImageError(true)}
+                      />
+                    </div>
                   ) : (
                     <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm font-semibold">
-                      {username.charAt(0).toUpperCase()}
+                      {username?.charAt(0).toUpperCase()}
                     </div>
                   )}
                   

@@ -3,7 +3,7 @@
  * Tests the ability to extract and parse JSON from LLM responses
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 
 // Mock the planning agent and content generator classes
 class JSONExtractor {
