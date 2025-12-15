@@ -39,7 +39,8 @@ export const MODEL_MAPPINGS: Record<AIProvider, Record<string, string>> = {
     'claude-haiku': 'claude-3-5-haiku-20241022',
   },
   openrouter: {
-    'x-ai/grok-4.1-fast:free': 'x-ai/grok-4.1-fast:free',
+    'mistralai/devstral-2512:free': 'mistralai/devstral-2512:free',
+    'x-ai/grok-4.1-fast:free': 'mistralai/devstral-2512:free', // Compatibility mapping
     'openai/gpt-oss-20b:free': 'openai/gpt-oss-20b:free',
     'tngtech/deepseek-r1t2-chimera:free': 'tngtech/deepseek-r1t2-chimera:free',
     'tngtech/deepseek-r1t-chimera:free': 'tngtech/deepseek-r1t-chimera:free',
@@ -48,7 +49,8 @@ export const MODEL_MAPPINGS: Record<AIProvider, Record<string, string>> = {
     'qwen/qwen3-coder:free': 'qwen/qwen3-coder:free',
   },
   kilo: {
-    'xai-grok-code-fast-1': 'xai/grok-beta',
+    'kilo/mistralai/devstral-2512:free': 'mistralai/devstral-2512:free',
+    'xai-grok-code-fast-1': 'mistralai/devstral-2512:free', // Compatibility mapping
     'claude-sonnet-4': 'anthropic/claude-3-5-sonnet-20241022',
   },
 };

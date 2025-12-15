@@ -36,7 +36,7 @@ const MODELS: Record<string, Array<{ id: string; name: string }>> = {
     { id: 'claude-haiku', name: 'Claude Haiku - Fastest' },
   ],
   openrouter: [
-    { id: 'x-ai/grok-4.1-fast:free', name: 'Grok 4.1 Fast Free - Free til 12/3' },
+    { id: 'mistralai/devstral-2512:free', name: 'Mistral Devstral 2512 - Free Code Model' },
     { id: 'openai/gpt-oss-20b:free', name: 'GPT OSS 20B Free - Open' },
     { id: 'tngtech/deepseek-r1t2-chimera:free', name: 'DeepSeek R1T2 Chimera Free - Reasoning' },
     { id: 'tngtech/deepseek-r1t-chimera:free', name: 'DeepSeek R1T Chimera Free - Reasoning' },
@@ -318,7 +318,7 @@ export default function ChatbotSettingsPage() {
                     <div className="mb-3 pb-3 border-b border-blue-200">
                       <h3 className="text-sm font-semibold text-blue-900 mb-2">🔍 Web Search API</h3>
                       <p className="text-xs text-blue-800 mb-2">
-                        Tavily enables web search for non-Gemini models (Grok, Claude, etc.)
+                        Tavily enables web search for non-Gemini models (Mistral, Claude, etc.)
                       </p>
                       <div className="flex items-center gap-2 text-xs">
                         <span className="text-blue-700">Free tier: 1000 searches/month</span>

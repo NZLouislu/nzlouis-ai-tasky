@@ -182,17 +182,16 @@ export const useChatStore = create<ChatState>()(
       name: 'chat-storage',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        // Only persist essential long-term states
-        sessions: state.sessions,
+        // Only persist essential settings and UI state
+        // sessions: state.sessions, // Removed to reduce size - fetch on load
         currentSessionId: state.currentSessionId,
-        availableModels: state.availableModels,
+        // availableModels: state.availableModels, // Removed to ensure fresh models
         selectedModel: state.selectedModel,
         selectedProvider: state.selectedProvider,
         sidebarOpen: state.sidebarOpen,
-        contextChats: state.contextChats,
-        contextChatsMeta: state.contextChatsMeta,
+        // contextChats: state.contextChats, // Removed to avoid quota limits
+        // contextChatsMeta: state.contextChatsMeta, // Removed
         // DO NOT persist: input, previewImages, messages, isLoading
-        // These are temporary UI states that cause performance issues when persisted
       }),
     }
   )

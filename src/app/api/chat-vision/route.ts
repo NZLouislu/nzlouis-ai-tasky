@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
         modelName = 'gemini-1.5-flash-latest';
       } else {
         // For others (like gemini-2.5-flash or non-gemini models), try to use them directly
-        // If it's a non-Gemini model (e.g. x-ai/grok), it will likely fail with 404 from Google API
+        // If it's a non-Gemini model (e.g. mistral/devstral), it will likely fail with 404 from Google API
         // We will catch this error and return a user-friendly message
         modelName = modelId;
       }

@@ -26,6 +26,7 @@ const MODEL_CONFIGS = {
         { id: 'claude-haiku', name: 'Claude Haiku', description: 'Fast and efficient' },
     ],
     openrouter: [
+        { id: 'mistralai/devstral-2512:free', name: 'Mistral Devstral 2512', description: 'Free Code Model' },
         { id: 'openai/gpt-oss-20b:free', name: 'GPT OSS 20B Free', description: 'Free open-source GPT model' },
         { id: 'tngtech/deepseek-r1t2-chimera:free', name: 'DeepSeek R1T2 Chimera Free', description: 'Free reasoning model variant' },
         { id: 'tngtech/deepseek-r1t-chimera:free', name: 'DeepSeek R1T Chimera Free', description: 'Free reasoning model' },
@@ -34,7 +35,7 @@ const MODEL_CONFIGS = {
         { id: 'qwen/qwen3-coder:free', name: 'Qwen3 Coder Free', description: 'Free coding model' },
     ],
     kilo: [
-        { id: 'xai-grok-code-fast-1', name: 'Grok Code Fast', description: 'Fast coding assistant' },
+        { id: 'kilo/mistralai/devstral-2512:free', name: 'Mistral Devstral 2512', description: 'Free Code Model' },
         { id: 'claude-sonnet-4', name: 'Claude Sonnet 4', description: 'Via Kilo platform' },
     ],
 };

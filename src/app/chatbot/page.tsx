@@ -84,6 +84,20 @@ export default function ChatbotPage() {
     };
 
     checkAdminSession();
+    
+    // Emergency cleanup for QuotaExceededError
+    try {
+        const testKey = '__test_quota__';
+        localStorage.setItem(testKey, '1');
+        localStorage.removeItem(testKey);
+    } catch (e: any) {
+        if (e.name === 'QuotaExceededError' || e.code === 22 || e.message?.includes('QuotaExceededError')) {
+            console.warn('[Chatbot] Quota exceeded, clearing chat-storage to recover...');
+            localStorage.removeItem('chat-storage');
+            // Force reload to reset store state with clean storage
+            window.location.reload();
+        }
+    }
   }, []);
 
   useEffect(() => {
@@ -238,10 +252,28 @@ export default function ChatbotPage() {
 
         setAvailableModels(sortedModels);
 
-        if (!selectedModel && sortedModels.length > 0) {
-          const firstProvider = sortedModels[0].provider;
-          setSelectedProvider(firstProvider);
-          setSelectedModel(sortedModels[0].id);
+        const modelExists = sortedModels.some((m: AIModel) => m.id === selectedModel);
+        const grokIds = ['x-ai/grok-4.1-fast:free', 'xai-grok-code-fast-1'];
+        
+        if ((!selectedModel || !modelExists) && sortedModels.length > 0) {
+          console.log('[Chatbot] Selected model invalid or missing, checking for replacements');
+          
+          let targetModel;
+          // If previous was Grok, try to find Mistral
+          if (selectedModel && grokIds.includes(selectedModel)) {
+             targetModel = sortedModels.find((m: AIModel) => m.id === 'mistralai/devstral-2512:free' || m.id === 'kilo/mistralai/devstral-2512:free');
+          }
+
+          if (targetModel) {
+            console.log('[Chatbot] Automatically migrating to:', targetModel.id);
+            setSelectedProvider(targetModel.provider);
+            setSelectedModel(targetModel.id);
+          } else {
+            console.log('[Chatbot] Resetting to default');
+            const firstProvider = sortedModels[0].provider;
+            setSelectedProvider(firstProvider);
+            setSelectedModel(sortedModels[0].id);
+          }
         }
       } else {
         setAvailableModels([]);

@@ -112,9 +112,9 @@ describe('Chat Store Pagination Support', () => {
     
     if (persistedData) {
       const parsed = JSON.parse(persistedData);
-      expect(parsed.state.contextChatsMeta['test-post-1']).toBeDefined();
-      expect(parsed.state.contextChatsMeta['test-post-1'].currentOffset).toBe(50);
-      expect(parsed.state.contextChatsMeta['test-post-1'].hasMore).toBe(true);
+      // contextChatsMeta is explicitly removed from persistence to save quota
+      // So we expect it to be undefined in the persisted state
+      expect(parsed.state.contextChatsMeta).toBeUndefined();
     }
   });
 });

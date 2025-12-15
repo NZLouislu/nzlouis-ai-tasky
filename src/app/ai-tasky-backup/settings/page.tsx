@@ -43,7 +43,7 @@ const MODELS: Record<string, Array<{ id: string; name: string }>> = {
     { id: 'qwen/qwen3-coder:free', name: 'Qwen3 Coder Free' },
   ],
   kilo: [
-    { id: 'xai-grok-code-fast-1', name: 'Grok Code Fast' },
+    { id: 'kilo/mistralai/devstral-2512:free', name: 'Mistral Devstral 2512' },
     { id: 'claude-sonnet-4', name: 'Claude Sonnet 4' },
   ],
 };

@@ -15,6 +15,8 @@ describe('Chat Store Cache Optimization', () => {
       isStale: false,
       totalCount: 10,
       hasMore: false,
+      currentOffset: 0,
+      isLoadingMore: false,
     });
 
     expect(store.isCacheValid('test-post-1')).toBe(true);
@@ -29,6 +31,8 @@ describe('Chat Store Cache Optimization', () => {
       isStale: false,
       totalCount: 10,
       hasMore: false,
+      currentOffset: 0,
+      isLoadingMore: false,
     });
 
     expect(store.isCacheValid('test-post-1')).toBe(false);
@@ -42,6 +46,8 @@ describe('Chat Store Cache Optimization', () => {
       isStale: true,
       totalCount: 10,
       hasMore: false,
+      currentOffset: 0,
+      isLoadingMore: false,
     });
 
     expect(store.isCacheValid('test-post-1')).toBe(false);
@@ -64,7 +70,7 @@ describe('Chat Store Cache Optimization', () => {
     expect(store.getLoadingState('test-post-1')).toBe('success');
   });
 
-  it('should persist cache metadata to localStorage', () => {
+  it('should NOT persist cache metadata to localStorage (size optimization)', () => {
     const store = useChatStore.getState();
     
     const testMessages = [
@@ -82,15 +88,18 @@ describe('Chat Store Cache Optimization', () => {
       isStale: false,
       totalCount: 1,
       hasMore: false,
+      currentOffset: 0,
+      isLoadingMore: false,
     });
 
     const persistedData = localStorage.getItem('chat-storage');
-    expect(persistedData).toBeTruthy();
+    // The storage key might exist but should contain partialized data
     
     if (persistedData) {
       const parsed = JSON.parse(persistedData);
-      expect(parsed.state.contextChats['test-post-1']).toBeDefined();
-      expect(parsed.state.contextChatsMeta['test-post-1']).toBeDefined();
+      // Explicitly checking that heavy data is NOT persisted
+      expect(parsed.state.contextChats).toBeUndefined();
+      expect(parsed.state.contextChatsMeta).toBeUndefined();
     }
   });
 });

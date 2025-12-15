@@ -12,26 +12,26 @@ The AI integration provides a unified interface for multiple AI providers with s
 - **OpenAI**: gpt-4o, gpt-4o-mini, o3-mini, o1-mini
 - **Anthropic**: claude-4-opus, claude-sonnet, claude-haiku
 - **OpenRouter**: deepseek-r1, deepseek-v3, moonshot-kimi-k2, qwen3-coder
-- **Kilo**: xai-grok-code-fast-1, claude-sonnet-4
+- **Kilo**: mistralai/devstral-2512:free, claude-sonnet-4
 
 ## Usage
 
 ### Get AI Model
 
 ```typescript
-import { getModel } from '@/lib/ai';
+import { getModel } from "@/lib/ai";
 
 // Get model for authenticated user
-const model = await getModel(userId, 'google', 'gemini-2.5-flash');
+const model = await getModel(userId, "google", "gemini-2.5-flash");
 
 // Get model with fallback to env vars (for unauthenticated)
-const model = await getModel(undefined, 'openai', 'gpt-4o');
+const model = await getModel(undefined, "openai", "gpt-4o");
 ```
 
 ### Get User Settings
 
 ```typescript
-import { getUserAISettings } from '@/lib/ai';
+import { getUserAISettings } from "@/lib/ai";
 
 const settings = await getUserAISettings(userId);
 // Returns: { defaultProvider, defaultModel, temperature, maxTokens, systemPrompt }
@@ -40,11 +40,11 @@ const settings = await getUserAISettings(userId);
 ### Update User Settings
 
 ```typescript
-import { updateUserAISettings } from '@/lib/ai';
+import { updateUserAISettings } from "@/lib/ai";
 
 await updateUserAISettings(userId, {
-  defaultProvider: 'openai',
-  defaultModel: 'gpt-4o',
+  defaultProvider: "openai",
+  defaultModel: "gpt-4o",
   temperature: 0.7,
   maxTokens: 2048,
 });
@@ -53,22 +53,22 @@ await updateUserAISettings(userId, {
 ### Use in API Route
 
 ```typescript
-import { streamText } from 'ai';
-import { getModel, getUserAISettings } from '@/lib/ai';
+import { streamText } from "ai";
+import { getModel, getUserAISettings } from "@/lib/ai";
 
 export async function POST(req: Request) {
   const { userId, messages } = await req.json();
-  
+
   // Get user settings
   const settings = await getUserAISettings(userId);
-  
+
   // Get model
   const model = await getModel(
     userId,
     settings.defaultProvider,
     settings.defaultModel
   );
-  
+
   // Stream response
   const result = streamText({
     model,
@@ -76,7 +76,7 @@ export async function POST(req: Request) {
     temperature: settings.temperature,
     maxTokens: settings.maxTokens,
   });
-  
+
   return result.toDataStreamResponse();
 }
 ```
@@ -89,7 +89,7 @@ User API keys are stored encrypted in the database:
 
 ```typescript
 // Keys are automatically fetched and decrypted by getModel()
-const model = await getModel(userId, 'openai', 'gpt-4o');
+const model = await getModel(userId, "openai", "gpt-4o");
 ```
 
 ### Environment Variable Fallback
@@ -107,15 +107,15 @@ KILO_API_KEY=...
 ## Model Validation
 
 ```typescript
-import { isValidModel, getAvailableModels } from '@/lib/ai';
+import { isValidModel, getAvailableModels } from "@/lib/ai";
 
 // Check if model exists
-if (isValidModel('google', 'gemini-2.5-flash')) {
+if (isValidModel("google", "gemini-2.5-flash")) {
   // Model is valid
 }
 
 // Get all models for a provider
-const models = getAvailableModels('openai');
+const models = getAvailableModels("openai");
 // Returns: ['gpt-4.1', 'gpt-4o', 'gpt-4o-mini', ...]
 ```
 
@@ -123,11 +123,11 @@ const models = getAvailableModels('openai');
 
 ```typescript
 try {
-  const model = await getModel(userId, 'openai', 'gpt-4o');
+  const model = await getModel(userId, "openai", "gpt-4o");
 } catch (error) {
-  if (error.message.includes('No API key')) {
+  if (error.message.includes("No API key")) {
     // Handle missing API key
-  } else if (error.message.includes('Unsupported provider')) {
+  } else if (error.message.includes("Unsupported provider")) {
     // Handle invalid provider
   }
 }
