@@ -5,6 +5,7 @@ import { AIProvider } from "@/lib/ai/providers";
 import { getUserIdFromRequest } from "@/lib/admin-auth";
 
 const MODEL_PROVIDER_MAP: Record<string, AIProvider> = {
+    'gemini-3-flash-preview': 'google',
     'gemini-2.5-flash': 'google',
     'gemini-3-pro-preview': 'google',
     'gemini-2.5-pro': 'google',
@@ -167,6 +168,7 @@ export async function POST(req: NextRequest) {
             );
 
             const modelMap: Record<string, string> = {
+                'gemini-3-flash-preview': 'gemini-3-flash-preview',
                 'gemini-2.5-flash': 'gemini-2.5-flash',
                 'gemini-3-pro-preview': 'gemini-3-pro-preview',
                 'gemini-2.5-pro': 'gemini-2.5-pro',

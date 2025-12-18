@@ -70,14 +70,10 @@ async function callLLM(
   overrideModel?: string
 ): Promise<string> {
   const settings = await getUserAISettings(userId);
-  
   const provider = overrideProvider || settings.defaultProvider;
-  const modelId = overrideModel || settings.defaultModel;
-
-  console.log(`🤖 [LLM Call] Using Provider: ${provider}, Model: ${modelId} ${overrideModel ? '(User Selected)' : '(Default)'}`);
+  let modelId = overrideModel || settings.defaultModel;
 
   const apiKey = await getUserAPIKey(userId, provider);
-  
   if (!apiKey) {
     throw new Error(`Please configure your ${provider.toUpperCase()} API key in Settings`);
   }
@@ -87,89 +83,153 @@ async function callLLM(
   const { createGoogleGenerativeAI } = await import('@ai-sdk/google');
   const { createAnthropic } = await import('@ai-sdk/anthropic');
 
-  let model: any;
+  async function performAttempt(mId: string, temp: number): Promise<any> {
+    console.log(`🔍 [Diagnostic] Preparing model call:`, {
+      modelId: mId,
+      provider,
+      temperature: temp,
+      maxTokens: settings.maxTokens,
+      hasApiKey: !!apiKey,
+      apiKeyLength: apiKey?.length,
+      systemPromptLength: systemPrompt?.length,
+      userPromptLength: userPrompt?.length
+    });
 
-  switch (provider) {
-    case 'google': {
-      const google = createGoogleGenerativeAI({ apiKey });
-      model = google(modelId);
-      break;
+    let model: any;
+    const sdkKey = apiKey || undefined;
+    
+    if (!sdkKey) {
+      throw new Error(`API key is missing for provider ${provider}. Please configure your API key in Settings.`);
     }
 
-    case 'openai': {
-      const openai = createOpenAI({ apiKey });
-      model = openai(modelId);
-      break;
+    switch (provider) {
+      case 'google':
+        model = createGoogleGenerativeAI({ apiKey: sdkKey })(mId);
+        break;
+      case 'openai':
+        model = createOpenAI({ apiKey: sdkKey })(mId);
+        break;
+      case 'anthropic':
+        model = createAnthropic({ apiKey: sdkKey })(mId);
+        break;
+      case 'openrouter':
+      case 'kilo':
+        const baseURL = provider === 'kilo' ? 'https://api.kilo.ai/v1' : 'https://openrouter.ai/api/v1';
+        model = createOpenAI({ apiKey: sdkKey, baseURL })(mId);
+        break;
+      default:
+        throw new Error(`Unsupported provider: ${provider}`);
     }
 
-    case 'anthropic': {
-      const anthropic = createAnthropic({ apiKey });
-      model = anthropic(modelId);
-      break;
-    }
-
-    case 'openrouter':
-    case 'kilo': {
-      const baseURL = provider === 'kilo' 
-        ? 'https://api.kilo.ai/v1'
-        : 'https://openrouter.ai/api/v1';
-      
-      const openrouter = createOpenAI({ 
-        apiKey,
-        baseURL,
-      });
-      model = openrouter(modelId);
-      break;
-    }
-
-    default:
-      throw new Error(`Unsupported provider: ${provider}`);
-  }
-
-  try {
-    const { text, finishReason, usage } = await generateText({
+    console.log(`📤 [Request] Calling ${provider}/${mId}...`);
+    const result = await generateText({
       model,
       messages: [
-        {
-          role: 'system',
-          content: systemPrompt,
-        },
-        {
-          role: 'user',
-          content: userPrompt,
-        },
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
       ],
-      temperature: settings.temperature,
+      temperature: temp,
       maxTokens: settings.maxTokens,
     });
 
-    console.log(`📊 [LLM Response] finishReason: ${finishReason}, tokens: ${usage?.totalTokens || 'N/A'}, length: ${text?.length || 0}`);
+    console.log(`📥 [Response] Received from ${provider}/${mId}:`, {
+      hasText: !!result?.text,
+      textLength: result?.text?.length || 0,
+      finishReason: result?.finishReason,
+      usage: result?.usage,
+      rawResponsePreview: result?.text?.substring(0, 200)
+    });
 
-    if (!text || text.trim().length === 0) {
-      console.warn(`⚠️ [LLM] Empty response from ${provider}/${modelId}. finishReason: ${finishReason}`);
+    return result;
+  }
+
+  console.log(`🤖 [LLM Call] Start: ${provider}/${modelId}`);
+
+  try {
+    const response = await performAttempt(modelId, settings.temperature);
+    
+    if (!response) {
+      throw new Error(`Null response from ${provider}/${modelId}. The API call succeeded but returned no data.`);
+    }
+
+    if (!response.text || response.text.trim().length === 0) {
+      const debugInfo = {
+        provider,
+        modelId,
+        finishReason: response.finishReason,
+        usage: response.usage,
+        hasText: !!response.text,
+        textLength: response.text?.length || 0
+      };
       
-      if (modelId.includes(':free') || modelId.includes('free')) {
-        throw new Error(`The free model ${modelId} returned an empty response. This may be due to rate limits or model availability. Try again or switch to a paid model.`);
+      console.error(`❌ [Empty Response Debug]:`, debugInfo);
+      
+      // Special handling for OpenRouter free models
+      if (provider === 'openrouter' && modelId.includes(':free')) {
+        const isUsageInvalid = !response.usage || 
+          isNaN(response.usage.totalTokens as number) || 
+          response.usage.totalTokens === null;
+        
+        if (isUsageInvalid) {
+          throw new Error(`OpenRouter 免费模型 [${modelId}] 当前不可用。
+
+可能原因:
+1. 该免费模型的全局配额已耗尽
+2. 模型已被下架或暂时关闭
+3. 您的 API Key 触发了频率限制
+
+✅ 推荐解决方案:
+• 切换到 Google Gemini (稳定且免费): gemini-2.0-flash-exp
+• 或使用其他 OpenRouter 付费模型
+• 检查 OpenRouter 状态: https://openrouter.ai/models
+
+📊 当前状态:
+- API 连接: ✅ 正常
+- 请求处理: ❌ 未执行 (Token 使用量为 NaN)
+- 建议: 立即切换模型`);
+        }
       }
       
-      throw new Error(`Empty response from ${provider}/${modelId}. The model may be temporarily unavailable.`);
+      throw new Error(`模型 [${modelId}] 返回了空内容。
+调试信息:
+- 提供商: ${provider}
+- 完成原因: ${response.finishReason || 'unknown'}
+- Token使用: ${JSON.stringify(response.usage || 'N/A')}
+- 可能原因: API配额耗尽、模型过载、或请求被过滤
+
+建议: 请检查 API Key 是否有效,或切换到其他模型重试。`);
     }
 
-    return text;
-  } catch (error) {
-    console.error(`LLM call failed for ${provider}/${modelId}:`, error);
+    console.log(`📊 [LLM Call] Success: ${modelId} (${response.text.length} chars)`);
+    return response.text;
+  } catch (error: any) {
+    console.error(`❌ [LLM Final Error] for ${provider}/${modelId}:`, {
+      message: error.message,
+      stack: error.stack?.split('\n').slice(0, 3),
+      cause: error.cause
+    });
     
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    
-    if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
-      throw new Error(`Rate limit exceeded for ${provider}. Please wait a moment and try again.`);
+    let friendlyError = error.message;
+    if (provider === 'google' && (modelId.includes('gemini-3') || modelId.includes('gemini-1.5') || modelId.includes('gemini-2'))) {
+      if (error.message.includes('404') || error.message.includes('not found') || error.message.includes('NOT_FOUND')) {
+        friendlyError = `模型 [${modelId}] 在 Google API 中未找到。
+可能原因:
+1. 模型 ID 错误 (请确认完整 ID)
+2. 您的 API Key 无权访问此模型
+3. 该模型已被弃用或名称已更改
+
+建议: 尝试使用 'gemini-2.0-flash-exp' 或 'gemini-1.5-flash'`;
+      } else if (error.message.includes('429') || error.message.includes('rate limit') || error.message.includes('quota')) {
+        friendlyError = `[${modelId}] API 配额已用尽或触发频率限制。
+请稍后重试,或检查您的 Google AI Studio 配额设置。`;
+      } else if (error.message.includes('API key')) {
+        friendlyError = `Google API Key 未配置或无效。
+请在设置中配置有效的 API Key。
+获取地址: https://makersuite.google.com/app/apikey`;
+      }
     }
     
-    if (errorMessage.includes('Empty response')) {
-      throw error;
-    }
-    
-    throw new Error(`Failed to generate response using ${provider}/${modelId}: ${errorMessage}`);
+    throw new Error(friendlyError);
   }
 }
 

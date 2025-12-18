@@ -13,6 +13,9 @@ interface PageModification {
   target?: string;
   content?: string;
   title?: string;
+  model?: string;
+  provider?: string;
+  searchEnabled?: boolean;
 }
 
 interface ArticleContext {

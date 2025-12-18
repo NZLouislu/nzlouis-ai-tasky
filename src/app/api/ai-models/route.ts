@@ -5,14 +5,14 @@ import { getUserIdFromRequest } from "@/lib/admin-auth";
 
 const MODEL_CONFIGS = {
     google: [
-        { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Fast' },
+        { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'Ultra Fast' },
+        { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', description: 'Fast' },
         { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro Preview', description: 'Paid API' },
         { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Advanced' },
+        { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Fast' },
         { id: 'gemini-2.5-flash-live', name: 'Gemini 2.5 Flash Live', description: 'Realtime' },
         { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', description: 'Lite' },
         { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Quick' },
-        { id: 'gemini-2.0-flash-live', name: 'Gemini 2.0 Flash Live', description: 'Live' },
-        { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', description: 'Light' },
     ],
     openai: [
         { id: 'gpt-4o', name: 'GPT-4o', description: 'Flagship' },

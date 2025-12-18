@@ -1151,16 +1151,18 @@ export default function BlogPage() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 second timeout
 
+        const model = typeof mod !== 'string' ? (mod as any).model : undefined;
+        const provider = typeof mod !== 'string' ? (mod as any).provider : undefined;
+        const search_enabled = typeof mod !== 'string' ? (mod as any).searchEnabled : undefined;
+
         try {
           console.log("Sending request to /api/blog/ai-assist (Agentic Pipeline)");
-          console.log("Request body:", {
+          console.log("Parameters:", {
             post_id: activePostId,
-            current_content: currentPost.content || [],
-            current_title: currentPost.title || 'Untitled',
-            message: instruction.trim(),
-            model: typeof mod !== 'string' ? mod.model : undefined,
-            provider: typeof mod !== 'string' ? mod.provider : undefined,
-            search_enabled: typeof mod !== 'string' ? mod.searchEnabled : undefined,
+            model,
+            provider,
+            search_enabled,
+            instruction_length: instruction.length
           });
 
           const response = await fetch('/api/blog/ai-assist', {
@@ -1174,7 +1176,10 @@ export default function BlogPage() {
               current_content: currentPost.content || [],
               current_title: currentPost.title || 'Untitled',
               message: instruction.trim(),
-              conversation_id: `blog-${activePostId}`, // Use post ID as conversation context
+              conversation_id: `blog-${activePostId}`,
+              model,
+              provider,
+              search_enabled
             }),
             signal: controller.signal,
           });

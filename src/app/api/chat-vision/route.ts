@@ -14,13 +14,15 @@ export async function POST(req: NextRequest) {
     }
 
     // Determine model to use
-    // Default to gemini-1.5-flash-latest which is a stable alias
-    let modelName = 'gemini-1.5-flash-latest';
+    // Default to gemini-3-flash-preview
+    let modelName = 'gemini-3-flash-preview';
     
     if (modelId) {
       // Map user friendly names to actual API model names
       // We trust the modelId passed from the client, but handle specific aliases if needed
-      if (modelId.includes('gemini-2.0-flash')) {
+      if (modelId.includes('gemini-3-flash-preview')) {
+        modelName = 'gemini-3-flash-preview';
+      } else if (modelId.includes('gemini-2.0-flash')) {
         modelName = 'gemini-2.0-flash-exp';
       } else if (modelId.includes('gemini-1.5-pro')) {
         modelName = 'gemini-1.5-pro-latest';

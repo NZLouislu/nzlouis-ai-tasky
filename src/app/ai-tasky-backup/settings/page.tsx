@@ -14,6 +14,7 @@ const PROVIDERS = [
 
 const MODELS: Record<string, Array<{ id: string; name: string }>> = {
   google: [
+    { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash' },
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
     { id: 'gemini-2.5-flash-live', name: 'Gemini 2.5 Flash Live' },
     { id: 'gemini-2.0-flash-live', name: 'Gemini 2.0 Flash Live' },
@@ -62,7 +63,7 @@ export default function SettingsPage() {
   const [configuredKeys, setConfiguredKeys] = useState<string[]>([]);
   const [settings, setSettings] = useState({
     defaultProvider: 'google',
-    defaultModel: 'gemini-2.5-flash',
+    defaultModel: 'gemini-3-flash-preview',
     temperature: 0.8,
     maxTokens: 1024,
     systemPrompt: 'You are a helpful AI assistant.',

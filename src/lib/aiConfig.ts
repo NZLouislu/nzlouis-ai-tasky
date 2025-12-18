@@ -120,6 +120,19 @@ export const AI_PROVIDERS: AIProvider[] = [
     description: "Google’s latest Gemini and Imagen models",
     models: [
       {
+        id: "gemini-3-flash-preview",
+        name: "Gemini 3 Flash",
+        provider: "google",
+        contextWindow: 1000000,
+        supportsImages: true,
+        supportsVision: true,
+        maxTokens: 8192,
+        pricing: { input: 0.0005, output: 0.003 },
+        capabilities: ["text", "vision", "code"],
+        isFree: false,
+        description: "Latest and fastest - Pro-grade intelligence at Flash speed",
+      },
+      {
         id: "gemini-2.5-flash",
         name: "Gemini 2.5 Flash",
         provider: "google",

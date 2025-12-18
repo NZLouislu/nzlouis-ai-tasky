@@ -36,6 +36,7 @@ setInterval(() => {
 }, 60 * 1000);
 
 const MODEL_PROVIDER_MAP: Record<string, AIProvider> = {
+  'gemini-3-flash-preview': 'google',
   'gemini-2.5-flash': 'google',
   'gemini-3-pro-preview': 'google',
   'gemini-2.5-pro': 'google',
@@ -206,7 +207,7 @@ export async function POST(req: NextRequest) {
         })()
       : Promise.resolve({
           defaultProvider: 'google' as AIProvider,
-          defaultModel: 'gemini-2.5-flash',
+          defaultModel: 'gemini-3-flash-preview',
           temperature: 0.8,
           maxTokens: 4096,
           systemPrompt: 'You are a helpful AI assistant with vision capabilities. You can see and analyze images provided by users.',
@@ -595,6 +596,7 @@ export async function POST(req: NextRequest) {
       }
 
       const modelMap: Record<string, string> = {
+        'gemini-3-flash-preview': 'gemini-3-flash-preview',
         'gemini-2.5-flash': 'gemini-2.5-flash',
         'gemini-3-pro-preview': 'gemini-3-pro-preview',
         'gemini-2.5-pro': 'gemini-2.5-pro',

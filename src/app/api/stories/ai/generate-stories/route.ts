@@ -169,7 +169,7 @@ Please generate 5-10 user stories that cover the main features and requirements 
             source_report_id: reportDocumentId,
             platform,
             generated_at: new Date().toISOString(),
-            ai_model: 'gemini-2.0-flash-exp',
+            ai_model: 'gemini-3-flash-preview',
           },
         })
         .select('*')

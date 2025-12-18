@@ -14,14 +14,12 @@ const PROVIDERS = [
 
 const MODELS: Record<string, Array<{ id: string; name: string }>> = {
   google: [
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash - Fast' },
+    { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash - Ultra Fast' },
+    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash - Fast' },
     { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro Preview - Paid API' },
     { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro - Advanced' },
-    { id: 'gemini-2.5-flash-live', name: 'Gemini 2.5 Flash Live - Realtime' },
-    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite - Lite' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash - Fast' },
     { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash - Quick' },
-    { id: 'gemini-2.0-flash-live', name: 'Gemini 2.0 Flash Live - Live' },
-    { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite - Light' },
   ],
   openai: [
     { id: 'gpt-4o', name: 'GPT-4o - Flagship' },
@@ -64,7 +62,7 @@ export default function ChatbotSettingsPage() {
   const [configuredKeys, setConfiguredKeys] = useState<string[]>([]);
   const [settings, setSettings] = useState({
     defaultProvider: 'google',
-    defaultModel: 'gemini-2.5-flash',
+    defaultModel: 'gemini-3-flash-preview',
     temperature: 0.8,
     maxTokens: 1024,
     systemPrompt: 'You are a helpful AI assistant.',
@@ -111,7 +109,7 @@ export default function ChatbotSettingsPage() {
         // Map snake_case from DB to camelCase for state
         setSettings({
           defaultProvider: data.settings.default_provider || 'google',
-          defaultModel: data.settings.default_model || 'gemini-2.5-flash',
+          defaultModel: data.settings.default_model || 'gemini-3-flash-preview',
           temperature: data.settings.temperature ?? 0.8,
           maxTokens: data.settings.max_tokens ?? 1024,
           systemPrompt: data.settings.system_prompt || 'You are a helpful AI assistant.',

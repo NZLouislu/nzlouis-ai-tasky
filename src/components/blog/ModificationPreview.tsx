@@ -148,29 +148,32 @@ export function ModificationPreview({
                     newValue={modifiedText}
                     splitView={true}
                     showDiffOnly={false}
-                    leftTitle="Before"
-                    rightTitle="After"
+                    leftTitle="Original Content"
+                    rightTitle="Proposed Modification"
                     styles={{
                       variables: {
                         light: {
                           diffViewerBackground: '#ffffff',
-                          addedBackground: '#e6ffed',
-                          removedBackground: '#ffeef0',
-                          wordAddedBackground: '#acf2bd',
-                          wordRemovedBackground: '#fdb8c0',
-                          addedGutterBackground: '#cdffd8',
-                          removedGutterBackground: '#ffdce0',
-                          gutterBackground: '#f7f7f7',
-                          gutterBackgroundDark: '#f3f3f3',
-                          highlightBackground: '#fffbdd',
-                          highlightGutterBackground: '#fff5b1',
+                          addedBackground: '#f0fff4',
+                          removedBackground: '#fff5f5',
+                          wordAddedBackground: '#c6f6d5',
+                          wordRemovedBackground: '#fed7d7',
+                          addedGutterBackground: '#def7e5',
+                          removedGutterBackground: '#fbe9e9',
+                          gutterBackground: '#f8fafc',
+                          gutterBackgroundDark: '#f1f5f9',
                         },
                       },
                       line: {
-                        padding: '10px 2px',
+                        padding: '12px 10px',
                         fontSize: '14px',
-                        lineHeight: '1.6',
+                        lineHeight: '1.7',
                       },
+                      content: {
+                        width: '50%',
+                        minWidth: '400px',
+                        wordBreak: 'break-word',
+                      }
                     }}
                   />
                 )}

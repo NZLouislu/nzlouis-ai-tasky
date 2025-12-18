@@ -46,7 +46,8 @@ export class AgentOrchestrator {
         this.perceptionAgent.perceive(request.message, request.current_content),
       ]);
 
-      console.log(`✅ Phase 1 completed in ${Date.now() - startTime}ms`);
+      const isChinese = /[\u4e00-\u9fa5]/.test(request.message);
+      console.log(`✅ Phase 1 completed in ${Date.now() - startTime}ms (Language: ${isChinese ? 'CN' : 'EN'})`);
 
       let documentStructure = cachedDocStructure || perception.documentStructure;
       let writingStyle = cachedWritingStyle;
@@ -83,7 +84,7 @@ export class AgentOrchestrator {
       let searchContext: SearchContext | null = null;
       if (planning.needs_search && planning.search_queries.length > 0) {
         console.log('[Stage 3] Retrieval - Searching for information...');
-        searchContext = await this.performSearch(planning.search_queries, callLLM);
+        searchContext = await this.performSearch(planning.search_queries, callLLM, isChinese);
       }
 
       console.log('[Stage 4] Generation - Generating content with style context...');
@@ -93,7 +94,8 @@ export class AgentOrchestrator {
         request.current_content,
         request.message,
         callLLM,
-        writingStyle
+        writingStyle,
+        isChinese
       );
 
       console.log('[Parallel Phase 5] Validation + Tool Checks...');
@@ -162,11 +164,13 @@ export class AgentOrchestrator {
 
   private async performSearch(
     queries: string[],
-    callLLM: (systemPrompt: string, userPrompt: string) => Promise<string>
+    callLLM: (systemPrompt: string, userPrompt: string) => Promise<string>,
+    isChinese: boolean
   ): Promise<SearchContext> {
     try {
-      const searchPromises = queries.slice(0, 3).map(query =>
-        searchTavily(query, { max_results: 3 })
+      // Search up to 5 queries and get more results per query for better depth
+      const searchPromises = queries.slice(0, 5).map(query =>
+        searchTavily(query, { max_results: 5 })
       );
 
       const allResults = await Promise.all(searchPromises);
@@ -174,9 +178,9 @@ export class AgentOrchestrator {
 
       const uniqueResults = Array.from(
         new Map(flatResults.map(r => [r.url, r])).values()
-      ).slice(0, 5);
+      ).slice(0, 10) as any[];
 
-      const summary = await this.summarizeSearchResults(uniqueResults, callLLM);
+      const summary = await this.summarizeSearchResults(uniqueResults, callLLM, isChinese);
 
       return {
         raw_results: uniqueResults,
@@ -195,15 +199,19 @@ export class AgentOrchestrator {
 
   private async summarizeSearchResults(
     results: { title: string; content: string; url: string }[],
-    callLLM: (systemPrompt: string, userPrompt: string) => Promise<string>
+    callLLM: (systemPrompt: string, userPrompt: string) => Promise<string>,
+    isChinese: boolean
   ): Promise<string> {
     if (results.length === 0) {
       return 'No search results available.';
     }
 
-    const systemPrompt = 'You are a research assistant. Summarize the following search results into a concise, informative summary.';
+    const systemPrompt = isChinese 
+      ? '你是一位资深的行业研究员和分析师。请从以下搜索结果中提取详细的事实、核心数据、具体统计信息和深度洞见。**严禁生成短小的摘要。** 请尽可能保留细节，为文章提供充实的参考背景。如果搜索结果包含多个子话题，请分条列出。'
+      : 'You are an expert research analyst. Extract detailed facts, core data points, statistics, and insights. **Do not provide a brief summary.** Preserve as much detail as possible to provide a rich background for the article. Organize by sub-topics if necessary.';
+
     const userPrompt = results
-      .map((r, i) => `[${i + 1}] ${r.title}\n${r.content.slice(0, 500)}...\nSource: ${r.url}`)
+      .map((r, i) => `[${isChinese ? '来源' : 'Source'} ${i + 1}] ${r.title}\n${r.content.slice(0, 800)}...\nURL: ${r.url}`)
       .join('\n\n');
 
     try {

@@ -64,6 +64,9 @@ export default function ChatbotPage() {
   const [editingTitle, setEditingTitle] = useState("");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const [userHasScrolledUp, setUserHasScrolledUp] = useState(false);
 
   useEffect(() => {
     const checkAdminSession = async () => {
@@ -234,9 +237,41 @@ export default function ChatbotPage() {
     };
   }, [handleImageUpload]);
 
+  // Handle auto-scrolling
   useEffect(() => {
+    if (!scrollContainerRef.current) return;
+    
+    const container = scrollContainerRef.current;
+    const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 150;
+
+    if (isAtBottom && !userHasScrolledUp) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    } else if (isLoading) {
+      // If we are loading and not at bottom, show the scroll button
+      setShowScrollButton(true);
+    }
+  }, [messages, isLoading, userHasScrolledUp]);
+
+  // Track manual scroll to determine if we should stop auto-scrolling
+  const handleScroll = useCallback(() => {
+    if (!scrollContainerRef.current) return;
+    
+    const container = scrollContainerRef.current;
+    const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 150;
+    
+    if (isAtBottom) {
+      setUserHasScrolledUp(false);
+      setShowScrollButton(false);
+    } else {
+      setUserHasScrolledUp(true);
+    }
+  }, []);
+
+  const scrollToBottom = () => {
+    setUserHasScrolledUp(false);
+    setShowScrollButton(false);
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  };
 
   const loadAvailableModels = async () => {
     try {
@@ -666,7 +701,7 @@ export default function ChatbotPage() {
         body: JSON.stringify({
           title: "New Chat",
           provider: selectedProvider || "google",
-          model: selectedModel || "gemini-2.5-flash",
+          model: selectedModel || "gemini-3-flash-preview",
         }),
       });
       const data = await res.json();
@@ -913,7 +948,11 @@ export default function ChatbotPage() {
           </h1>
         </div>
 
-        <div className="flex-1 overflow-y-auto chatbot-scrollbar">
+        <div 
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto chatbot-scrollbar relative"
+        >
           <div className="w-full max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto p-4 sm:p-6">
             {availableModels.length === 0 && !isCheckingAuth && (
               <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm">
@@ -1053,115 +1092,24 @@ export default function ChatbotPage() {
                               );
                             },
                             table: ({ ...props }) => (
-                              <div
-                                style={{
-                                  margin: "3rem 0 0 0",
-                                  all: "initial",
-                                  display: "block",
-                                  fontFamily: "inherit",
-                                  width: "100%",
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    backgroundColor: "#FFF8F0",
-                                    borderRadius: "1rem",
-                                    padding: "0",
-                                    border: "1px solid #F5E6D3",
-                                    boxShadow:
-                                      "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)",
-                                    overflow: "hidden",
-                                    display: "block",
-                                    marginBottom: "3rem",
-                                  }}
-                                >
-                                  <div className="p-5 overflow-x-auto">
-                                    <table
-                                      style={{
-                                        width: "100%",
-                                        borderCollapse: "separate",
-                                        borderSpacing: "0",
-                                        margin: "0",
-                                        backgroundColor: "transparent",
-                                        display: "table",
-                                      }}
-                                      {...props}
-                                    />
-                                  </div>
-                                </div>
+                              <div className="my-8 w-full overflow-x-auto rounded-xl border border-orange-100 shadow-sm">
+                                <table className="w-full border-collapse text-left text-sm" {...props} />
                               </div>
                             ),
                             thead: ({ ...props }) => (
-                              <thead
-                                style={{
-                                  backgroundColor: "#FFF8F0",
-                                  display: "table-header-group",
-                                }}
-                                {...props}
-                              />
+                              <thead className="bg-orange-50/50" {...props} />
                             ),
                             tbody: ({ ...props }) => (
-                              <tbody
-                                style={{
-                                  backgroundColor: "white",
-                                  display: "table-row-group",
-                                }}
-                                {...props}
-                              />
+                              <tbody className="divide-y divide-orange-100 bg-white" {...props} />
                             ),
                             th: ({ ...props }) => (
-                              <th
-                                style={{
-                                  padding: "1rem 1.5rem",
-                                  textAlign: "left",
-                                  fontSize: "0.875rem",
-                                  fontWeight: "700",
-                                  color: "#4B5563",
-                                  backgroundColor: "#FFF8F0",
-                                  borderBottom: "2px solid #F5E6D3",
-                                  display: "table-cell",
-                                  whiteSpace: "pre-wrap",
-                                  wordBreak: "break-word",
-                                  verticalAlign: "top",
-                                }}
-                                {...props}
-                              />
+                              <th className="px-6 py-4 font-bold text-gray-900 border-b-2 border-orange-100 min-w-[120px]" {...props} />
                             ),
                             td: ({ ...props }) => (
-                              <td
-                                style={{
-                                  padding: "1rem 1.5rem",
-                                  fontSize: "0.875rem",
-                                  color: "#374151",
-                                  backgroundColor: "white",
-                                  borderBottom:
-                                    "1px solid rgba(245, 230, 211, 0.4)",
-                                  display: "table-cell",
-                                  whiteSpace: "pre-wrap",
-                                  wordBreak: "break-word",
-                                  verticalAlign: "top",
-                                  maxWidth: "600px",
-                                }}
-                                {...props}
-                              />
+                              <td className="px-6 py-4 text-gray-700 leading-relaxed min-w-[150px] align-top" {...props} />
                             ),
                             tr: ({ ...props }) => (
-                              <tr
-                                style={{
-                                  transition: "background-color 0.2s",
-                                  display: "table-row",
-                                }}
-                                onMouseEnter={(e) => {
-                                  const target = e.currentTarget as HTMLElement;
-                                  target.style.backgroundColor =
-                                    "rgba(255, 248, 240, 0.5)";
-                                }}
-                                onMouseLeave={(e) => {
-                                  const target = e.currentTarget as HTMLElement;
-                                  target.style.backgroundColor = "transparent";
-                                }}
-                                {...props}
-                              />
+                              <tr className="hover:bg-orange-50/30 transition-colors" {...props} />
                             ),
                           } as any
                         }
@@ -1206,9 +1154,20 @@ export default function ChatbotPage() {
                 </div>
               </div>
             )}
-                  </>
-                );
-              })()}
+                   {showScrollButton && (
+                    <div className="absolute bottom-4 left-0 right-0 flex justify-center z-20">
+                      <button
+                        onClick={scrollToBottom}
+                        className="bg-blue-600 text-white px-6 py-2 rounded-full shadow-xl hover:bg-blue-700 transition-all flex items-center gap-2 animate-bounce ring-4 ring-white/50"
+                      >
+                        <span className="text-lg">⬇️</span>
+                        <span className="font-medium">New content below</span>
+                      </button>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
 

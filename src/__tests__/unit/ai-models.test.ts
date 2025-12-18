@@ -15,8 +15,9 @@ import {
 describe('AI Models', () => {
   describe('isValidModel', () => {
     it('should return true for valid Google models', () => {
+      expect(isValidModel('google', 'gemini-3-flash-preview')).toBe(true);
+      expect(isValidModel('google', 'gemini-1.5-flash')).toBe(true);
       expect(isValidModel('google', 'gemini-2.5-pro')).toBe(true);
-      expect(isValidModel('google', 'gemini-2.5-flash')).toBe(true);
     });
 
     it('should return true for valid OpenAI models', () => {
@@ -42,8 +43,9 @@ describe('AI Models', () => {
   describe('getAvailableModels', () => {
     it('should return all Google models', () => {
       const models = getAvailableModels('google');
+      expect(models).toContain('gemini-3-flash-preview');
+      expect(models).toContain('gemini-1.5-flash');
       expect(models).toContain('gemini-2.5-pro');
-      expect(models).toContain('gemini-2.5-flash');
       expect(models.length).toBeGreaterThan(0);
     });
 

@@ -9,12 +9,11 @@ export class ContentGenerator {
     currentContent: PartialBlock[],
     userMessage: string,
     callLLM: (systemPrompt: string, userPrompt: string) => Promise<string>,
-    writingStyle?: WritingStyle | null
+    writingStyle?: WritingStyle | null,
+    isChinese: boolean = false
   ): Promise<GenerationResult> {
     console.log('[Generation] Starting content generation...');
-    
-    const isChinese = /[\u4e00-\u9fa5]/.test(userMessage);
-    console.log(`[Generation] Language detected: ${isChinese ? 'Chinese' : 'English'}`);
+    console.log(`[Generation] Language: ${isChinese ? 'Chinese' : 'English'}`);
     
     try {
       const systemPrompt = this.buildGenerationSystemPrompt(writingStyle, planning.action_plan.estimated_words, isChinese);
@@ -27,8 +26,13 @@ export class ContentGenerator {
         isChinese
       );
 
+      // Force high detail by explicitly adding a "No Short Content" mandate
+      const reinforcedUserPrompt = userPrompt + (isChinese 
+        ? "\n\n**重要提示（深度写令）：禁止生成简短回复。请基于搜索到的事实，进行深度的行业影响分析。内容必须包含至少 3-4 个详细的逻辑层级，每一段写得要充实（保持在 200-300 字左右一个段落），确保整体字数不少于预计字数。**" 
+        : "\n\n**IMPORTANT (Depth Command): Do not provide a brief summary. Perform deep industry analysis based on the facts. The content MUST include at least 3-4 detailed logical levels. Each section must be substantial (200-300 words).**");
+
       console.log('[Generation] Calling LLM (Attempt 1 - JSON Mode)...');
-      const response = await callLLM(systemPrompt, userPrompt);
+      const response = await callLLM(systemPrompt, reinforcedUserPrompt);
 
       return this.parseGenerationResponse(response);
     } catch (error) {
@@ -218,9 +222,18 @@ Requirements:
       }
       
       const sourcesNote = searchContext.sources?.length > 0
-        ? `\n\n*${isChinese ? '来源' : 'Sources'}: ${searchContext.sources.map(s => s.title).join(', ')}*`
+        ? `\n\n*${isChinese ? '参考来源' : 'References'}:*\n${searchContext.sources.map(s => `> - [${s.title}](${s.url || '#'})`).join('\n')}`
         : '';
-      content = `## ${sectionTitle}\n\n${summaryText}${sourcesNote}`;
+        
+      // Clean up summaryText from common "noisy" patterns (like PDF dots or page numbers)
+      const cleanSummary = summaryText
+        .replace(/\.{4,}/g, ' ') // Remove long sequences of dots
+        .replace(/\s{2,}/g, ' ') // Collapse spaces
+        .replace(/表\s?\d+:?/g, '') // Remove table references if they are just noise
+        .replace(/图\s?\d+:?/g, '') // Remove figure references
+        .trim();
+
+      content = `## ${sectionTitle}\n\n${cleanSummary}\n\n*${isChinese ? '提示：由于 AI 生成连接异常，以上内容基于实时搜索结果自动整理，请您审阅并微调。' : 'Note: Content synthesized from live search results due to AI connection issues.'}*${sourcesNote}`;
     } else {
       // No search data available - show error message
       content = isChinese 
@@ -360,7 +373,13 @@ ${topicKeywords} involves several important aspects that require analysis from d
     }
 
     const languageNote = isChinese 
-      ? `\n**Language:** Generate content in Chinese (中文). The content field must contain Chinese text.\n`
+      ? `\n**Language:** Generate content in Chinese (中文).
+**写作要求：**
+1. **拒绝平庸**：不要简单重复搜索结果，要进行深度的行业分析和逻辑串联。
+2. **专业表达**：使用地道的行业术语，内容要体现专业深度。
+3. **数据支撑**：尽可能包含具体的数字、百分比、时间节点或行业案例。
+4. **清洗干扰**：过滤掉搜索结果中的杂质信息（如页码、来源索引、乱码字符）。
+5. **字数达标**：生成的段落应充实饱满，接近目标字数限制。\n`
       : '';
     
     const exampleTitle = isChinese ? '火星的自然条件' : 'Mars Natural Conditions';
@@ -382,13 +401,13 @@ ${languageNote}
 ${styleGuidance}
 **Generation Requirements:**
 
-1. Accuracy: All facts must be accurate and well-researched
-2. Fluency: Natural language, appropriate blog style
-3. Structure: Clear logic, appropriate paragraphing
+1. **Insight & Depth**: Go beyond surface-level information. Provide unique insights, analysis, and expert perspectives.
+2. **Fact-Driven**: Include specific data points, statistics, names, and real-world examples derived from the search context.
+3. **Structure & Logic**: Use professional blog structure. Every sentence must add value; avoid generic filler text.
 4. Detail: Target word/character count ~${estimatedWords}
-5. Timeliness: Use current and relevant information
-6. Readability: Suitable for general readers
-7. IMPORTANT: Generate REAL content with specific facts, data, and details
+5. **Expert Tone**: Sound like a thought leader in the field. Use appropriate technical terminology correctly.
+6. Timeliness: Prioritize the latest information and trends from the provided context.
+7. **Mandatory Specificity**: Instead of "AI is useful", say "AI improves [specific metric] by [X%] in [specific industry]".
 
 **Content Format Rules:**
 
