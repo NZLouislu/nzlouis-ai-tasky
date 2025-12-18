@@ -28,6 +28,10 @@ export class ContextBuilder {
   async analyzeUserWritingStyle(userId: string): Promise<WritingStyle> {
     try {
       // 获取用户最近 10 篇文章
+      if (!blogDb) {
+        console.warn('blogDb is null, returning default style');
+        return this.getDefaultStyle();
+      }
       const { data: recentPosts, error } = await blogDb
         .from('posts')
         .select('content')

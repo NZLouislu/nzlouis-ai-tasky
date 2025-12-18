@@ -1,9 +1,9 @@
 import React from "react";
 import type { Meta, StoryObj } from "@storybook/react";
 import { useState } from "react";
-import BlogHeader from "../components/blog/BlogHeader";
-import IconSelector from "../components/blog/IconSelector";
-import CoverOptions from "../components/blog/CoverOptions";
+import BlogHeader from "@/components/blog/BlogHeader";
+import IconSelector from "@/components/blog/IconSelector";
+import CoverOptions from "@/components/blog/CoverOptions";
 
 const meta: Meta = {
   title: "Blog/BlogHeaderActions",

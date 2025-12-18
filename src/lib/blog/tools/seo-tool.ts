@@ -22,7 +22,7 @@ export interface SEOAnalysis {
 }
 
 /**
- * 检查 SEO 质量
+ * Check SEO quality
  */
 export async function checkSEO(
   content: string,
@@ -31,14 +31,14 @@ export async function checkSEO(
   const titleLength = title.length;
   const titleOptimal = titleLength >= 30 && titleLength <= 60;
 
-  // 检查 H2 标题
+  // Check H2 headings
   const hasH2 = content.includes('"level":2') || content.includes('level: 2');
   const headingCount = countHeadings(content);
 
-  // 计算关键词密度
+  // Calculate keyword density
   const keywordDensity = calculateKeywordDensity(content, title);
 
-  // 计算总分
+  // Calculate total score
   let score = 0;
   if (titleOptimal) score += 4;
   else if (titleLength > 0) score += 2;
@@ -51,12 +51,12 @@ export async function checkSEO(
     title: {
       length: titleLength,
       optimal: titleOptimal,
-      suggestion: titleLength < 30 ? '标题过短，建议30-60字' : null,
+      suggestion: titleLength < 30 ? 'Title too short, recommended 30-60 characters' : null,
     },
     headings: {
       hasH2,
       count: headingCount,
-      suggestion: !hasH2 ? '缺少H2子标题，影响SEO' : null,
+      suggestion: !hasH2 ? 'Missing H2 subheadings, affects SEO' : null,
     },
     keywords: {
       density: keywordDensity,
@@ -67,7 +67,7 @@ export async function checkSEO(
 }
 
 /**
- * 计算标题数量
+ * Count number of headings
  */
 function countHeadings(content: string): number {
   const h2Matches = content.match(/"level":2/g) || [];
@@ -76,18 +76,20 @@ function countHeadings(content: string): number {
 }
 
 /**
- * 计算关键词密度（简化版）
+ * Calculate keyword density (simplified version)
  */
 function calculateKeywordDensity(content: string, title: string): number {
-  // 提取标题中的关键词
+  // Extract keywords from title
   const titleWords = title.match(/[\u4e00-\u9fa5]{2,}/g) || [];
   if (titleWords.length === 0) return 0;
 
-  // 计算关键词在内容中出现的频率
+  // Calculate keyword frequency in content
   const mainKeyword = titleWords[0];
+  if (!mainKeyword) return 0;
+  
   const matches = content.match(new RegExp(mainKeyword, 'g')) || [];
 
-  // 计算密度（出现次数 / 总字数 * 100）
+  // Calculate density (occurrences / total characters * 100)
   const totalChars = content.length;
   return totalChars > 0 ? (matches.length / (totalChars / 100)) * 100 : 0;
 }

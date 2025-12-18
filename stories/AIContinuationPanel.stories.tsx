@@ -1,6 +1,6 @@
 import React from "react";
 import { Meta, StoryObj } from "@storybook/react";
-import AIContinuationPanel from "../components/AIContinuationPanel";
+import AIContinuationPanel from "@/components/AIContinuationPanel";
 
 const meta: Meta<typeof AIContinuationPanel> = {
   title: "Components/AIContinuationPanel",

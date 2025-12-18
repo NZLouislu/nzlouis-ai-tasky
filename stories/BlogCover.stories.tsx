@@ -1,6 +1,6 @@
 import React from "react";
 import { Meta, StoryObj } from "@storybook/react";
-import BlogCover from "../components/blog/BlogCover";
+import BlogCover from "@/components/blog/BlogCover";
 
 const meta: Meta<typeof BlogCover> = {
   title: "Blog/BlogCover",

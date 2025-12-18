@@ -9,16 +9,16 @@ describe("DocumentAnalyzer", () => {
       const blocks: PartialBlock[] = [
         {
           type: "heading",
-          content: [{ type: "text", text: "Chapter 1" }],
+          content: [{ type: "text", text: "Chapter 1", styles: {} }],
           props: { level: 1 },
         },
-        { type: "paragraph", content: [{ type: "text", text: "Content 1" }] },
+        { type: "paragraph", content: [{ type: "text", text: "Content 1", styles: {} }] },
         {
           type: "heading",
-          content: [{ type: "text", text: "Section 1.1" }],
+          content: [{ type: "text", text: "Section 1.1", styles: {} }],
           props: { level: 2 },
         },
-        { type: "paragraph", content: [{ type: "text", text: "Content 1.1" }] },
+        { type: "paragraph", content: [{ type: "text", text: "Content 1.1", styles: {} }] },
       ];
 
       const result = analyzer.analyze(blocks);
@@ -31,8 +31,8 @@ describe("DocumentAnalyzer", () => {
 
     it("should handle documents with no headings", () => {
       const blocks: PartialBlock[] = [
-        { type: "paragraph", content: [{ type: "text", text: "Paragraph 1" }] },
-        { type: "paragraph", content: [{ type: "text", text: "Paragraph 2" }] },
+        { type: "paragraph", content: [{ type: "text", text: "Paragraph 1", styles: {} }] },
+        { type: "paragraph", content: [{ type: "text", text: "Paragraph 2", styles: {} }] },
       ];
 
       const result = analyzer.analyze(blocks);
@@ -46,32 +46,32 @@ describe("DocumentAnalyzer", () => {
       const blocks: PartialBlock[] = [
         {
           type: "heading",
-          content: [{ type: "text", text: "H1" }],
+          content: [{ type: "text", text: "H1", styles: {} }],
           props: { level: 1 },
         },
         {
           type: "heading",
-          content: [{ type: "text", text: "H2" }],
+          content: [{ type: "text", text: "H2", styles: {} }],
           props: { level: 2 },
         },
         {
           type: "heading",
-          content: [{ type: "text", text: "H3" }],
+          content: [{ type: "text", text: "H3", styles: {} }],
           props: { level: 3 },
         },
         {
           type: "heading",
-          content: [{ type: "text", text: "H4" }],
+          content: [{ type: "text", text: "H4", styles: {} }],
           props: { level: 4 },
         },
         {
           type: "heading",
-          content: [{ type: "text", text: "H5" }],
+          content: [{ type: "text", text: "H5", styles: {} }],
           props: { level: 5 },
         },
         {
           type: "heading",
-          content: [{ type: "text", text: "H6" }],
+          content: [{ type: "text", text: "H6", styles: {} }],
           props: { level: 6 },
         },
       ];
@@ -90,11 +90,11 @@ describe("DocumentAnalyzer", () => {
       const blocks: PartialBlock[] = [
         {
           type: "paragraph",
-          content: [{ type: "text", text: "Hello world this is a test" }],
+          content: [{ type: "text", text: "Hello world this is a test", styles: {} }],
         },
         {
           type: "paragraph",
-          content: [{ type: "text", text: "Another paragraph here" }],
+          content: [{ type: "text", text: "Another paragraph here", styles: {} }],
         },
       ];
 
@@ -110,7 +110,7 @@ describe("DocumentAnalyzer", () => {
       const blocks: PartialBlock[] = [
         {
           type: "paragraph",
-          content: [{ type: "text", text: words }],
+          content: [{ type: "text", text: words, styles: {} }],
         },
       ];
 
@@ -135,16 +135,16 @@ describe("DocumentAnalyzer", () => {
       const blocks: PartialBlock[] = [
         {
           type: "heading",
-          content: [{ type: "text", text: "Introduction" }],
+          content: [{ type: "text", text: "Introduction", styles: {} }],
           props: { level: 1 },
         },
-        { type: "paragraph", content: [{ type: "text", text: "Intro text" }] },
+        { type: "paragraph", content: [{ type: "text", text: "Intro text", styles: {} }] },
         {
           type: "heading",
-          content: [{ type: "text", text: "Body" }],
+          content: [{ type: "text", text: "Body", styles: {} }],
           props: { level: 1 },
         },
-        { type: "paragraph", content: [{ type: "text", text: "Body text" }] },
+        { type: "paragraph", content: [{ type: "text", text: "Body text", styles: {} }] },
       ];
 
       const result = analyzer.analyze(blocks);
@@ -160,12 +160,12 @@ describe("DocumentAnalyzer", () => {
       const blocks: PartialBlock[] = [
         {
           type: "heading",
-          content: [{ type: "text", text: "Section 1" }],
+          content: [{ type: "text", text: "Section 1", styles: {} }],
           props: { level: 1 },
         },
         {
           type: "paragraph",
-          content: [{ type: "text", text: "One two three four five" }],
+          content: [{ type: "text", text: "One two three four five", styles: {} }],
         },
       ];
 
@@ -180,12 +180,12 @@ describe("DocumentAnalyzer", () => {
       const blocks: PartialBlock[] = [
         {
           type: "heading",
-          content: [{ type: "text", text: "Title" }],
+          content: [{ type: "text", text: "Title", styles: {} }],
           props: { level: 1 },
         },
-        { type: "paragraph", content: [{ type: "text", text: "Text" }] },
-        { type: "bulletListItem", content: [{ type: "text", text: "Item" }] },
-        { type: "numberedListItem", content: [{ type: "text", text: "Item" }] },
+        { type: "paragraph", content: [{ type: "text", text: "Text", styles: {} }] },
+        { type: "bulletListItem", content: [{ type: "text", text: "Item", styles: {} }] },
+        { type: "numberedListItem", content: [{ type: "text", text: "Item", styles: {} }] },
       ];
 
       const result = analyzer.analyze(blocks);
@@ -209,7 +209,7 @@ describe("DocumentAnalyzer", () => {
       for (let i = 0; i < 1000; i++) {
         blocks.push({
           type: "paragraph",
-          content: [{ type: "text", text: "Test paragraph content" }],
+          content: [{ type: "text", text: "Test paragraph content", styles: {} }],
         });
       }
 

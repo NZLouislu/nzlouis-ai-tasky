@@ -1,6 +1,6 @@
 import React from "react";
 import { Meta, StoryObj } from "@storybook/react";
-import CoverOptions from "../components/blog/CoverOptions";
+import CoverOptions from "@/components/blog/CoverOptions";
 
 const meta: Meta<typeof CoverOptions> = {
   title: "Blog/CoverOptions",

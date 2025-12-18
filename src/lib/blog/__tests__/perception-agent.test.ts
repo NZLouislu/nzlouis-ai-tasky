@@ -13,25 +13,25 @@ describe('PerceptionAgent', () => {
     {
       type: 'heading',
       props: { level: 1 },
-      content: [{ type: 'text', text: 'Mars Exploration' }],
+      content: [{ type: 'text', text: 'Mars Exploration', styles: {} }],
     },
     {
       type: 'heading',
       props: { level: 2 },
-      content: [{ type: 'text', text: 'Mars Exploration History' }],
+      content: [{ type: 'text', text: 'Mars Exploration History', styles: {} }],
     },
     {
       type: 'paragraph',
-      content: [{ type: 'text', text: 'Mars has been explored since the 1960s...' }],
+      content: [{ type: 'text', text: 'Mars has been explored since the 1960s...', styles: {} }],
     },
     {
       type: 'heading',
       props: { level: 2 },
-      content: [{ type: 'text', text: 'Future Outlook' }],
+      content: [{ type: 'text', text: 'Future Outlook', styles: {} }],
     },
     {
       type: 'paragraph',
-      content: [{ type: 'text', text: 'Future missions to Mars...' }],
+      content: [{ type: 'text', text: 'Future missions to Mars...', styles: {} }],
     },
   ];
 
@@ -131,11 +131,11 @@ describe('PerceptionAgent', () => {
         {
           type: 'heading',
           props: { level: 2 },
-          content: [{ type: 'text', text: 'Long Section' }],
+          content: [{ type: 'text', text: 'Long Section', styles: {} }],
         },
         ...Array(20).fill({
           type: 'paragraph',
-          content: [{ type: 'text', text: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. '.repeat(10) }],
+          content: [{ type: 'text', text: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. '.repeat(10), styles: {} }],
         }),
       ];
 

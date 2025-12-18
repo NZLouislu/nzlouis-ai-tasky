@@ -20,6 +20,8 @@ export interface AgentRequest {
 export interface AgentResponse {
   conversation_id: string;
   message_id: string;
+  requiresSetup?: boolean;
+  message?: string;
 
   // AI's reply message
   reply: {

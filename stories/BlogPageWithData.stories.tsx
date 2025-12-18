@@ -1,6 +1,6 @@
 import React from "react";
 import { Meta, StoryObj } from "@storybook/react";
-import BlogPageStorybook from "../components/blog/BlogPageStorybook";
+import BlogPageStorybook from "@/components/blog/BlogPageStorybook";
 import { PartialBlock } from "@blocknote/core";
 
 
@@ -60,7 +60,7 @@ export const WithRealApiIntegration: Story = {
     },
   },
   decorators: [
-    (Story) => {
+    (Story: any) => {
       return <Story />;
     },
   ],

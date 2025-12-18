@@ -1,6 +1,6 @@
 import React from "react";
 import { Meta, StoryObj } from "@storybook/react";
-import BlogContent from "../components/blog/BlogContent";
+import BlogContent from "@/components/blog/BlogContent";
 import { PartialBlock } from "@blocknote/core";
 
 const meta: Meta<typeof BlogContent> = {

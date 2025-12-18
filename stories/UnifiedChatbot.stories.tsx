@@ -1,6 +1,6 @@
 import React from "react";
 import { Meta, StoryObj } from "@storybook/react";
-import UnifiedChatbot from "../components/UnifiedChatbot";
+import UnifiedChatbot from "@/components/UnifiedChatbot";
 
 const meta: Meta<typeof UnifiedChatbot> = {
   title: "Components/UnifiedChatbot",
@@ -17,7 +17,7 @@ type Story = StoryObj<typeof UnifiedChatbot>;
 export const WorkspaceMode: Story = {
   args: {
     mode: "workspace",
-    onPageModification: async (mod) => {
+    onPageModification: async (mod: any) => {
       console.log("Page modification", mod);
       return "Modification applied";
     },

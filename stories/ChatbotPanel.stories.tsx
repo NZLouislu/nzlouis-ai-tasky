@@ -1,6 +1,6 @@
 import React from "react";
 import { Meta, StoryObj } from "@storybook/react";
-import ChatbotPanel from "../components/blog/ChatbotPanel";
+import ChatbotPanel from "@/components/blog/ChatbotPanel";
 
 const meta: Meta<typeof ChatbotPanel> = {
   title: "Blog/ChatbotPanel",

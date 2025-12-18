@@ -1,6 +1,6 @@
 import React from "react";
 import { Meta, StoryObj } from "@storybook/react";
-import IconSelector from "../components/blog/IconSelector";
+import IconSelector from "@/components/blog/IconSelector";
 
 const meta: Meta<typeof IconSelector> = {
   title: "Blog/IconSelector",

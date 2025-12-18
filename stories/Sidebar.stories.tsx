@@ -1,6 +1,6 @@
 import React from "react";
 import { Meta, StoryObj } from "@storybook/react";
-import Sidebar from "../components/Sidebar";
+import Sidebar from "@/components/Sidebar";
 
 const meta: Meta<typeof Sidebar> = {
   title: "Components/Sidebar",
@@ -63,14 +63,14 @@ export const Default: Story = {
     pages: samplePages,
     activePageId: "1-1",
     onAddPage: () => console.log("Add page clicked"),
-    onAddSubPage: (parentPageId) =>
+    onAddSubPage: (parentPageId: string) =>
       console.log("Add sub page clicked for", parentPageId),
-    onUpdatePageTitle: (pageId, newTitle) =>
+    onUpdatePageTitle: (pageId: string, newTitle: string) =>
       console.log("Update page title", pageId, newTitle),
-    onSelectPage: (pageId) => console.log("Select page", pageId),
+    onSelectPage: (pageId: string) => console.log("Select page", pageId),
     sidebarOpen: true,
     expandedPages: new Set(["1", "2"]),
-    onToggleExpand: (pageId) => console.log("Toggle expand", pageId),
+    onToggleExpand: (pageId: string) => console.log("Toggle expand", pageId),
   },
 };
 
@@ -81,13 +81,13 @@ export const Collapsed: Story = {
     pages: samplePages,
     activePageId: "1-1",
     onAddPage: () => console.log("Add page clicked"),
-    onAddSubPage: (parentPageId) =>
+    onAddSubPage: (parentPageId: string) =>
       console.log("Add sub page clicked for", parentPageId),
-    onUpdatePageTitle: (pageId, newTitle) =>
+    onUpdatePageTitle: (pageId: string, newTitle: string) =>
       console.log("Update page title", pageId, newTitle),
-    onSelectPage: (pageId) => console.log("Select page", pageId),
+    onSelectPage: (pageId: string) => console.log("Select page", pageId),
     sidebarOpen: false,
     expandedPages: new Set(["1", "2"]),
-    onToggleExpand: (pageId) => console.log("Toggle expand", pageId),
+    onToggleExpand: (pageId: string) => console.log("Toggle expand", pageId),
   },
 };

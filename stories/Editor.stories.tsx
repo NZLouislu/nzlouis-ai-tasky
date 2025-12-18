@@ -1,6 +1,6 @@
 import React from "react";
 import { Meta, StoryObj } from "@storybook/react";
-import Editor from "../components/Editor";
+import Editor from "@/components/Editor";
 import { PartialBlock } from "@blocknote/core";
 
 const meta: Meta<typeof Editor> = {
@@ -18,7 +18,7 @@ type Story = StoryObj<typeof Editor>;
 export const Empty: Story = {
   args: {
     initialContent: undefined,
-    onChange: (content) => console.log("Content changed", content),
+    onChange: (content: PartialBlock[]) => console.log("Content changed", content),
     onSave: () => console.log("Save clicked"),
     isSaving: false,
   },
@@ -43,7 +43,7 @@ export const WithContent: Story = {
         content: "This is another paragraph with some ",
       },
     ] as PartialBlock[],
-    onChange: (content) => console.log("Content changed", content),
+    onChange: (content: PartialBlock[]) => console.log("Content changed", content),
     onSave: () => console.log("Save clicked"),
     isSaving: false,
   },
@@ -57,7 +57,7 @@ export const Saving: Story = {
         content: "This is a sample paragraph in the editor.",
       },
     ] as PartialBlock[],
-    onChange: (content) => console.log("Content changed", content),
+    onChange: (content: PartialBlock[]) => console.log("Content changed", content),
     onSave: () => console.log("Save clicked"),
     isSaving: true,
   },
