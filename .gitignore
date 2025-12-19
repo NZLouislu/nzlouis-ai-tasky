@@ -30,6 +30,7 @@
 .gemini/
 .vscode/
 .agent/
+/storybook-static
 
 # production
 /build
