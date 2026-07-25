@@ -1,48 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { supabaseAdmin } from '@/lib/supabase/supabase-admin';
-import type { Database } from '@/lib/supabase/supabase-client';
+import { db } from '@/lib/db/connection';
+import { blogPosts, userProfiles } from '@/lib/db/schema/tasky';
+import { eq, desc } from 'drizzle-orm';
 import { getUserIdFromRequest } from '@/lib/admin-auth';
+
+async function ensureUserProfile(userId: string) {
+  const [existing] = await db
+    .select({ id: userProfiles.id })
+    .from(userProfiles)
+    .where(eq(userProfiles.id, userId));
+
+  if (!existing) {
+    await db.insert(userProfiles).values({
+      id: userId,
+      email: `${userId.substring(0, 8)}@placeholder.com`,
+      name: 'User',
+    });
+    console.log(`Auto-created user profile for ${userId}`);
+  }
+}
 
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
     const userId = getUserIdFromRequest(session?.user?.id, req);
-    
+
     if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!supabaseAdmin) {
-      return NextResponse.json(
-        { error: 'Supabase admin client not configured' },
-        { status: 500 }
-      );
-    }
+    await ensureUserProfile(userId);
 
-    const { data, error } = await supabaseAdmin
-      .from('blog_posts')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+    const data = await db
+      .select()
+      .from(blogPosts)
+      .where(eq(blogPosts.userId, userId))
+      .orderBy(desc(blogPosts.createdAt));
 
-    if (error) {
-      console.error('Error fetching posts:', error);
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      data,
-    });
+    return NextResponse.json({ success: true, data });
   } catch (error) {
-    console.error('Unexpected error:', error);
+    console.error('Error fetching posts:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
@@ -54,61 +52,36 @@ export async function POST(request: NextRequest) {
   try {
     const session = await auth();
     const userId = getUserIdFromRequest(session?.user?.id, request);
-    
+
     if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!supabaseAdmin) {
-      return NextResponse.json(
-        { error: 'Supabase admin client not configured' },
-        { status: 500 }
-      );
-    }
+    await ensureUserProfile(userId);
 
     const body = await request.json();
-    const { title, content, icon, cover, parent_id } = body;
-
     const postId = crypto.randomUUID();
-    const now = new Date().toISOString();
 
-    const insertData: Database['public']['Tables']['blog_posts']['Insert'] = {
+    await db.insert(blogPosts).values({
       id: postId,
-      user_id: userId,
-      title: title || 'Untitled',
-      content: content || null,
-      icon: icon || null,
-      cover: cover || null,
-      parent_id: parent_id || null,
+      userId,
+      title: body.title || 'Untitled',
+      content: body.content || null,
+      icon: body.icon || null,
+      cover: body.cover || null,
+      parentId: body.parent_id || body.parentId || null,
       published: false,
       position: null,
-      created_at: now,
-      updated_at: now,
-    };
-
-    const { data, error } = await supabaseAdmin
-      .from('blog_posts')
-      .insert(insertData as unknown as never)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error creating post:', error);
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      data,
     });
+
+    const [data] = await db
+      .select()
+      .from(blogPosts)
+      .where(eq(blogPosts.id, postId));
+
+    return NextResponse.json({ success: true, data });
   } catch (error) {
-    console.error('Unexpected error:', error);
+    console.error('Error creating post:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
@@ -120,56 +93,34 @@ export async function PUT(request: NextRequest) {
   try {
     const session = await auth();
     const userId = getUserIdFromRequest(session?.user?.id, request);
-    
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
 
-    if (!supabaseAdmin) {
-      return NextResponse.json(
-        { error: 'Supabase admin client not configured' },
-        { status: 500 }
-      );
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await request.json();
     const { id, ...updates } = body;
 
     if (!id) {
-      return NextResponse.json(
-        { error: 'Post ID is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Post ID is required' }, { status: 400 });
     }
 
-    const { data, error } = await supabaseAdmin
-      .from('blog_posts')
-      .update({
+    await db
+      .update(blogPosts)
+      .set({
         ...updates,
-        updated_at: new Date().toISOString(),
-      } as unknown as never)
-      .eq('id', id)
-      .eq('user_id', userId)
+        updatedAt: new Date(),
+      })
+      .where(eq(blogPosts.id, id));
+
+    const [data] = await db
       .select()
-      .single();
+      .from(blogPosts)
+      .where(eq(blogPosts.id, id));
 
-    if (error) {
-      console.error('Error updating post:', error);
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-      data,
-    });
+    return NextResponse.json({ success: true, data });
   } catch (error) {
-    console.error('Unexpected error:', error);
+    console.error('Error updating post:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
@@ -181,50 +132,25 @@ export async function DELETE(request: NextRequest) {
   try {
     const session = await auth();
     const userId = getUserIdFromRequest(session?.user?.id, request);
-    
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
 
-    if (!supabaseAdmin) {
-      return NextResponse.json(
-        { error: 'Supabase admin client not configured' },
-        { status: 500 }
-      );
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
     if (!id) {
-      return NextResponse.json(
-        { error: 'Post ID is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Post ID is required' }, { status: 400 });
     }
 
-    const { error } = await supabaseAdmin
-      .from('blog_posts')
-      .delete()
-      .eq('id', id)
-      .eq('user_id', userId);
+    await db
+      .delete(blogPosts)
+      .where(eq(blogPosts.id, id));
 
-    if (error) {
-      console.error('Error deleting post:', error);
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-    });
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Unexpected error:', error);
+    console.error('Error deleting post:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

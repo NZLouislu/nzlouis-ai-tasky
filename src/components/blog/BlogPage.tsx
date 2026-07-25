@@ -467,6 +467,7 @@ export default function BlogPage() {
   const unsavedChanges = useRef<Map<string, Post>>(new Map());
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isCreatingPost = useRef<boolean>(false);
+  const hasSyncedRef = useRef<boolean>(false);
 
   // Modification Preview State
   const [pendingModification, setPendingModification] = useState<{
@@ -720,68 +721,51 @@ export default function BlogPage() {
       return;
     }
 
-    // Sync when:
-    // 1. localPosts is empty (initial load)
-    // 2. posts count different from localPosts (create/delete)
-    if (posts && !isLoading) {
-      const postsLength = posts.length;
-      const needsSync = localPosts.length === 0 ||
-        postsLength !== localPosts.length;
+    if (!posts || isLoading) return;
 
-      console.log("Sync check:", { needsSync, postsLength, localPostsLength: localPosts.length });
+    const postsLength = posts.length;
+    const needsSync = !hasSyncedRef.current || postsLength !== localPosts.length;
 
-      if (needsSync) {
-        console.log("🔄 Converting and setting posts from store:", postsLength);
+    console.log("Sync check:", { needsSync, postsLength, localPostsLength: localPosts.length, hasSynced: hasSyncedRef.current });
 
-        // Convert BlogPost[] to Post[] with proper type handling
-        const convertedPosts: Post[] = posts.map((post) => ({
-          ...post,
-          content: (post.content as PartialBlock[]) || [],
-          icon: post.icon ?? undefined,
-          children: post.children ? mapPosts(post.children as unknown as Post[]) : [],
-          // Ensure cover.type is properly typed
-          cover: post.cover
-            ? {
-              type:
-                post.cover.type === "color" || post.cover.type === "image"
-                  ? post.cover.type
-                  : "color",
-              value: post.cover.value || "",
-            }
-            : undefined,
-        }));
+    if (needsSync) {
+      hasSyncedRef.current = true;
+      console.log("🔄 Converting and setting posts from store:", postsLength);
 
-        const mapped = mapPosts(convertedPosts);
-        console.log("✅ Mapped posts:", mapped.length);
-        setLocalPosts(mapped);
+      const convertedPosts: Post[] = posts.map((post) => ({
+        ...post,
+        content: (post.content as PartialBlock[]) || [],
+        icon: post.icon ?? undefined,
+        children: post.children ? mapPosts(post.children as unknown as Post[]) : [],
+        cover: post.cover
+          ? {
+            type: post.cover.type === "color" || post.cover.type === "image" ? post.cover.type : "color",
+            value: post.cover.value || "",
+          }
+          : undefined,
+      }));
 
-        if (mapped.length > 0) {
-          const currentPostExists = findPostById(mapped, activePostId);
-          if (!currentPostExists) {
-            const defaultPost = findFirstAvailablePost(mapped);
-            if (defaultPost) {
-              // Only update if the current activePostId is not the default post's ID
-              if (activePostId !== defaultPost.id) {
-                console.log("📌 Setting active post to:", defaultPost.id);
-                setActivePostId(defaultPost.id);
-              }
-            }
+      const mapped = mapPosts(convertedPosts);
+      console.log("✅ Mapped posts:", mapped.length);
+      setLocalPosts(mapped);
+
+      if (mapped.length > 0) {
+        const currentPostExists = findPostById(mapped, activePostId);
+        if (!currentPostExists) {
+          const defaultPost = findFirstAvailablePost(mapped);
+          if (defaultPost && activePostId !== defaultPost.id) {
+            console.log("📌 Setting active post to:", defaultPost.id);
+            setActivePostId(defaultPost.id);
           }
         }
-      } else {
-        console.log("ℹ️ Posts count matches, skipping sync");
       }
     }
   }, [
     posts,
-    activePostId,
+    isLoading,
     findPostById,
     findFirstAvailablePost,
     mapPosts,
-    localPosts,
-    isStorybook,
-    userId,
-    isLoading,
   ]);
 
   useEffect(() => {
@@ -791,13 +775,9 @@ export default function BlogPage() {
     }
   }, [userId]);
 
-  // Add effect to monitor localPosts changes
   useEffect(() => {
-    console.log("localPosts updated:", localPosts.length, "posts");
     if (localPosts.length > 0) {
-      console.log("First post ID:", localPosts[0].id);
-      const activePost = findPostById(localPosts, activePostId);
-      console.log("Active post cover:", activePost?.cover);
+      findPostById(localPosts, activePostId);
     }
   }, [localPosts, activePostId, findPostById]);
 

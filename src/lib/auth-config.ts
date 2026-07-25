@@ -1,6 +1,8 @@
 import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
-import { taskyDb } from "./supabase/tasky-db-client";
+import { db } from "./db/connection";
+import { userProfiles } from "./db/schema/tasky";
+import { eq } from "drizzle-orm";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET,
@@ -12,44 +14,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     async signIn({ user, profile }) {
-      // Create user profile record on first login
       if (user.email) {
         try {
-          // Check if user already exists
-          const { data: existingUser } = await taskyDb
-            .from('user_profiles')
-            .select('id')
-            .eq('email', user.email)
-            .single();
+          const [existing] = await db
+            .select({ id: userProfiles.id })
+            .from(userProfiles)
+            .where(eq(userProfiles.email, user.email));
 
-          if (!existingUser) {
-            // Create new user record
-            const { error } = await taskyDb
-              .from('user_profiles')
-              .insert({
-                id: user.id || crypto.randomUUID(),
-                email: user.email,
-                name: user.name,
-                image: user.image,
-                email_verified: profile?.email_verified ? new Date().toISOString() : null,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-              });
-
-            if (error) {
-              console.error('Failed to create user profile:', error);
-              // Continue login even if creation fails
-            }
+          if (!existing) {
+            await db.insert(userProfiles).values({
+              id: user.id || crypto.randomUUID(),
+              email: user.email,
+              name: user.name,
+              image: user.image,
+              emailVerified: profile?.email_verified ? new Date() : null,
+            });
           } else {
-            // Update existing user info
-            await taskyDb
-              .from('user_profiles')
-              .update({
+            await db
+              .update(userProfiles)
+              .set({
                 name: user.name,
                 image: user.image,
-                updated_at: new Date().toISOString(),
+                updatedAt: new Date(),
               })
-              .eq('email', user.email);
+              .where(eq(userProfiles.email, user.email));
           }
         } catch (error) {
           console.error('Error in signIn callback:', error);
@@ -58,17 +46,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return true;
     },
     async jwt({ token, user }) {
-      // Add user info to token on first login
       if (user) {
-        // Get user ID from database
         if (user.email) {
-          const { data: dbUser } = await taskyDb
-            .from('user_profiles')
-            .select('id')
-            .eq('email', user.email)
-            .single();
+          try {
+            const [dbUser] = await db
+              .select({ id: userProfiles.id })
+              .from(userProfiles)
+              .where(eq(userProfiles.email, user.email));
 
-          token.id = dbUser?.id || user.id;
+            token.id = dbUser?.id || user.id;
+          } catch {
+            token.id = user.id;
+          }
         } else {
           token.id = user.id;
         }
@@ -79,7 +68,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return token;
     },
     async session({ session, token }) {
-      // Get user info from token
       if (token && session.user) {
         session.user.id = token.id as string;
         session.user.email = token.email as string;
@@ -93,7 +81,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: '/auth/signin',
   },
   session: {
-    strategy: 'jwt', // Use JWT strategy to avoid database access in Edge Runtime
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    strategy: 'jwt',
+    maxAge: 30 * 24 * 60 * 60,
   },
 });

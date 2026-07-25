@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useBlogStore, BlogPost as StoreBlogPost } from "@/lib/stores/blog-store";
 import type { PartialBlock } from "@blocknote/core";
 
@@ -88,8 +88,7 @@ export const useBlogData = () => {
   }, []);
 
   // Memoize converted posts to prevent unnecessary re-renders
-  // We use the store's posts directly, but apply the safety conversion
-  const posts = blogPosts.map(convertPost);
+  const posts = useMemo(() => blogPosts.map(convertPost), [blogPosts, convertPost]);
 
   // SWR Pattern:
   // 1. If we have posts, show them immediately (isLoading = false)
@@ -149,7 +148,7 @@ export const useBlogData = () => {
 
   const updatePostContentLocal = useCallback(async (postId: string, newContent: PartialBlock[]) => {
     await updatePostContent(postId, {
-      content: newContent,
+      content: newContent as unknown as JSON,
       updated_at: new Date().toISOString(),
     });
   }, [updatePostContent]);
