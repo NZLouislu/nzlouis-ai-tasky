@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth-config";
-import { taskyDb } from "@/lib/supabase/tasky-db-client";
+import { db } from "@/lib/db/connection";
+import { userAPIKeys, modelTestResults } from "@/lib/db/schema/tasky";
 import { AIProvider } from "@/lib/ai/providers";
 import { getUserIdFromRequest } from "@/lib/admin-auth";
+import { and, eq } from 'drizzle-orm';
 
 const MODEL_PROVIDER_MAP: Record<string, AIProvider> = {
     'gemini-3-flash-preview': 'google',
@@ -31,9 +33,9 @@ const MODEL_PROVIDER_MAP: Record<string, AIProvider> = {
     'deepseek/deepseek-r1-0528:free': 'openrouter',
     'qwen/qwen3-coder:free': 'openrouter',
     'mistralai/devstral-2512:free': 'openrouter',
-    'x-ai/grok-4.1-fast:free': 'openrouter', // Compatibility
+    'x-ai/grok-4.1-fast:free': 'openrouter',
     'kilo/mistralai/devstral-2512:free': 'kilo',
-    'xai-grok-code-fast-1': 'kilo', // Compatibility
+    'xai-grok-code-fast-1': 'kilo',
     'claude-sonnet-4': 'kilo',
 };
 
@@ -69,12 +71,11 @@ export async function POST(req: NextRequest) {
 
         console.log(`[test-model] Provider: ${provider}, Model: ${modelId}`);
 
-        const { data: keyData } = await taskyDb
-            .from('user_api_keys')
-            .select('provider')
-            .eq('user_id', userId)
-            .eq('provider', provider)
-            .single();
+        const [keyData] = await db
+            .select({ provider: userAPIKeys.provider })
+            .from(userAPIKeys)
+            .where(and(eq(userAPIKeys.userId, userId), eq(userAPIKeys.provider, provider)))
+            .limit(1);
 
         if (!keyData) {
             return NextResponse.json(
@@ -150,12 +151,15 @@ export async function POST(req: NextRequest) {
 
             const { decryptAPIKey } = await import('@/lib/encryption');
             
-            const { data: apiKeyRecord } = await taskyDb
-                .from('user_api_keys')
-                .select('key_encrypted, iv, auth_tag')
-                .eq('user_id', userId)
-                .eq('provider', 'google')
-                .single();
+            const [apiKeyRecord] = await db
+                .select({
+                    key_encrypted: userAPIKeys.keyEncrypted,
+                    iv: userAPIKeys.iv,
+                    auth_tag: userAPIKeys.authTag,
+                })
+                .from(userAPIKeys)
+                .where(and(eq(userAPIKeys.userId, userId), eq(userAPIKeys.provider, 'google')))
+                .limit(1);
 
             if (!apiKeyRecord) {
                 throw new Error('Google API key not found');
@@ -241,15 +245,19 @@ export async function POST(req: NextRequest) {
             console.error(`[test-model] Empty response detected`);
 
             try {
-                await taskyDb
-                    .from('model_test_results')
-                    .upsert({
-                        user_id: userId,
-                        model_id: modelId,
+                await db
+                    .insert(modelTestResults)
+                    .values({
+                        userId,
+                        modelId: modelId!,
                         success: false,
-                        tested_at: new Date().toISOString(),
-                    }, {
-                        onConflict: 'user_id,model_id'
+                    })
+                    .onConflictDoUpdate({
+                        target: [modelTestResults.userId, modelTestResults.modelId],
+                        set: {
+                            success: false,
+                            testedAt: new Date(),
+                        },
                     });
             } catch (dbError) {
                 console.warn('Failed to save test result to database:', dbError);
@@ -264,15 +272,19 @@ export async function POST(req: NextRequest) {
         console.log(`[test-model] Test successful. Response: "${responseText}"`);
 
         try {
-            await taskyDb
-                .from('model_test_results')
-                .upsert({
-                    user_id: userId,
-                    model_id: modelId,
+            await db
+                .insert(modelTestResults)
+                .values({
+                    userId,
+                    modelId: modelId!,
                     success: true,
-                    tested_at: new Date().toISOString(),
-                }, {
-                    onConflict: 'user_id,model_id'
+                })
+                .onConflictDoUpdate({
+                    target: [modelTestResults.userId, modelTestResults.modelId],
+                    set: {
+                        success: true,
+                        testedAt: new Date(),
+                    },
                 });
         } catch (dbError) {
             console.warn('Failed to save test result to database:', dbError);
@@ -292,15 +304,19 @@ export async function POST(req: NextRequest) {
 
         if (modelId) {
             try {
-                await taskyDb
-                    .from('model_test_results')
-                    .upsert({
-                        user_id: userId,
-                        model_id: modelId,
+                await db
+                    .insert(modelTestResults)
+                    .values({
+                        userId,
+                        modelId,
                         success: false,
-                        tested_at: new Date().toISOString(),
-                    }, {
-                        onConflict: 'user_id,model_id'
+                    })
+                    .onConflictDoUpdate({
+                        target: [modelTestResults.userId, modelTestResults.modelId],
+                        set: {
+                            success: false,
+                            testedAt: new Date(),
+                        },
                     });
             } catch (dbError) {
                 console.warn('Failed to save test result to database:', dbError);

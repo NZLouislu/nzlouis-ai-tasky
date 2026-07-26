@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { supabaseAdmin } from '@/lib/supabase/supabase-admin';
+import { db } from '@/lib/db/connection';
+import { blogPosts } from '@/lib/db/schema/tasky';
 import { defaultWelcomePosts } from '@/lib/blog/default-posts';
+import { eq } from 'drizzle-orm';
 
 export async function POST() {
   try {
@@ -13,26 +15,11 @@ export async function POST() {
       );
     }
 
-    if (!supabaseAdmin) {
-      return NextResponse.json(
-        { error: 'Supabase admin client not configured' },
-        { status: 500 }
-      );
-    }
-
-    const { data: existingPosts, error: checkError } = await supabaseAdmin
-      .from('blog_posts')
-      .select('id')
-      .eq('user_id', session.user.id)
+    const existingPosts = await db
+      .select({ id: blogPosts.id })
+      .from(blogPosts)
+      .where(eq(blogPosts.userId, session.user.id))
       .limit(1);
-
-    if (checkError) {
-      console.error('Error checking existing posts:', checkError);
-      return NextResponse.json(
-        { error: checkError.message },
-        { status: 500 }
-      );
-    }
 
     if (existingPosts && existingPosts.length > 0) {
       return NextResponse.json({
@@ -42,36 +29,25 @@ export async function POST() {
       });
     }
 
-    const now = new Date().toISOString();
+    const now = new Date();
+    const currentUserId = session.user.id;
     const postsToCreate = defaultWelcomePosts.map((post) => ({
       id: crypto.randomUUID(),
-      user_id: session.user?.id,
+      userId: currentUserId,
       title: post.title,
       content: post.content,
       icon: post.icon,
       cover: post.cover,
       published: false,
-      parent_id: null,
+      parentId: null,
       position: null,
-      created_at: now,
-      updated_at: now,
+      createdAt: now,
+      updatedAt: now,
     }));
 
-    const { data, error: insertError } = await supabaseAdmin
-      .from('blog_posts')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .insert(postsToCreate as any)
-      .select();
+    const data = await db.insert(blogPosts).values(postsToCreate).returning();
 
-    if (insertError) {
-      console.error('Error creating welcome posts:', insertError);
-      return NextResponse.json(
-        { error: insertError.message },
-        { status: 500 }
-      );
-    }
-
-    console.log(`Created ${data.length} welcome posts for user ${session.user.id}`);
+    console.log(`Created ${data.length} welcome posts for user ${currentUserId}`);
 
     return NextResponse.json({
       success: true,

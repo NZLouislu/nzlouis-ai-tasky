@@ -10,8 +10,19 @@ Object.defineProperty(global, 'FileReader', {
         }
       }, 0);
     }
+    
+    readAsArrayBuffer() {
+      setTimeout(() => {
+        if (this.onload) {
+          // Return a fake array buffer
+          this.result = new ArrayBuffer(8);
+          this.onload({ target: { result: this.result } } as any);
+        }
+      }, 0);
+    }
     onload: ((event: any) => void) | null = null;
     onerror: ((event: any) => void) | null = null;
+    result: any = null;
   }
 });
 
@@ -57,6 +68,23 @@ Object.defineProperty(global, 'document', {
   }
 });
 
+// Mock File API
+Object.defineProperty(global, 'File', {
+  value: class FileImpl extends Blob {
+    constructor(fileBits: BlobPart[], fileName: string, options?: FilePropertyBag) {
+      super(fileBits, options);
+      Object.defineProperty(this, 'name', {
+        value: fileName,
+        enumerable: true
+      });
+      Object.defineProperty(this, 'lastModified', {
+        value: options?.lastModified ?? Date.now(),
+        enumerable: true
+      });
+    }
+  }
+});
+
 // Mock crypto for Node.js environment
 Object.defineProperty(global, 'crypto', {
   value: {
@@ -64,7 +92,48 @@ Object.defineProperty(global, 'crypto', {
   }
 });
 
-// Mock Supabase
+// Mock TextEncoder and TextDecoder for Node.js
+if (typeof global.TextEncoder === 'undefined') {
+  // @ts-expect-error - global augmentation for Node.js
+  global.TextEncoder = require('util').TextEncoder;
+}
+// @ts-expect-error - global augmentation for Node.js
+if (typeof global.TextDecoder === 'undefined') {
+  global.TextDecoder = require('util').TextDecoder;
+}
+
+// Mock the File object's arrayBuffer method for Node.js
+// This needs to be done after the File class is defined
+const originalFile = global.File;
+if (typeof originalFile !== 'undefined' && originalFile.prototype) {
+  Object.defineProperty(originalFile.prototype, 'arrayBuffer', {
+    value: function() {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          resolve(reader.result as ArrayBuffer);
+        };
+        reader.readAsArrayBuffer(this);
+      });
+    }
+  });
+}
+
+// Mock R2 storage
+vi.mock('@/lib/storage/r2-storage', () => {
+  const mockFn = () => {};
+  mockFn.mockResolvedValue = () => mockFn;
+  return {
+    uploadFileToR2: async () => ({
+      key: 'blog-images/user-id/test-id/test-key',
+      url: 'https://test.com/image.jpg'
+    }),
+    deleteObjectFromR2: async () => {},
+    listObjectsWithPrefix: async () => []
+  };
+});
+
+// Mock Upload Service dependencies
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({
     storage: {
@@ -150,7 +219,7 @@ describe('Upload Service', () => {
       expect(result).toEqual({
         publicUrl: 'https://test.com/image.jpg',
         filePath: expect.stringContaining('blog-images/user-id/test-id/'),
-        fileId: 'test-file-id'
+        fileId: expect.any(String)
       });
     });
   });

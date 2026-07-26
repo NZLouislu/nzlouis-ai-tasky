@@ -1,5 +1,4 @@
-import { pgTable, uuid, text, boolean, integer, jsonb, timestamp, uniqueIndex, index, primaryKey, unique } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { pgTable, uuid, text, boolean, integer, jsonb, timestamp, index, primaryKey, unique } from 'drizzle-orm/pg-core';
 
 // ─── User Profiles ───────────────────────────────────────────
 export const userProfiles = pgTable('user_profiles', {
@@ -246,6 +245,18 @@ export const userAPIKeys = pgTable('user_api_keys', {
 }, (table) => ({
   userProviderUnique: unique('uq_user_api_keys_provider').on(table.userId, table.provider),
   userIdx: index('idx_user_api_keys_user').on(table.userId),
+}));
+
+// ─── Model Test Results ──────────────────────────────────────
+export const modelTestResults = pgTable('model_test_results', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => userProfiles.id, { onDelete: 'cascade' }),
+  modelId: text('model_id').notNull(),
+  success: boolean('success').notNull(),
+  testedAt: timestamp('tested_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userModelUnique: unique('uq_model_test_results_user_model').on(table.userId, table.modelId),
+  userIdx: index('idx_model_test_results_user').on(table.userId),
 }));
 
 // ─── Export Configs (Jira/Trello) ────────────────────────────

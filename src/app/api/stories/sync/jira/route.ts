@@ -1,17 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { createClient } from '@supabase/supabase-js';
+import { db } from '@/lib/db/connection';
+import { storiesDocuments, storiesProjects, storiesPlatformConnections, storiesSyncHistory } from '@/lib/db/schema/stories';
+import { eq, and, desc } from 'drizzle-orm';
 import { syncStoriesToJira, parseStoriesContent } from '@/lib/stories/sync/jira-sync';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-
-function getSupabaseClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-  );
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,51 +21,54 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Document ID is required' }, { status: 400 });
     }
 
-    const supabase = getSupabaseClient();
-
     // Get document content
-    const { data: document, error: docError } = await supabase
-      .from('stories_documents')
-      .select(`
-        *,
-        project:stories_projects(*)
-      `)
-      .eq('id', documentId)
-      .single();
+    const [document] = await db
+      .select()
+      .from(storiesDocuments)
+      .where(eq(storiesDocuments.id, documentId));
 
-    if (docError || !document) {
+    if (!document) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
 
+    // Get project info
+    const [project] = await db
+      .select()
+      .from(storiesProjects)
+      .where(eq(storiesProjects.id, document.projectId));
+
     // Verify user owns this document
-    if (document.project.user_id !== session.user.email) {
+    if (project?.userId !== session.user.email) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Check if document is a stories document
-    if (document.document_type !== 'stories') {
+    if (document.documentType !== 'stories') {
       return NextResponse.json({ error: 'Only stories documents can be synced' }, { status: 400 });
     }
 
     // Get Jira connection for this project
-    const { data: connection, error: connError } = await supabase
-      .from('stories_platform_connections')
-      .select('*')
-      .eq('user_id', session.user.email)
-      .eq('platform', 'jira')
-      .eq('google_account_email', document.project.google_account_email)
-      .single();
+    const [connection] = await db
+      .select()
+      .from(storiesPlatformConnections)
+      .where(
+        and(
+          eq(storiesPlatformConnections.userId, session.user.email),
+          eq(storiesPlatformConnections.platform, 'jira'),
+          eq(storiesPlatformConnections.googleAccountEmail, project!.googleAccountEmail)
+        )
+      );
 
-    if (connError || !connection) {
+    if (!connection) {
       return NextResponse.json({ error: 'Jira connection not found' }, { status: 404 });
     }
 
-    if (connection.connection_status !== 'connected') {
+    if (connection.connectionStatus !== 'connected') {
       return NextResponse.json({ error: 'Jira connection is not active' }, { status: 400 });
     }
 
     // Convert BlockNote content to markdown (simplified)
-    const markdownContent = convertBlockNoteToMarkdown(document.content);
+    const markdownContent = convertBlockNoteToMarkdown(document.content as any[]);
     
     // Parse stories from content
     const stories = parseStoriesContent(markdownContent);
@@ -80,67 +78,66 @@ export async function POST(request: NextRequest) {
     }
 
     // Get Jira configuration
+    const projectMeta = project?.projectMetadata as { jira_url?: string } | null;
     const jiraConfig = {
-      baseUrl: document.project.project_metadata?.jira_url || 'https://your-domain.atlassian.net',
-      email: connection.google_account_email,
-      apiToken: decryptToken(connection.access_token_encrypted),
-      projectKey: document.project.platform_project_id,
-      issueTypeId: '10001', // Story issue type
-      subTaskTypeId: '10003', // Sub-task issue type
+      baseUrl: projectMeta?.jira_url || 'https://your-domain.atlassian.net',
+      email: connection.googleAccountEmail,
+      apiToken: decryptToken(connection.accessTokenEncrypted || ''),
+      projectKey: project?.platformProjectId || '',
+      issueTypeId: '10001',
+      subTaskTypeId: '10003',
       priorityMap: {
         'high': '1',
         'medium': '3',
         'low': '4'
       },
-      userMap: {} // Would be populated from Jira users
+      userMap: {}
     };
 
     // Start sync process
     const syncStartTime = new Date();
     
     // Create sync history record
-    const { data: syncHistory, error: syncError } = await supabase
-      .from('stories_sync_history')
-      .insert({
-        document_id: documentId,
-        sync_direction: 'to_platform',
+    const [syncHistory] = await db
+      .insert(storiesSyncHistory)
+      .values({
+        documentId,
+        syncDirection: 'to_platform',
         platform: 'jira',
-        sync_status: 'in_progress',
-        started_at: syncStartTime.toISOString()
+        syncStatus: 'in_progress',
+        startedAt: syncStartTime,
       })
-      .select()
-      .single();
+      .returning();
 
-    if (syncError) {
+    if (!syncHistory) {
       return NextResponse.json({ error: 'Failed to create sync record' }, { status: 500 });
     }
 
     try {
-      // Sync stories to Jira
       const results = await syncStoriesToJira(stories, jiraConfig);
       
       const successCount = results.filter(r => r.success).length;
       const failureCount = results.filter(r => !r.success).length;
       
       // Update sync history
-      await supabase
-        .from('stories_sync_history')
-        .update({
-          sync_status: failureCount === 0 ? 'success' : (successCount > 0 ? 'partial' : 'failed'),
-          items_synced: successCount,
-          items_failed: failureCount,
-          sync_details: { results },
-          completed_at: new Date().toISOString()
+      await db
+        .update(storiesSyncHistory)
+        .set({
+          syncStatus: failureCount === 0 ? 'success' : (successCount > 0 ? 'partial' : 'failed'),
+          itemsSynced: successCount,
+          itemsFailed: failureCount,
+          syncDetails: { results },
+          completedAt: new Date(),
         })
-        .eq('id', syncHistory.id);
+        .where(eq(storiesSyncHistory.id, syncHistory.id));
 
       // Update document last_synced_at
-      await supabase
-        .from('stories_documents')
-        .update({
-          last_synced_at: new Date().toISOString()
+      await db
+        .update(storiesDocuments)
+        .set({
+          lastSyncedAt: new Date(),
         })
-        .eq('id', documentId);
+        .where(eq(storiesDocuments.id, documentId));
 
       return NextResponse.json({
         success: true,
@@ -155,14 +152,14 @@ export async function POST(request: NextRequest) {
 
     } catch (syncError) {
       // Update sync history with error
-      await supabase
-        .from('stories_sync_history')
-        .update({
-          sync_status: 'failed',
-          error_message: syncError instanceof Error ? syncError.message : 'Unknown error',
-          completed_at: new Date().toISOString()
+      await db
+        .update(storiesSyncHistory)
+        .set({
+          syncStatus: 'failed',
+          errorMessage: syncError instanceof Error ? syncError.message : 'Unknown error',
+          completedAt: new Date(),
         })
-        .eq('id', syncHistory.id);
+        .where(eq(storiesSyncHistory.id, syncHistory.id));
 
       throw syncError;
     }
@@ -190,20 +187,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Document ID is required' }, { status: 400 });
     }
 
-    const supabase = getSupabaseClient();
-
     // Get sync history for document
-    const { data: syncHistory, error } = await supabase
-      .from('stories_sync_history')
-      .select('*')
-      .eq('document_id', documentId)
-      .eq('platform', 'jira')
-      .order('started_at', { ascending: false })
+    const syncHistory = await db
+      .select()
+      .from(storiesSyncHistory)
+      .where(
+        and(
+          eq(storiesSyncHistory.documentId, documentId),
+          eq(storiesSyncHistory.platform, 'jira')
+        )
+      )
+      .orderBy(desc(storiesSyncHistory.startedAt))
       .limit(10);
-
-    if (error) {
-      return NextResponse.json({ error: 'Failed to fetch sync history' }, { status: 500 });
-    }
 
     return NextResponse.json({ syncHistory });
 
@@ -218,7 +213,6 @@ export async function GET(request: NextRequest) {
 
 // Helper functions
 function convertBlockNoteToMarkdown(content: any[]): string {
-  // Simplified conversion - would need proper BlockNote to Markdown converter
   return content.map(block => {
     if (block.type === 'paragraph') {
       return block.content?.map((item: any) => item.text || '').join('') || '';
@@ -228,6 +222,5 @@ function convertBlockNoteToMarkdown(content: any[]): string {
 }
 
 function decryptToken(encryptedToken: string): string {
-  // Placeholder - would use actual decryption
   return encryptedToken;
 }

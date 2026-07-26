@@ -228,7 +228,7 @@ Please generate a detailed execution plan in JSON format.`;
       }
       
       // Clean up response (remove markdown code blocks)
-      let cleanedResponse = response
+      const cleanedResponse = response
         .replace(/```json\s*/g, '')
         .replace(/```\s*/g, '')
         .trim();

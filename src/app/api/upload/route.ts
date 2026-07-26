@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/supabase-admin";
 import { auth } from "@/lib/auth-config";
 import { getUserIdFromRequest } from "@/lib/admin-auth";
+import { uploadImage } from "@/lib/services/upload-service";
 
 export async function POST(request: NextRequest) {
   try {
     // Check authentication
-    const session = await auth();
-    const userId = getUserIdFromRequest(session?.user?.id, request);
+    await auth();
+    const userId = getUserIdFromRequest(request);
     
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file size (5MB max)
+    // Validate file size (5MB max for route-level validation)
     if (file.size > 5 * 1024 * 1024) {
       return NextResponse.json(
         { error: "File size must be less than 5MB" },
@@ -36,43 +36,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate unique filename
-    const fileExt = file.name.split(".").pop();
-    const fileName = `${userId}/${Date.now()}.${fileExt}`;
+    // Upload using our upload service
+    const uploadOptions = {
+      file,
+      entityType: 'blog_cover', // Default to blog_cover for upload route
+      entityId: 'upload',       // Generic ID for direct uploads
+      userId: userId.toString()
+    };
 
-    // Convert File to ArrayBuffer then to Buffer
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const result = await uploadImage(uploadOptions);
 
-    // Upload to Supabase Storage
-    if (!supabaseAdmin) {
-      return NextResponse.json(
-        { error: 'Supabase admin client not configured' },
-        { status: 500 }
-      );
-    }
-
-    const { data, error } = await supabaseAdmin.storage
-      .from("blog-covers")
-      .upload(fileName, buffer, {
-        contentType: file.type,
-        upsert: false,
-      });
-
-    if (error) {
-      console.error("Supabase upload error:", error);
-      return NextResponse.json(
-        { error: "Failed to upload file" },
-        { status: 500 }
-      );
-    }
-
-    // Get public URL
-    const {
-      data: { publicUrl },
-    } = supabaseAdmin.storage.from("blog-covers").getPublicUrl(data.path);
-
-    return NextResponse.json({ url: publicUrl });
+    return NextResponse.json({ url: result.publicUrl });
   } catch (error) {
     console.error("Upload error:", error);
     return NextResponse.json(

@@ -5,11 +5,6 @@ export interface TavilyResult {
   score?: number;
 }
 
-interface TavilyResponse {
-  answer?: string;
-  results: TavilyResult[];
-}
-
 export async function searchTavily(
   query: string, 
   options: { max_results?: number } = {}

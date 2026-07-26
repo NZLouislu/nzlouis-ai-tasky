@@ -161,8 +161,8 @@ export default function JiraProjectSelectDialog({
                       Navigate to Projects
                     </h4>
                     <p className="text-sm text-gray-600 mt-1">
-                      Click on <strong>"Projects"</strong> in the top navigation
-                      bar, then select <strong>"Create project"</strong>.
+                      Click on <strong>&quot;Projects&quot;</strong> in the top navigation
+                      bar, then select <strong>&quot;Create project&quot;</strong>.
                     </p>
                   </div>
                 </div>
@@ -207,7 +207,7 @@ export default function JiraProjectSelectDialog({
                       Create the Project
                     </h4>
                     <p className="text-sm text-gray-600 mt-1">
-                      Click <strong>"Create"</strong> to finalize your project.
+                      Click <strong>&quot;Create&quot;</strong> to finalize your project.
                     </p>
                   </div>
                 </div>
@@ -235,8 +235,8 @@ export default function JiraProjectSelectDialog({
                 </h4>
                 <p className="text-sm text-blue-700">
                   Make sure you have the necessary permissions to create
-                  projects in your Jira instance. If you don't see the "Create
-                  project" option, contact your Jira administrator.
+                  projects in your Jira instance. If you don&apos;t see the &quot;Create
+                  project&quot; option, contact your Jira administrator.
                 </p>
               </div>
             </div>
@@ -342,6 +342,7 @@ export default function JiraProjectSelectDialog({
                   >
                     <div className="flex items-start space-x-3">
                       {project.avatarUrls?.["48x48"] && (
+                        // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={project.avatarUrls["48x48"]}
                           alt={project.name}

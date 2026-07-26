@@ -1,28 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseService } from "@/lib/supabase/supabase-client";
+import { db } from "@/lib/db/connection";
+import { tasks, taskColumns } from "@/lib/db/schema/tasky";
+import { eq, asc } from "drizzle-orm";
 
-// Get all tasks for a column
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ columnId: string }> }
 ) {
   try {
-    if (!supabaseService) {
-      return NextResponse.json(
-        { error: "Database not configured" },
-        { status: 503 }
-      );
-    }
-
     const { columnId } = await params;
 
-    const { data, error } = await supabaseService
-      .from("tasks")
-      .select("*")
-      .eq("column_id", columnId)
-      .order("position", { ascending: true });
-
-    if (error) throw error;
+    const data = await db.select()
+      .from(tasks)
+      .where(eq(tasks.columnId, columnId))
+      .orderBy(asc(tasks.position));
 
     return NextResponse.json(data);
   } catch (error) {
@@ -34,48 +25,31 @@ export async function GET(
   }
 }
 
-// Create a new task in a column
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ columnId: string }> }
 ) {
   try {
-    if (!supabaseService) {
-      return NextResponse.json(
-        { error: "Database not configured" },
-        { status: 503 }
-      );
-    }
-
     const { columnId } = await params;
     const body = await request.json();
 
-    // First, get the column to get the board_id
-    const { data: column, error: columnError } = await supabaseService
-      .from("task_columns")
-      .select("board_id")
-      .eq("id", columnId)
-      .single();
+    const [column] = await db.select({ boardId: taskColumns.boardId })
+      .from(taskColumns)
+      .where(eq(taskColumns.id, columnId));
 
-    if (columnError) throw columnError;
-
-    const { data, error } = await supabaseService
-      .from("tasks")
-      .insert({
-        board_id: column.board_id,
-        column_id: columnId,
-        parent_id: body.parent_id || null,
+    const [data] = await db.insert(tasks)
+      .values({
+        boardId: column.boardId,
+        columnId: columnId,
+        parentId: body.parent_id || null,
         title: body.title,
         description: body.description || null,
         position: body.position || null,
-        due_date: body.due_date || null,
+        dueDate: body.due_date || null,
         completed: body.completed || false,
         priority: body.priority || 0,
       })
-      .select()
-      .single();
-
-    if (error) throw error;
+      .returning();
 
     return NextResponse.json(data);
   } catch (error) {

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { db } from '@/lib/db/connection';
+import { storiesProjects, storiesDocuments } from '@/lib/db/schema/stories';
+import { eq, and } from 'drizzle-orm';
 import { getUserIdFromRequest } from '@/lib/admin-auth';
 
 interface RouteParams {
@@ -24,30 +26,28 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const resolvedParams = await params;
     const documentId = resolvedParams.id;
 
-    // Get document with project info
-    const { data: document, error } = await taskyDb
-      .from('stories_documents')
-      .select(`
-        *,
-        stories_projects!inner(
-          id,
-          project_name,
-          platform,
-          user_id,
-          platform_credentials,
-          project_metadata
+    const [row] = await db
+      .select()
+      .from(storiesDocuments)
+      .innerJoin(storiesProjects, eq(storiesDocuments.projectId, storiesProjects.id))
+      .where(
+        and(
+          eq(storiesDocuments.id, documentId),
+          eq(storiesProjects.userId, userId),
         )
-      `)
-      .eq('id', documentId)
-      .eq('stories_projects.user_id', userId)
-      .single();
+      );
 
-    if (error || !document) {
+    if (!row) {
       return NextResponse.json(
         { error: 'Document not found or access denied' },
         { status: 404 }
       );
     }
+
+    const document = {
+      ...row.stories_documents,
+      stories_projects: row.stories_projects,
+    };
 
     return NextResponse.json({
       success: true,
@@ -80,56 +80,48 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const body = await request.json();
     const { title, content, fileName, metadata } = body;
 
-    // Verify document belongs to user
-    const { data: existingDoc, error: checkError } = await taskyDb
-      .from('stories_documents')
-      .select(`
-        id,
-        metadata,
-        stories_projects!inner(user_id)
-      `)
-      .eq('id', documentId)
-      .eq('stories_projects.user_id', userId)
-      .single();
+    const [existingDoc] = await db
+      .select({
+        id: storiesDocuments.id,
+        metadata: storiesDocuments.metadata,
+      })
+      .from(storiesDocuments)
+      .innerJoin(storiesProjects, eq(storiesDocuments.projectId, storiesProjects.id))
+      .where(
+        and(
+          eq(storiesDocuments.id, documentId),
+          eq(storiesProjects.userId, userId),
+        )
+      );
 
-    if (checkError || !existingDoc) {
+    if (!existingDoc) {
       return NextResponse.json(
         { error: 'Document not found or access denied' },
         { status: 404 }
       );
     }
 
-    // Update document
     const updateData: any = {
-      updated_at: new Date().toISOString(),
+      updatedAt: new Date(),
     };
 
     if (title !== undefined) updateData.title = title;
     if (content !== undefined) updateData.content = content;
-    if (fileName !== undefined) updateData.file_name = fileName;
+    if (fileName !== undefined) updateData.fileName = fileName;
     if (metadata !== undefined) {
       updateData.metadata = {
         ...(existingDoc.metadata ?? {}),
         ...metadata,
         updated_from: 'api',
-        last_modified_at: new Date().toISOString(),
+        last_modified_at: new Date(),
       };
     }
 
-    const { data: document, error: updateError } = await taskyDb
-      .from('stories_documents')
-      .update(updateData)
-      .eq('id', documentId)
-      .select('*')
-      .single();
-
-    if (updateError) {
-      console.error('Database error:', updateError);
-      return NextResponse.json(
-        { error: 'Failed to update document' },
-        { status: 500 }
-      );
-    }
+    const [document] = await db
+      .update(storiesDocuments)
+      .set(updateData)
+      .where(eq(storiesDocuments.id, documentId))
+      .returning();
 
     return NextResponse.json({
       success: true,
@@ -161,37 +153,27 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const resolvedParams = await params;
     const documentId = resolvedParams.id;
 
-    // Verify document belongs to user
-    const { data: existingDoc, error: checkError } = await taskyDb
-      .from('stories_documents')
-      .select(`
-        id,
-        stories_projects!inner(user_id)
-      `)
-      .eq('id', documentId)
-      .eq('stories_projects.user_id', userId)
-      .single();
+    const [existingDoc] = await db
+      .select({ id: storiesDocuments.id })
+      .from(storiesDocuments)
+      .innerJoin(storiesProjects, eq(storiesDocuments.projectId, storiesProjects.id))
+      .where(
+        and(
+          eq(storiesDocuments.id, documentId),
+          eq(storiesProjects.userId, userId),
+        )
+      );
 
-    if (checkError || !existingDoc) {
+    if (!existingDoc) {
       return NextResponse.json(
         { error: 'Document not found or access denied' },
         { status: 404 }
       );
     }
 
-    // Delete document
-    const { error: deleteError } = await taskyDb
-      .from('stories_documents')
-      .delete()
-      .eq('id', documentId);
-
-    if (deleteError) {
-      console.error('Database error:', deleteError);
-      return NextResponse.json(
-        { error: 'Failed to delete document' },
-        { status: 500 }
-      );
-    }
+    await db
+      .delete(storiesDocuments)
+      .where(eq(storiesDocuments.id, documentId));
 
     return NextResponse.json({
       success: true,

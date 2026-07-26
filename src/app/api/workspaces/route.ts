@@ -1,24 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase/supabase-client";
+import { db } from "@/lib/db/connection";
+import { workspaces } from "@/lib/db/schema/tasky";
+import { eq, asc } from "drizzle-orm";
 
 export async function GET() {
   try {
-    if (!supabase) {
-      return NextResponse.json(
-        { error: "Database not configured" },
-        { status: 503 }
-      );
-    }
-
     const userId = "user-1";
 
-    const { data, error } = await supabase
-      .from("workspaces")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: true });
-
-    if (error) throw error;
+    const data = await db.select()
+      .from(workspaces)
+      .where(eq(workspaces.userId, userId))
+      .orderBy(asc(workspaces.createdAt));
 
     return NextResponse.json(data);
   } catch (error) {
@@ -30,31 +22,19 @@ export async function GET() {
   }
 }
 
-// Create a new workspace
 export async function POST(request: NextRequest) {
   try {
-    if (!supabase) {
-      return NextResponse.json(
-        { error: "Database not configured" },
-        { status: 503 }
-      );
-    }
-
     const body = await request.json();
 
     const userId = "user-1";
 
-    const { data, error } = await supabase
-      .from("workspaces")
-      .insert({
-        user_id: userId,
+    const [data] = await db.insert(workspaces)
+      .values({
+        userId: userId,
         name: body.name,
         icon: body.icon || null,
       })
-      .select()
-      .single();
-
-    if (error) throw error;
+      .returning();
 
     return NextResponse.json(data);
   } catch (error) {

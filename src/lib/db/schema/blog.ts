@@ -1,5 +1,5 @@
-import { pgTable, uuid, text, boolean, integer, timestamp, index, date, unique } from 'drizzle-orm/pg-core';
-import { blogPosts, userProfiles } from './tasky';
+import { pgTable, uuid, text, boolean, integer, jsonb, timestamp, index, date, unique } from 'drizzle-orm/pg-core';
+
 
 // ─── Feature Toggles ─────────────────────────────────────────
 export const featureToggles = pgTable('feature_toggles', {
@@ -24,6 +24,22 @@ export const comments = pgTable('comments', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   postIdx: index('idx_comments_post').on(table.postId),
+}));
+
+// ─── Blog Chat Messages ──────────────────────────────────────
+export const blogChatMessages = pgTable('blog_chat_messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  postId: text('post_id').notNull(),
+  userId: text('user_id').notNull(),
+  role: text('role', { enum: ['user', 'assistant'] }).notNull(),
+  content: jsonb('content').notNull(),
+  timestamp: timestamp('timestamp', { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  postIdIdx: index('idx_blog_chat_messages_post_id').on(table.postId),
+  userIdIdx: index('idx_blog_chat_messages_user_id').on(table.userId),
+  timestampIdx: index('idx_blog_chat_messages_timestamp').on(table.timestamp),
 }));
 
 // ─── Post Stats ──────────────────────────────────────────────

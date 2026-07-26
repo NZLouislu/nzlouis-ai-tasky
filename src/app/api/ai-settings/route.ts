@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth-config";
-import { taskyDb } from "@/lib/supabase/tasky-db-client";
+import { db } from "@/lib/db/connection";
+import { userAISettings } from "@/lib/db/schema/tasky";
 import { getUserIdFromRequest } from "@/lib/admin-auth";
+import { eq } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -12,32 +14,25 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const { data: settings, error } = await taskyDb
-      .from('user_ai_settings')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
-
-    if (error && error.code !== 'PGRST116') throw error;
+    const [settings] = await db
+      .select()
+      .from(userAISettings)
+      .where(eq(userAISettings.userId, userId))
+      .limit(1);
 
     if (!settings) {
-      const { data: newSettings, error: createError } = await taskyDb
-        .from('user_ai_settings')
-        .insert({
-          id: crypto.randomUUID(),
-          user_id: userId,
-          default_provider: 'google',
-          default_model: 'gemini-3-flash-preview',
-          temperature: 0.8,
-          max_tokens: 1024,
-          system_prompt: 'You are a helpful AI assistant.',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+      const [newSettings] = await db
+        .insert(userAISettings)
+        .values({
+          userId,
+          defaultProvider: 'google',
+          defaultModel: 'gemini-3-flash-preview',
+          temperature: 8,
+          maxTokens: 1024,
+          systemPrompt: 'You are a helpful AI assistant.',
         })
-        .select()
-        .single();
+        .returning();
 
-      if (createError) throw createError;
       return NextResponse.json({ settings: newSettings });
     }
 
@@ -80,26 +75,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const { data: settings, error } = await taskyDb
-      .from('user_ai_settings')
-      .upsert({
-        id: crypto.randomUUID(),
-        user_id: userId,
-        default_provider: data.defaultProvider || data.default_provider || 'google',
-        default_model: data.defaultModel || data.default_model || 'gemini-3-flash-preview',
-        temperature: data.temperature ?? 0.8,
-        max_tokens: (data.maxTokens || data.max_tokens) ?? 1024,
-        system_prompt: data.systemPrompt || data.system_prompt || 'You are a helpful AI assistant.',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'user_id',
-        ignoreDuplicates: false,
+    const [settings] = await db
+      .insert(userAISettings)
+      .values({
+        userId,
+        defaultProvider: data.defaultProvider || data.default_provider || 'google',
+        defaultModel: data.defaultModel || data.default_model || 'gemini-3-flash-preview',
+        temperature: data.temperature !== undefined ? Math.round(data.temperature * 10) : 8,
+        maxTokens: (data.maxTokens || data.max_tokens) ?? 1024,
+        systemPrompt: data.systemPrompt || data.system_prompt || 'You are a helpful AI assistant.',
       })
-      .select()
-      .single();
-
-    if (error) throw error;
+      .onConflictDoUpdate({
+        target: userAISettings.userId,
+        set: {
+          defaultProvider: data.defaultProvider || data.default_provider || 'google',
+          defaultModel: data.defaultModel || data.default_model || 'gemini-3-flash-preview',
+          temperature: data.temperature !== undefined ? Math.round(data.temperature * 10) : 8,
+          maxTokens: (data.maxTokens || data.max_tokens) ?? 1024,
+          systemPrompt: data.systemPrompt || data.system_prompt || 'You are a helpful AI assistant.',
+        },
+      })
+      .returning();
 
     return NextResponse.json({ 
       success: true,

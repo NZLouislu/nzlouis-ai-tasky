@@ -1,37 +1,18 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase/supabase-client";
+import { db } from '@/lib/db/connection';
+import { blogPosts } from '@/lib/db/schema/tasky';
 
 export async function GET() {
   try {
-    if (!supabase) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: "Supabase client not initialized",
-          config: {
-            url: process.env.NEXT_PUBLIC_SUPABASE_URL ? "Present" : "Missing",
-            anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "Present" : "Missing"
-          }
-        },
-        { status: 500 }
-      );
-    }
-
-    const { data, error } = await supabase
-      .from("blog_posts")
-      .select("id, title, user_id, created_at")
+    const data = await db
+      .select({
+        id: blogPosts.id,
+        title: blogPosts.title,
+        userId: blogPosts.userId,
+        createdAt: blogPosts.createdAt,
+      })
+      .from(blogPosts)
       .limit(5);
-
-    if (error) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: error.message,
-          details: error
-        },
-        { status: 500 }
-      );
-    }
 
     return NextResponse.json({
       success: true,

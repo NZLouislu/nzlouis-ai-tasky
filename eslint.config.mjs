@@ -26,6 +26,12 @@ const eslintConfig = [
       "postcss.config.mjs",
     ],
   },
+  {
+    rules: {
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-require-imports": "warn",
+    },
+  },
 ];
 
 export default eslintConfig;

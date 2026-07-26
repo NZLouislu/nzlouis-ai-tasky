@@ -4,57 +4,27 @@ import {
   getTaskySupabaseServiceConfig,
 } from "@/lib/environment";
 
-// Read Supabase config from environment variables
 const supabaseConfig = getTaskySupabaseConfig();
 const supabaseServiceConfig = getTaskySupabaseServiceConfig();
 
-// Create client only when environment variables are properly configured
 export const supabase = (() => {
-  // Check if environment variables exist and are not empty
   if (!supabaseConfig.url || !supabaseConfig.anonKey) {
-    console.warn(
-      "Tasky Supabase configuration missing. Tasky features will be limited."
-    );
-    console.warn(
-      "Please set correct TASKY_SUPABASE_URL and TASKY_SUPABASE_ANON_KEY in .env file"
-    );
-    console.warn("Current config values:", {
-      url: supabaseConfig.url ? "Present" : "Missing",
-      anonKey: supabaseConfig.anonKey ? "Present" : "Missing",
-    });
     return null;
   }
 
   try {
-    // Supabase client initialized successfully
     return createClient(supabaseConfig.url, supabaseConfig.anonKey);
-  } catch (error) {
-    console.error("Failed to initialize Supabase client:", error);
+  } catch {
     return null;
   }
 })();
 
-// Create service client for server-side operations
 export const supabaseService = (() => {
-  // Check if environment variables exist and are not empty
   if (!supabaseServiceConfig.url || !supabaseServiceConfig.serviceRoleKey) {
-    console.warn(
-      "Tasky Supabase service configuration missing. Some server-side features will be limited."
-    );
-    console.warn(
-      "Please set correct TASKY_SUPABASE_URL and TASKY_SUPABASE_SERVICE_ROLE_KEY in .env file"
-    );
-    console.warn("Current service config values:", {
-      url: supabaseServiceConfig.url ? "Present" : "Missing",
-      serviceRoleKey: supabaseServiceConfig.serviceRoleKey
-        ? "Present"
-        : "Missing",
-    });
     return null;
   }
 
   try {
-    // Supabase service client initialized successfully
     return createClient(
       supabaseServiceConfig.url,
       supabaseServiceConfig.serviceRoleKey,
@@ -66,13 +36,11 @@ export const supabaseService = (() => {
         },
       }
     );
-  } catch (error) {
-    console.error("Failed to initialize Supabase service client:", error);
+  } catch {
     return null;
   }
 })();
 
-// Database types for the new tables
 export type Database = {
   public: {
     Tables: {
@@ -375,7 +343,7 @@ export type Database = {
           file_path?: string;
           file_name?: string;
           file_size?: number | null;
-          mime_type?: string | null;
+          mime_type?: number | null;
           entity_type?: string | null;
           entity_id?: string | null;
           created_at?: string;

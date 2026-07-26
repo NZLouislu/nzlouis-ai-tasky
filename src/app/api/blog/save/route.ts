@@ -1,19 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { getBlogSupabaseConfig } from "@/lib/environment";
+import { db } from '@/lib/db/connection';
+import { blogPosts } from '@/lib/db/schema/tasky';
+
 
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
-
-const blogConfig = getBlogSupabaseConfig();
-const blogSupabase = blogConfig.url && blogConfig.serviceRoleKey
-  ? createClient(blogConfig.url, blogConfig.serviceRoleKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  })
-  : null;
 
 async function verifyAuth(request: NextRequest): Promise<boolean> {
   try {
@@ -78,13 +68,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!blogSupabase) {
-      return NextResponse.json(
-        { error: "Blog database not configured" },
-        { status: 500 }
-      );
-    }
-
     // Extract userId from request body, use default value if not present
     const userIdToUse = userId || "00000000-0000-0000-0000-000000000000";
 
@@ -105,23 +88,30 @@ export async function POST(request: NextRequest) {
     const flatPosts = flattenPosts(posts);
 
     const savePromises = flatPosts.map(async (post: BlogPost) => {
-      if (!blogSupabase) {
-        throw new Error("Blog database not configured");
-      }
-      const { error } = await blogSupabase.from("posts").upsert({
-        id: post.id,
-        user_id: userIdToUse,
-        title: post.title,
-        content: post.content,
-        icon: post.icon,
-        cover: post.cover,
-        parent_id: post.parent_id ?? null,
-        updated_at: new Date().toISOString(),
-      });
-      if (error) {
-        console.error(`Failed to save post ${post.id}:`, error);
-        throw error;
-      }
+      await db
+        .insert(blogPosts)
+        .values({
+          id: post.id,
+          userId: userIdToUse,
+          title: post.title,
+          content: post.content,
+          icon: post.icon,
+          cover: post.cover,
+          parentId: post.parent_id ?? null,
+          updatedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: blogPosts.id,
+          set: {
+            userId: userIdToUse,
+            title: post.title,
+            content: post.content,
+            icon: post.icon,
+            cover: post.cover,
+            parentId: post.parent_id ?? null,
+            updatedAt: new Date(),
+          },
+        });
     });
 
     await Promise.all(savePromises);

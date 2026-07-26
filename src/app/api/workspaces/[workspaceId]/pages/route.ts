@@ -1,28 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase/supabase-client";
+import { db } from "@/lib/db/connection";
+import { workspacePages } from "@/lib/db/schema/tasky";
+import { eq, asc } from "drizzle-orm";
 
-// Get all pages for a workspace
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
-    if (!supabase) {
-      return NextResponse.json(
-        { error: "Database not configured" },
-        { status: 503 }
-      );
-    }
-
     const { workspaceId } = await params;
 
-    const { data, error } = await supabase
-      .from("workspace_pages")
-      .select("*")
-      .eq("workspace_id", workspaceId)
-      .order("position", { ascending: true });
-
-    if (error) throw error;
+    const data = await db.select()
+      .from(workspacePages)
+      .where(eq(workspacePages.workspaceId, workspaceId))
+      .orderBy(asc(workspacePages.position));
 
     return NextResponse.json(data);
   } catch (error) {
@@ -34,37 +25,25 @@ export async function GET(
   }
 }
 
-// Create a new page in a workspace
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ workspaceId: string }> }
 ) {
   try {
-    if (!supabase) {
-      return NextResponse.json(
-        { error: "Database not configured" },
-        { status: 503 }
-      );
-    }
-
     const { workspaceId } = await params;
     const body = await request.json();
 
-    const { data, error } = await supabase
-      .from("workspace_pages")
-      .insert({
-        workspace_id: workspaceId,
-        parent_id: body.parent_id || null,
+    const [data] = await db.insert(workspacePages)
+      .values({
+        workspaceId: workspaceId,
+        parentId: body.parent_id || null,
         title: body.title || "Untitled",
         content: body.content || null,
         icon: body.icon || null,
         cover: body.cover || null,
         position: body.position || null,
       })
-      .select()
-      .single();
-
-    if (error) throw error;
+      .returning();
 
     return NextResponse.json(data);
   } catch (error) {

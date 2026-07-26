@@ -99,7 +99,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, ...updates } = body;
+    const { id, parent_id, ...updates } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Post ID is required' }, { status: 400 });
@@ -109,6 +109,7 @@ export async function PUT(request: NextRequest) {
       .update(blogPosts)
       .set({
         ...updates,
+        ...(parent_id !== undefined ? { parentId: parent_id } : {}),
         updatedAt: new Date(),
       })
       .where(eq(blogPosts.id, id));

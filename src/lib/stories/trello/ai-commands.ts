@@ -155,10 +155,9 @@ function moveStoryToList(
   targetList: string
 ): string {
   const lines = markdown.split("\n");
-  let currentList = "";
   let storyStartIndex = -1;
   let storyEndIndex = -1;
-  let storyLines: string[] = [];
+  const storyLines: string[] = [];
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];

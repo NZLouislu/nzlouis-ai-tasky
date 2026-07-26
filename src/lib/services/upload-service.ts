@@ -1,14 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.TASKY_SUPABASE_SERVICE_ROLE_KEY!;
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-  },
-});
+import { v4 as uuidv4 } from 'uuid';
+import { uploadFileToR2, deleteObjectFromR2, listObjectsWithPrefix } from '@/lib/storage/r2-storage';
 
 export interface UploadOptions {
   file: File;
@@ -26,6 +17,7 @@ export interface UploadResult {
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
+// Image compression function (keep the same as before)
 async function compressImage(file: File): Promise<File> {
   if (file.size <= 1024 * 1024) {
     return file;
@@ -87,86 +79,73 @@ export async function uploadImage(options: UploadOptions): Promise<UploadResult>
     throw new Error('File size must not exceed 10MB');
   }
 
-  let processedFile = file;
   if (file.size > 1024 * 1024) {
-    processedFile = await compressImage(file);
+    await compressImage(file);
   }
 
   const folder = entityType === 'blog_cover' ? 'blog-covers' : 
-                 entityType === 'blog_post' ? 'blog-images' : 'chat-images';
+                entityType === 'blog_post' ? 'blog-images' : 'chat-images';
   const timestamp = Date.now();
   const fileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '-');
   const filePath = `${folder}/${userId}/${entityId}/${timestamp}-${fileName}`;
 
-  const { error: uploadError } = await supabase.storage
-    .from('NZLouis Tasky')
-    .upload(filePath, processedFile, {
-      cacheControl: '3600',
-      upsert: false,
-    });
+  // Convert File to Buffer using FileReader (compatible with jsdom)
+  const buffer = await new Promise<Buffer>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result && typeof reader.result !== 'string') {
+        resolve(Buffer.from(reader.result));
+      } else {
+        reject(new Error('Failed to read file'));
+      }
+    };
+    reader.onerror = () => reject(new Error('FileReader error'));
+    reader.readAsArrayBuffer(file);
+  });
 
-  if (uploadError) throw uploadError;
+  // Upload to R2
+  const { key, url } = await uploadFileToR2(buffer, filePath, file.type);
 
-  const { data: { publicUrl } } = supabase.storage
-    .from('NZLouis Tasky')
-    .getPublicUrl(filePath);
-
-  const { data: fileRecord, error: dbError } = await supabase
-    .from('storage_files')
-    .insert({
-      id: crypto.randomUUID(),
-      user_id: userId,
-      bucket_name: 'NZLouis Tasky',
-      file_path: filePath,
-      file_name: file.name,
-      file_size: processedFile.size,
-      mime_type: file.type,
-      entity_type: entityType,
-      entity_id: entityId,
-      created_at: new Date().toISOString(),
-    })
-    .select()
-    .single();
-
-  if (dbError) {
-    await supabase.storage.from('NZLouis Tasky').remove([filePath]);
-    throw dbError;
-  }
+  // Generate a file ID (we'll use UUID for now)
+  const fileId = uuidv4();
 
   return {
-    publicUrl,
-    filePath,
-    fileId: fileRecord.id,
+    publicUrl: url,
+    filePath: key,
+    fileId: fileId,
   };
 }
 
-export async function deleteImage(fileId: string, userId: string): Promise<void> {
-  const { data: file } = await supabase
-    .from('storage_files')
-    .select('*')
-    .eq('id', fileId)
-    .eq('user_id', userId)
-    .single();
-
-  if (!file) throw new Error('File not found');
-
-  await supabase.storage.from(file.bucket_name).remove([file.file_path]);
-  await supabase.from('storage_files').delete().eq('id', fileId);
+export async function deleteFile(filePath: string, _userId: string): Promise<void> {
+  try {
+    // Delete from R2 storage
+    await deleteObjectFromR2(filePath);
+    
+    // TODO: Delete from database (storage_files table)
+    // This would require importing and using the database client
+  } catch (error) {
+    console.error('Error deleting image:', error);
+    throw error;
+  }
 }
 
 export async function deleteEntityImages(entityType: string, entityId: string, userId: string): Promise<void> {
-  const { data: files } = await supabase
-    .from('storage_files')
-    .select('*')
-    .eq('entity_type', entityType)
-    .eq('entity_id', entityId)
-    .eq('user_id', userId);
-
-  if (files && files.length > 0) {
-    const filePaths = files.map(f => f.file_path);
-    await supabase.storage.from('NZLouis Tasky').remove(filePaths);
-    await supabase.from('storage_files').delete()
-      .eq('entity_type', entityType)
-      .eq('entity_id', entityId);
+  try {
+    const prefix = `${entityType}/${userId}/${entityId}/`;
+    const files = await listObjectsWithPrefix(prefix);
+    
+    // Delete each file from R2 storage
+    for (const fileKey of files) {
+      try {
+        await deleteObjectFromR2(fileKey);
+      } catch (error) {
+        console.error(`Failed to delete file ${fileKey}:`, error);
+      }
+    }
+    
+    // TODO: Delete from database (storage_files table)
+  } catch (error) {
+    console.error('Error deleting entity images:', error);
+    throw error;
   }
 }

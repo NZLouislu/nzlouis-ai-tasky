@@ -1,8 +1,10 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createAnthropic } from '@ai-sdk/anthropic';
-import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { db } from '@/lib/db/connection';
+import { userAPIKeys } from '@/lib/db/schema/tasky';
 import { decryptAPIKey } from '@/lib/encryption';
+import { and, eq } from 'drizzle-orm';
 
 export type AIProvider = 'openai' | 'google' | 'anthropic' | 'openrouter' | 'kilo';
 
@@ -12,15 +14,18 @@ export type AIProvider = 'openai' | 'google' | 'anthropic' | 'openrouter' | 'kil
 async function getUserAPIKey(userId: string, provider: string): Promise<string | null> {
   console.log(`[getUserAPIKey] Fetching API key for user: ${userId}, provider: ${provider}`);
 
-  const { data: apiKeyRecord, error } = await taskyDb
-    .from('user_api_keys')
-    .select('key_encrypted, iv, auth_tag')
-    .eq('user_id', userId)
-    .eq('provider', provider)
-    .single();
+  const [apiKeyRecord] = await db
+    .select({
+      key_encrypted: userAPIKeys.keyEncrypted,
+      iv: userAPIKeys.iv,
+      auth_tag: userAPIKeys.authTag,
+    })
+    .from(userAPIKeys)
+    .where(and(eq(userAPIKeys.userId, userId), eq(userAPIKeys.provider, provider)))
+    .limit(1);
 
-  if (error || !apiKeyRecord) {
-    console.log(`[getUserAPIKey] No API key found for user ${userId}, provider ${provider}:`, error?.message);
+  if (!apiKeyRecord) {
+    console.log(`[getUserAPIKey] No API key found for user ${userId}, provider ${provider}`);
     return null;
   }
 

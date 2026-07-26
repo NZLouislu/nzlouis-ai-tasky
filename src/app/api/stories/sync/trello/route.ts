@@ -1,17 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { createClient } from '@supabase/supabase-js';
+import { db } from '@/lib/db/connection';
+import { storiesDocuments, storiesProjects, storiesPlatformConnections, storiesSyncHistory } from '@/lib/db/schema/stories';
+import { eq, and, desc } from 'drizzle-orm';
 import { syncStoriesToTrello, parseStoriesForTrello } from '@/lib/stories/sync/trello-sync';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-
-function getSupabaseClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-  );
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,51 +21,54 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Document ID is required' }, { status: 400 });
     }
 
-    const supabase = getSupabaseClient();
-
     // Get document content
-    const { data: document, error: docError } = await supabase
-      .from('stories_documents')
-      .select(`
-        *,
-        project:stories_projects(*)
-      `)
-      .eq('id', documentId)
-      .single();
+    const [document] = await db
+      .select()
+      .from(storiesDocuments)
+      .where(eq(storiesDocuments.id, documentId));
 
-    if (docError || !document) {
+    if (!document) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
 
+    // Get project info
+    const [project] = await db
+      .select()
+      .from(storiesProjects)
+      .where(eq(storiesProjects.id, document.projectId));
+
     // Verify user owns this document
-    if (document.project.user_id !== session.user.email) {
+    if (project?.userId !== session.user.email) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Check if document is a stories document
-    if (document.document_type !== 'stories') {
+    if (document.documentType !== 'stories') {
       return NextResponse.json({ error: 'Only stories documents can be synced' }, { status: 400 });
     }
 
     // Get Trello connection for this project
-    const { data: connection, error: connError } = await supabase
-      .from('stories_platform_connections')
-      .select('*')
-      .eq('user_id', session.user.email)
-      .eq('platform', 'trello')
-      .eq('google_account_email', document.project.google_account_email)
-      .single();
+    const [connection] = await db
+      .select()
+      .from(storiesPlatformConnections)
+      .where(
+        and(
+          eq(storiesPlatformConnections.userId, session.user.email),
+          eq(storiesPlatformConnections.platform, 'trello'),
+          eq(storiesPlatformConnections.googleAccountEmail, project!.googleAccountEmail)
+        )
+      );
 
-    if (connError || !connection) {
+    if (!connection) {
       return NextResponse.json({ error: 'Trello connection not found' }, { status: 404 });
     }
 
-    if (connection.connection_status !== 'connected') {
+    if (connection.connectionStatus !== 'connected') {
       return NextResponse.json({ error: 'Trello connection is not active' }, { status: 400 });
     }
 
     // Convert BlockNote content to markdown (simplified)
-    const markdownContent = convertBlockNoteToMarkdown(document.content);
+    const markdownContent = convertBlockNoteToMarkdown(document.content as any[]);
     
     // Parse stories from content
     const stories = parseStoriesForTrello(markdownContent);
@@ -80,42 +78,41 @@ export async function POST(request: NextRequest) {
     }
 
     // Get Trello configuration
+    const projectMeta = project?.projectMetadata as { trello_list_id?: string; member_aliases?: Record<string, string> } | null;
     const trelloConfig = {
       key: process.env.TRELLO_API_KEY!,
-      token: decryptToken(connection.access_token_encrypted),
-      boardId: document.project.platform_project_id,
-      listId: document.project.project_metadata?.trello_list_id || 'default-list-id',
+      token: decryptToken(connection.accessTokenEncrypted || ''),
+      boardId: project?.platformProjectId || '',
+      listId: projectMeta?.trello_list_id || 'default-list-id',
       priorityLabelMap: {
         'high': 'High Priority',
         'medium': 'Medium Priority',
         'low': 'Low Priority',
         'critical': 'Critical'
       },
-      memberAliasMap: document.project.project_metadata?.member_aliases || {}
+      memberAliasMap: projectMeta?.member_aliases || {}
     };
 
     // Start sync process
     const syncStartTime = new Date();
     
     // Create sync history record
-    const { data: syncHistory, error: syncError } = await supabase
-      .from('stories_sync_history')
-      .insert({
-        document_id: documentId,
-        sync_direction: 'to_platform',
+    const [syncHistory] = await db
+      .insert(storiesSyncHistory)
+      .values({
+        documentId,
+        syncDirection: 'to_platform',
         platform: 'trello',
-        sync_status: 'in_progress',
-        started_at: syncStartTime.toISOString()
+        syncStatus: 'in_progress',
+        startedAt: syncStartTime,
       })
-      .select()
-      .single();
+      .returning();
 
-    if (syncError) {
+    if (!syncHistory) {
       return NextResponse.json({ error: 'Failed to create sync record' }, { status: 500 });
     }
 
     try {
-      // Sync stories to Trello
       const results = await syncStoriesToTrello(stories, trelloConfig);
       
       const successCount = results.filter(r => r.success).length;
@@ -123,24 +120,24 @@ export async function POST(request: NextRequest) {
       const totalChecklists = results.reduce((sum, r) => sum + (r.checklistsCreated || 0), 0);
       
       // Update sync history
-      await supabase
-        .from('stories_sync_history')
-        .update({
-          sync_status: failureCount === 0 ? 'success' : (successCount > 0 ? 'partial' : 'failed'),
-          items_synced: successCount,
-          items_failed: failureCount,
-          sync_details: { results, checklistsCreated: totalChecklists },
-          completed_at: new Date().toISOString()
+      await db
+        .update(storiesSyncHistory)
+        .set({
+          syncStatus: failureCount === 0 ? 'success' : (successCount > 0 ? 'partial' : 'failed'),
+          itemsSynced: successCount,
+          itemsFailed: failureCount,
+          syncDetails: { results, checklistsCreated: totalChecklists },
+          completedAt: new Date(),
         })
-        .eq('id', syncHistory.id);
+        .where(eq(storiesSyncHistory.id, syncHistory.id));
 
       // Update document last_synced_at
-      await supabase
-        .from('stories_documents')
-        .update({
-          last_synced_at: new Date().toISOString()
+      await db
+        .update(storiesDocuments)
+        .set({
+          lastSyncedAt: new Date(),
         })
-        .eq('id', documentId);
+        .where(eq(storiesDocuments.id, documentId));
 
       return NextResponse.json({
         success: true,
@@ -156,14 +153,14 @@ export async function POST(request: NextRequest) {
 
     } catch (syncError) {
       // Update sync history with error
-      await supabase
-        .from('stories_sync_history')
-        .update({
-          sync_status: 'failed',
-          error_message: syncError instanceof Error ? syncError.message : 'Unknown error',
-          completed_at: new Date().toISOString()
+      await db
+        .update(storiesSyncHistory)
+        .set({
+          syncStatus: 'failed',
+          errorMessage: syncError instanceof Error ? syncError.message : 'Unknown error',
+          completedAt: new Date(),
         })
-        .eq('id', syncHistory.id);
+        .where(eq(storiesSyncHistory.id, syncHistory.id));
 
       throw syncError;
     }
@@ -191,20 +188,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Document ID is required' }, { status: 400 });
     }
 
-    const supabase = getSupabaseClient();
-
     // Get sync history for document
-    const { data: syncHistory, error } = await supabase
-      .from('stories_sync_history')
-      .select('*')
-      .eq('document_id', documentId)
-      .eq('platform', 'trello')
-      .order('started_at', { ascending: false })
+    const syncHistory = await db
+      .select()
+      .from(storiesSyncHistory)
+      .where(
+        and(
+          eq(storiesSyncHistory.documentId, documentId),
+          eq(storiesSyncHistory.platform, 'trello')
+        )
+      )
+      .orderBy(desc(storiesSyncHistory.startedAt))
       .limit(10);
-
-    if (error) {
-      return NextResponse.json({ error: 'Failed to fetch sync history' }, { status: 500 });
-    }
 
     return NextResponse.json({ syncHistory });
 
@@ -219,7 +214,6 @@ export async function GET(request: NextRequest) {
 
 // Helper functions
 function convertBlockNoteToMarkdown(content: any[]): string {
-  // Simplified conversion - would need proper BlockNote to Markdown converter
   return content.map(block => {
     if (block.type === 'paragraph') {
       return block.content?.map((item: any) => item.text || '').join('') || '';
@@ -229,6 +223,5 @@ function convertBlockNoteToMarkdown(content: any[]): string {
 }
 
 function decryptToken(encryptedToken: string): string {
-  // Placeholder - would use actual decryption
   return encryptedToken;
 }

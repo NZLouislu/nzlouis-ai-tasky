@@ -1,19 +1,9 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { db } from '@/lib/db/connection';
+import { blogPosts } from '@/lib/db/schema/tasky';
+import { eq } from 'drizzle-orm';
 
 export async function GET() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.TASKY_SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url || !serviceKey) {
-    return NextResponse.json(
-      { error: "Missing SUPABASE_URL or SERVICE_ROLE_KEY" },
-      { status: 500 }
-    );
-  }
-
-  const supabase = createClient(url, serviceKey);
-  // Valid UUID v4 test ID
   let testId: string;
   if (
     typeof crypto !== "undefined" &&
@@ -21,7 +11,6 @@ export async function GET() {
   ) {
     testId = crypto.randomUUID();
   } else {
-    // Fallback for Node.js environment
     testId = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
       /[xy]/g,
       function (c) {
@@ -32,29 +21,47 @@ export async function GET() {
     );
   }
 
-  // 1. Attempt to insert
-  const { error: insertError, data: insertData } = await supabase
-    .from("blog_posts")
-    .insert({
-      id: testId,
-      user_id: "00000000-0000-0000-0000-000000000000",
-      title: "SUPABASE SERVICE KEY DELETE TEST",
-      content: [],
-    });
+  let insertSuccess = false;
+  let insertError: string | null = null;
+  let insertData: unknown = null;
+  let deleteSuccess = false;
+  let deleteError: string | null = null;
+  let deleteData: unknown = null;
 
-  // 2. Attempt to delete
-  const { error: deleteError, data: deleteData } = await supabase
-    .from("blog_posts")
-    .delete()
-    .eq("id", testId);
+  try {
+    const [inserted] = await db
+      .insert(blogPosts)
+      .values({
+        id: testId,
+        userId: "00000000-0000-0000-0000-000000000000",
+        title: "SUPABASE SERVICE KEY DELETE TEST",
+        content: [],
+      })
+      .returning();
+    insertSuccess = true;
+    insertData = inserted;
+  } catch (e) {
+    insertError = e instanceof Error ? e.message : String(e);
+  }
+
+  try {
+    const [deleted] = await db
+      .delete(blogPosts)
+      .where(eq(blogPosts.id, testId))
+      .returning();
+    deleteSuccess = true;
+    deleteData = deleted;
+  } catch (e) {
+    deleteError = e instanceof Error ? e.message : String(e);
+  }
 
   return NextResponse.json({
-    url,
-    serviceKeyPresent: !!serviceKey,
-    insertSuccess: !insertError,
-    insertError: insertError?.message ?? null,
-    deleteSuccess: !deleteError,
-    deleteError: deleteError?.message ?? null,
+    url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    serviceKeyPresent: !!process.env.TASKY_SUPABASE_SERVICE_ROLE_KEY,
+    insertSuccess,
+    insertError,
+    deleteSuccess,
+    deleteError,
     insertData,
     deleteData,
   });

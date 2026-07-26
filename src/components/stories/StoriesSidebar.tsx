@@ -435,7 +435,7 @@ export default function StoriesSidebar({
 
               {searchQuery && filteredPlatforms.every(p => p.projects.length === 0) && (
                 <div className="p-4 text-center text-gray-500">
-                  <p>No results found for "{searchQuery}"</p>
+                  <p>No results found for &quot;{searchQuery}&quot;</p>
                 </div>
               )}
             </div>
@@ -484,7 +484,7 @@ function TrelloHelpDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () =>
         
         <div className="p-6 space-y-4">
           <p className="text-gray-700">
-            It looks like you haven't added any Trello boards yet. To get started:
+            It looks like you haven&apos;t added any Trello boards yet. To get started:
           </p>
           
           <ol className="list-decimal list-inside space-y-2 text-gray-700">

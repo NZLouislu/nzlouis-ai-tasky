@@ -1,5 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase/supabase-client';
+import { db } from '@/lib/db/connection';
+import { eq, desc } from 'drizzle-orm';
+import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+
+const storiesChatMessages = pgTable('stories_chat_messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  documentId: text('document_id').notNull(),
+  userId: text('user_id').notNull(),
+  role: text('role').notNull(),
+  content: text('content').notNull(),
+  timestamp: timestamp('timestamp', { withTimezone: true }).defaultNow().notNull(),
+});
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,48 +26,26 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabaseClient = supabase;
-
-    if (!supabaseClient) {
-      return NextResponse.json(
-        { error: 'Supabase client not initialized' },
-        { status: 500 }
-      );
-    }
-
-    // Optimize: 
-    // 1. Remove count: 'exact' which is slow on large tables
-    // 2. Order by timestamp DESC to get latest messages first
-    // 3. Fetch limit + 1 to determine hasMore without counting
-    const { data, error } = await supabaseClient
-      .from('stories_chat_messages')
-      .select('*')
-      .eq('document_id', documentId)
-      .order('timestamp', { ascending: false })
-      .range(offset, offset + limit);
-
-    if (error) {
-      console.error('Error fetching chat messages:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch chat messages' },
-        { status: 500 }
-      );
-    }
+    const data = await db
+      .select()
+      .from(storiesChatMessages)
+      .where(eq(storiesChatMessages.documentId, documentId))
+      .orderBy(desc(storiesChatMessages.timestamp))
+      .limit(limit + 1)
+      .offset(offset);
 
     const messages = data || [];
     const hasMore = messages.length > limit;
-    
-    // If we fetched an extra item to check hasMore, remove it
+
     if (hasMore) {
       messages.pop();
     }
 
-    // Reverse messages to return them in chronological order (oldest -> newest)
     messages.reverse();
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       messages,
-      total: 0, // Deprecated
+      total: 0,
       hasMore,
       offset,
       limit
@@ -82,36 +71,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabaseClient = supabase;
-
-    if (!supabaseClient) {
-      return NextResponse.json(
-        { error: 'Supabase client not initialized' },
-        { status: 500 }
-      );
-    }
-
-    const { data, error } = await supabaseClient
-      .from('stories_chat_messages')
-      .insert({
-        document_id: documentId,
-        user_id: userId,
+    const [message] = await db
+      .insert(storiesChatMessages)
+      .values({
+        documentId,
+        userId,
         role,
         content,
-        timestamp: timestamp || new Date().toISOString(),
+        timestamp: timestamp || new Date(),
       })
-      .select()
-      .single();
+      .returning();
 
-    if (error) {
-      console.error('Error saving chat message:', error);
-      return NextResponse.json(
-        { error: 'Failed to save chat message' },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ message: data });
+    return NextResponse.json({ message });
   } catch (error) {
     console.error('Error in POST /api/stories/chat-messages:', error);
     return NextResponse.json(
@@ -133,27 +104,9 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const supabaseClient = supabase;
-
-    if (!supabaseClient) {
-      return NextResponse.json(
-        { error: 'Supabase client not initialized' },
-        { status: 500 }
-      );
-    }
-
-    const { error } = await supabaseClient
-      .from('stories_chat_messages')
-      .delete()
-      .eq('document_id', documentId);
-
-    if (error) {
-      console.error('Error deleting chat messages:', error);
-      return NextResponse.json(
-        { error: 'Failed to delete chat messages' },
-        { status: 500 }
-      );
-    }
+    await db
+      .delete(storiesChatMessages)
+      .where(eq(storiesChatMessages.documentId, documentId));
 
     return NextResponse.json({ success: true });
   } catch (error) {

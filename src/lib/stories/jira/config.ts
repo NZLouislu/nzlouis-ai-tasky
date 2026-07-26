@@ -1,4 +1,6 @@
-import { taskyDb } from "@/lib/supabase/tasky-db-client";
+import { db } from "@/lib/db/connection";
+import { userPlatformConfigs } from "@/lib/db/schema/stories";
+import { eq, and } from "drizzle-orm";
 import { decrypt } from "@/lib/encryption";
 
 export interface JiraConfig {
@@ -23,27 +25,30 @@ export async function loadJiraConfig(
   configName: string = "Default"
 ): Promise<JiraConfig | null> {
   try {
-    const { data, error } = await taskyDb
-      .from("user_platform_configs")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("platform", "jira")
-      .eq("config_name", configName)
-      .eq("is_active", true)
-      .single();
+    const [data] = await db
+      .select()
+      .from(userPlatformConfigs)
+      .where(
+        and(
+          eq(userPlatformConfigs.userId, userId),
+          eq(userPlatformConfigs.platform, "jira"),
+          eq(userPlatformConfigs.configName, configName),
+          eq(userPlatformConfigs.isActive, true),
+        )
+      );
 
-    if (error || !data) {
-      console.error("Failed to load Jira config:", error);
+    if (!data) {
+      console.error("Failed to load Jira config: no config found");
       return null;
     }
 
-    const apiToken = decrypt(data.jira_api_token_encrypted);
+    const apiToken = decrypt(data.jiraApiTokenEncrypted!);
 
     return {
-      jiraUrl: data.jira_url,
-      email: data.jira_email,
+      jiraUrl: data.jiraUrl!,
+      email: data.jiraEmail!,
       apiToken,
-      projectKey: data.jira_project_key,
+      projectKey: data.jiraProjectKey!,
       issueTypeId: "10001",
     };
   } catch (error) {

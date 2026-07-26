@@ -1,26 +1,37 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Database as TaskyDatabase } from "@/lib/supabase/supabase-client";
-import { blogDb } from "@/lib/supabase/blog-client";
-import type { Database as BlogDatabase } from "@/lib/supabase/blog-client";
-import { generateUuid } from "@/lib/utils/uuid";
 
 interface PostCover {
   type: "color" | "image";
   value: string;
 }
 
-export type BlogPost = Omit<
-  TaskyDatabase["public"]["Tables"]["blog_posts"]["Row"],
-  "cover"
-> & {
+export interface BlogPost {
+  id: string;
+  user_id: string;
+  title: string;
+  content: string | null;
+  parent_id: string | null;
+  created_at: string;
+  updated_at: string;
   cover?: PostCover | null;
   children?: BlogPost[];
   [key: string]: unknown;
-};
-type Comment = BlogDatabase["public"]["Tables"]["comments"]["Row"];
-type FeatureToggles =
-  BlogDatabase["public"]["Tables"]["feature_toggles"]["Row"];
+}
+
+interface Comment {
+    id: string;
+    post_id: string;
+    user_id: string;
+    content: string;
+    created_at: string;
+}
+
+interface FeatureToggles {
+    id: string;
+    key: string;
+    value: boolean;
+}
 
 interface AnalyticsData {
   posts: Array<{
@@ -185,7 +196,7 @@ export const useBlogStore = create<BlogState>()(
           if (!response.ok) {
             const errorData = await response.json();
             console.warn("API error:", errorData.error);
-            set({ posts: [], isLoading: false, error: errorData.error });
+            set({ isLoading: false, error: errorData.error });
             return;
           }
 
@@ -194,8 +205,27 @@ export const useBlogStore = create<BlogState>()(
 
           console.log(`Found ${userPosts?.length || 0} posts for user ${userId}`);
 
-          const rootPosts = userPosts?.filter((post: BlogPost) => post.parent_id === null) || [];
-          const childPosts = userPosts?.filter((post: BlogPost) => post.parent_id !== null) || [];
+          // Normalize posts: API returns camelCase (parentId), but BlogPost type uses snake_case (parent_id)
+          const normalizePost = (post: Record<string, unknown>): BlogPost => {
+            return {
+              id: (post.id || post.id) as string,
+              user_id: (post.user_id || post.userId) as string,
+              title: (post.title || post.title) as string,
+              content: (post.content || null) as string | null,
+              parent_id: (post.parent_id ?? post.parentId ?? null) as string | null,
+              created_at: (post.created_at || post.createdAt) as string,
+              updated_at: (post.updated_at || post.updatedAt) as string,
+              icon: post.icon as string | undefined,
+              cover: post.cover as Record<string, unknown> | null | undefined,
+              published: post.published as boolean | undefined,
+              position: post.position as number | undefined,
+            } as BlogPost;
+          };
+
+          const normalizedPosts = (userPosts || []).map(normalizePost);
+
+          const rootPosts = normalizedPosts.filter((post) => post.parent_id === null);
+          const childPosts = normalizedPosts.filter((post) => post.parent_id !== null);
 
           const childrenByParentId: Record<string, BlogPost[]> = {};
           childPosts.forEach((child: BlogPost) => {
@@ -230,8 +260,8 @@ export const useBlogStore = create<BlogState>()(
           set({ posts: postsWithChildren, lastFetchTime: now });
         } catch (error) {
           console.error("Error fetching posts:", error);
+          // Don't clear posts on error - keep existing data visible
           set({
-            posts: [],
             error: error instanceof Error ? error.message : "Failed to fetch posts",
           });
         } finally {
@@ -263,11 +293,26 @@ export const useBlogStore = create<BlogState>()(
           }
 
           const result = await response.json();
-          const createdPost = result.data as BlogPost;
+          const rawPost = result.data as Record<string, unknown>;
 
-          if (!createdPost) {
+          if (!rawPost) {
             throw new Error('No post data returned from server');
           }
+
+          // Normalize: API returns camelCase, store uses snake_case
+          const createdPost: BlogPost = {
+            id: rawPost.id as string,
+            user_id: (rawPost.user_id || rawPost.userId) as string,
+            title: (rawPost.title || rawPost.title) as string,
+            content: (rawPost.content || null) as string | null,
+            parent_id: (rawPost.parent_id ?? rawPost.parentId ?? null) as string | null,
+            created_at: (rawPost.created_at || rawPost.createdAt) as string,
+            updated_at: (rawPost.updated_at || rawPost.updatedAt) as string,
+            icon: rawPost.icon as string | undefined,
+            cover: rawPost.cover as Record<string, unknown> | null | undefined,
+            published: rawPost.published as boolean | undefined,
+            position: rawPost.position as number | undefined,
+          } as BlogPost;
 
           console.log("Post created successfully:", createdPost.id);
 
@@ -341,11 +386,26 @@ export const useBlogStore = create<BlogState>()(
           }
 
           const result = await response.json();
-          const updatedPost = result.data as BlogPost;
+          const rawPost = result.data as Record<string, unknown>;
 
-          if (!updatedPost) {
+          if (!rawPost) {
             throw new Error('No post data returned from server');
           }
+
+          // Normalize: API returns camelCase, store uses snake_case
+          const updatedPost: BlogPost = {
+            id: rawPost.id as string,
+            user_id: (rawPost.user_id || rawPost.userId) as string,
+            title: (rawPost.title || rawPost.title) as string,
+            content: (rawPost.content || null) as string | null,
+            parent_id: (rawPost.parent_id ?? rawPost.parentId ?? null) as string | null,
+            created_at: (rawPost.created_at || rawPost.createdAt) as string,
+            updated_at: (rawPost.updated_at || rawPost.updatedAt) as string,
+            icon: rawPost.icon as string | undefined,
+            cover: rawPost.cover as Record<string, unknown> | null | undefined,
+            published: rawPost.published as boolean | undefined,
+            position: rawPost.position as number | undefined,
+          } as BlogPost;
 
           console.log("Post updated successfully:", updatedPost.id);
 
@@ -424,21 +484,9 @@ export const useBlogStore = create<BlogState>()(
       fetchComments: async (postId) => {
         set({ isLoading: true, error: null });
         try {
-          if (!blogDb) {
-            console.warn(
-              "Blog database client not initialized. Cannot fetch comments."
-            );
-            return;
-          }
-
-          const { data, error } = await blogDb
-            .from("comments")
-            .select("*")
-            .eq("post_id", postId)
-            .order("created_at", { ascending: false });
-
-          if (error) throw error;
-
+          const response = await fetch(`/api/blog/comments?postId=${postId}`);
+          if (!response.ok) throw new Error('Failed to fetch comments');
+          const data = await response.json();
           set((state) => ({
             comments: {
               ...state.comments,
@@ -459,37 +507,19 @@ export const useBlogStore = create<BlogState>()(
       addNewComment: async (comment) => {
         set({ isLoading: true, error: null });
         try {
-          if (!blogDb) {
-            console.warn(
-              "Blog database client not initialized. Cannot add comment."
-            );
-            return;
-          }
-
-          const newComment = {
-            ...comment,
-            id: generateUuid(),
-            created_at: new Date().toISOString(),
-          };
-
-          const { data, error } = await blogDb
-            .from("comments")
-            .insert(newComment)
-            .select();
-
-          if (error) throw error;
-
-          if (!data || data.length === 0) {
-            throw new Error("Failed to insert comment.");
-          }
-
-          const insertedComment = data[0];
-
+          const response = await fetch('/api/blog/comments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(comment),
+          });
+          if (!response.ok) throw new Error('Failed to add comment');
+          const data = await response.json();
+          
           set((state) => ({
             comments: {
               ...state.comments,
               [comment.post_id]: [
-                insertedComment as Comment,
+                data,
                 ...(state.comments[comment.post_id] || []),
               ],
             },
@@ -507,16 +537,10 @@ export const useBlogStore = create<BlogState>()(
       removeComment: async (id) => {
         set({ isLoading: true, error: null });
         try {
-          if (!blogDb) {
-            console.warn(
-              "Blog database client not initialized. Cannot delete comment."
-            );
-            return;
-          }
-
-          const { error } = await blogDb.from("comments").delete().eq("id", id);
-
-          if (error) throw error;
+          const response = await fetch(`/api/blog/comments/${id}`, {
+            method: 'DELETE',
+          });
+          if (!response.ok) throw new Error('Failed to delete comment');
 
           set((state) => {
             const updatedComments = { ...state.comments };

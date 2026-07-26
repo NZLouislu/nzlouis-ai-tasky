@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { useChatStore } from '@/lib/store/chat-store';
 
 describe('Chat Store Pagination Support', () => {

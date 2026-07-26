@@ -1,28 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseService } from "@/lib/supabase/supabase-client";
+import { db } from "@/lib/db/connection";
+import { taskColumns } from "@/lib/db/schema/tasky";
+import { eq, asc } from "drizzle-orm";
 
-// Get all columns for a task board
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ boardId: string }> }
 ) {
   try {
-    if (!supabaseService) {
-      return NextResponse.json(
-        { error: "Database not configured" },
-        { status: 503 }
-      );
-    }
-
     const { boardId } = await params;
 
-    const { data, error } = await supabaseService
-      .from("task_columns")
-      .select("*")
-      .eq("board_id", boardId)
-      .order("position", { ascending: true });
-
-    if (error) throw error;
+    const data = await db.select()
+      .from(taskColumns)
+      .where(eq(taskColumns.boardId, boardId))
+      .orderBy(asc(taskColumns.position));
 
     return NextResponse.json(data);
   } catch (error) {
@@ -34,33 +25,21 @@ export async function GET(
   }
 }
 
-// Create a new column in a task board
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ boardId: string }> }
 ) {
   try {
-    if (!supabaseService) {
-      return NextResponse.json(
-        { error: "Database not configured" },
-        { status: 503 }
-      );
-    }
-
     const { boardId } = await params;
     const body = await request.json();
 
-    const { data, error } = await supabaseService
-      .from("task_columns")
-      .insert({
-        board_id: boardId,
+    const [data] = await db.insert(taskColumns)
+      .values({
+        boardId: boardId,
         name: body.name,
         position: body.position || null,
       })
-      .select()
-      .single();
-
-    if (error) throw error;
+      .returning();
 
     return NextResponse.json(data);
   } catch (error) {

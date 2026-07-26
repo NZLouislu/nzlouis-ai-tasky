@@ -49,7 +49,7 @@ export class AgentOrchestrator {
       const isChinese = /[\u4e00-\u9fa5]/.test(request.message);
       console.log(`✅ Phase 1 completed in ${Date.now() - startTime}ms (Language: ${isChinese ? 'CN' : 'EN'})`);
 
-      let documentStructure = cachedDocStructure || perception.documentStructure;
+      const documentStructure = cachedDocStructure || perception.documentStructure;
       let writingStyle = cachedWritingStyle;
 
       if (!cachedDocStructure && documentStructure) {

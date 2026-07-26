@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { db } from '@/lib/db/connection';
+import { userPlatformConfigs, storiesProjects, storiesDocuments } from '@/lib/db/schema/stories';
+import { eq, and } from 'drizzle-orm';
 import { decrypt } from '@/lib/encryption';
 import { getUserIdFromRequest } from '@/lib/admin-auth';
 
@@ -16,21 +18,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get user's Trello configuration
-    const { data: configs, error: configError } = await taskyDb
-      .from('user_platform_configs')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('platform', 'trello')
-      .eq('is_active', true);
-
-    if (configError) {
-      console.error('Database error:', configError);
-      return NextResponse.json(
-        { error: 'Failed to fetch Trello configurations' },
-        { status: 500 }
+    const configs = await db
+      .select()
+      .from(userPlatformConfigs)
+      .where(
+        and(
+          eq(userPlatformConfigs.userId, userId),
+          eq(userPlatformConfigs.platform, 'trello'),
+          eq(userPlatformConfigs.isActive, true),
+        )
       );
-    }
 
     if (!configs || configs.length === 0) {
       return NextResponse.json(
@@ -39,14 +36,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const config = configs[0]; // Use first active configuration
+    const config = configs[0];
 
-    // Decrypt credentials
     let trelloKey: string;
     let trelloToken: string;
     try {
-      trelloKey = decrypt(config.trello_key_encrypted);
-      trelloToken = decrypt(config.trello_token_encrypted);
+      trelloKey = decrypt(config.trelloKeyEncrypted!);
+      trelloToken = decrypt(config.trelloTokenEncrypted!);
     } catch (error) {
       console.error('Failed to decrypt Trello credentials:', error);
       return NextResponse.json(
@@ -55,7 +51,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get Trello boards list
     try {
       const boardsResponse = await fetch(
         `https://api.trello.com/1/members/me/boards?key=${trelloKey}&token=${trelloToken}`,
@@ -75,7 +70,6 @@ export async function GET(request: NextRequest) {
 
       const boards = await boardsResponse.json();
 
-      // Filter and format board data
       const formattedBoards = boards.map((board: any) => ({
         id: board.id,
         name: board.name,
@@ -94,7 +88,7 @@ export async function GET(request: NextRequest) {
         success: true,
         boards: formattedBoards,
         totalCount: formattedBoards.length,
-        configName: config.config_name,
+        configName: config.configName,
       });
 
     } catch (error) {
@@ -136,15 +130,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get user's Trello configuration
-    const { data: configs, error: configError } = await taskyDb
-      .from('user_platform_configs')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('platform', 'trello')
-      .eq('is_active', true);
+    const configs = await db
+      .select()
+      .from(userPlatformConfigs)
+      .where(
+        and(
+          eq(userPlatformConfigs.userId, userId),
+          eq(userPlatformConfigs.platform, 'trello'),
+          eq(userPlatformConfigs.isActive, true),
+        )
+      );
 
-    if (configError || !configs || configs.length === 0) {
+    if (!configs || configs.length === 0) {
       return NextResponse.json(
         { error: 'No active Trello configuration found' },
         { status: 404 }
@@ -153,43 +150,32 @@ export async function POST(request: NextRequest) {
 
     const config = configs[0];
 
-    // Create Stories project record
-    const { data: project, error: projectError } = await taskyDb
-      .from('stories_projects')
-      .insert({
-        user_id: userId,
+    const [project] = await db
+      .insert(storiesProjects)
+      .values({
+        userId,
         platform: 'trello',
-        platform_project_id: boardId,
-        project_name: boardName,
-        google_account_email: session?.user?.email || '',
-        connection_status: 'connected',
-        platform_credentials: {
+        platformProjectId: boardId,
+        projectName: boardName,
+        googleAccountEmail: session?.user?.email || '',
+        connectionStatus: 'connected',
+        platformCredentials: {
           board_id: boardId,
         },
-        project_metadata: {
-          config_name: config.config_name,
+        projectMetadata: {
+          config_name: config.configName,
           created_from: 'api',
         },
       })
-      .select('*')
-      .single();
+      .returning();
 
-    if (projectError) {
-      console.error('Database error:', projectError);
-      return NextResponse.json(
-        { error: 'Failed to create project record' },
-        { status: 500 }
-      );
-    }
-
-    // Create default Report document
     const reportFileName = `${boardName.replace(/\s+/g, '-')}-Report.md`;
-    const { data: reportDoc, error: reportError } = await taskyDb
-      .from('stories_documents')
-      .insert({
-        project_id: project.id,
-        document_type: 'report',
-        file_name: reportFileName,
+    const [reportDoc] = await db
+      .insert(storiesDocuments)
+      .values({
+        projectId: project.id,
+        documentType: 'report',
+        fileName: reportFileName,
         title: `${boardName} Report`,
         content: [
           {
@@ -207,21 +193,15 @@ export async function POST(request: NextRequest) {
           board_id: boardId,
         },
       })
-      .select('*')
-      .single();
+      .returning();
 
-    if (reportError) {
-      console.error('Failed to create report document:', reportError);
-    }
-
-    // Create default Stories document
     const storiesFileName = `${boardName.replace(/\s+/g, '-')}-Trello-Stories.md`;
-    const { data: storiesDoc, error: storiesError } = await taskyDb
-      .from('stories_documents')
-      .insert({
-        project_id: project.id,
-        document_type: 'stories',
-        file_name: storiesFileName,
+    await db
+      .insert(storiesDocuments)
+      .values({
+        projectId: project.id,
+        documentType: 'stories',
+        fileName: storiesFileName,
         title: `${boardName} Stories`,
         content: [
           {
@@ -239,12 +219,7 @@ export async function POST(request: NextRequest) {
           board_id: boardId,
         },
       })
-      .select('*')
-      .single();
-
-    if (storiesError) {
-      console.error('Failed to create stories document:', storiesError);
-    }
+      .returning();
 
     return NextResponse.json({
       success: true,
@@ -254,10 +229,10 @@ export async function POST(request: NextRequest) {
         boardId,
         boardName,
         platform: 'trello',
-        createdAt: project.created_at,
+        createdAt: project.createdAt,
         reportDocument: reportDoc ? {
           id: reportDoc.id,
-          fileName: reportDoc.file_name,
+          fileName: reportDoc.fileName,
           title: reportDoc.title,
         } : null,
       }

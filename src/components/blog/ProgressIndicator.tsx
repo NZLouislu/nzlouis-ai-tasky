@@ -32,7 +32,6 @@ export function ProgressIndicator({ currentStage, progress = 0 }: ProgressIndica
       {stages.map((stage, idx) => {
         const isCompleted = idx < currentStageIndex;
         const isCurrent = idx === currentStageIndex;
-        const isPending = idx > currentStageIndex;
 
         return (
           <div key={stage.id} className="flex items-center gap-3">

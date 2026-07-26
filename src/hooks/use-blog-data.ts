@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useEffect, useCallback, useMemo } from "react";
 import { useBlogStore, BlogPost as StoreBlogPost } from "@/lib/stores/blog-store";
 import type { PartialBlock } from "@blocknote/core";
 
@@ -90,12 +90,9 @@ export const useBlogData = () => {
   // Memoize converted posts to prevent unnecessary re-renders
   const posts = useMemo(() => blogPosts.map(convertPost), [blogPosts, convertPost]);
 
-  // SWR Pattern:
-  // 1. If we have posts, show them immediately (isLoading = false)
-  // 2. Fetch in background to update
-  // 3. If no posts and fetching, isLoading = true
-  
-  const isLoading = posts.length === 0 && storeLoading;
+  // Show loading skeleton during initial fetch (no posts yet and still loading)
+  // or when store explicitly indicates loading
+  const isLoading = storeLoading || (posts.length === 0 && !storeError);
 
   useEffect(() => {
     const init = async () => {

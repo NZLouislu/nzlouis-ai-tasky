@@ -1,4 +1,6 @@
-import { taskyDb } from "@/lib/supabase/tasky-db-client";
+import { db } from "@/lib/db/connection";
+import { userPlatformConfigs } from "@/lib/db/schema/stories";
+import { eq, and } from "drizzle-orm";
 import { decrypt } from "@/lib/encryption";
 
 export interface TrelloConfig {
@@ -20,27 +22,30 @@ export async function loadTrelloConfig(
   configName: string = "Default"
 ): Promise<TrelloConfig | null> {
   try {
-    const { data, error } = await taskyDb
-      .from("user_platform_configs")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("platform", "trello")
-      .eq("config_name", configName)
-      .eq("is_active", true)
-      .single();
+    const [data] = await db
+      .select()
+      .from(userPlatformConfigs)
+      .where(
+        and(
+          eq(userPlatformConfigs.userId, userId),
+          eq(userPlatformConfigs.platform, "trello"),
+          eq(userPlatformConfigs.configName, configName),
+          eq(userPlatformConfigs.isActive, true),
+        )
+      );
 
-    if (error || !data) {
-      console.error("Failed to load Trello config:", error);
+    if (!data) {
+      console.error("Failed to load Trello config: no config found");
       return null;
     }
 
-    const trelloKey = decrypt(data.trello_key_encrypted);
-    const trelloToken = decrypt(data.trello_token_encrypted);
+    const trelloKey = decrypt(data.trelloKeyEncrypted!);
+    const trelloToken = decrypt(data.trelloTokenEncrypted!);
 
     return {
       trelloKey,
       trelloToken,
-      trelloBoardId: data.trello_board_id,
+      trelloBoardId: data.trelloBoardId!,
     };
   } catch (error) {
     console.error("Error loading Trello config:", error);

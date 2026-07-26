@@ -2,13 +2,13 @@
  * Tests for AI Assist API Route
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { POST } from '../route';
 import { NextRequest } from 'next/server';
 
 // Mock dependencies
 vi.mock('@/lib/admin-auth', () => ({
-  getUserIdFromRequest: vi.fn((userId: string | undefined, req: unknown) => 'test-user-123'),
+  getUserIdFromRequest: vi.fn((_userId: string | undefined, _req: unknown) => 'test-user-123'),
 }));
 
 vi.mock('@/lib/ai/settings', () => ({

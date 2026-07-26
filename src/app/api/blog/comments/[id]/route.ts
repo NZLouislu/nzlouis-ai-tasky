@@ -1,22 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { blogDb } from "@/lib/supabase/blog-client";
+import { db } from "@/lib/db/connection";
+import { comments } from "@/lib/db/schema/blog";
+import { eq } from "drizzle-orm";
 
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    if (!blogDb) {
-      return NextResponse.json(
-        { error: "Database not configured" },
-        { status: 503 }
-      );
-    }
-
     const { id } = await params;
-    const { error } = await blogDb.from("comments").delete().eq("id", id);
-
-    if (error) throw error;
+    await db.delete(comments).where(eq(comments.id, id));
 
     return NextResponse.json({ success: true });
   } catch (error) {

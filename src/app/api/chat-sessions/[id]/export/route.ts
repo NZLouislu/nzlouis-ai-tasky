@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { db } from '@/lib/db/connection';
+import { chatSessions, chatMessages } from '@/lib/db/schema/tasky';
+import { eq, and, asc } from 'drizzle-orm';
 import {
   generateMarkdownFromSession,
   generateJiraMarkdown,
@@ -23,16 +25,23 @@ export async function GET(
     }
 
     // Verify session belongs to user and get messages
-    const { data: chatSession, error } = await taskyDb
-      .from('chat_sessions')
-      .select('*, messages:chat_messages(*)')
-      .eq('id', id)
-      .eq('user_id', userId)
-      .single();
+    const [chatSession] = await db
+      .select()
+      .from(chatSessions)
+      .where(and(eq(chatSessions.id, id), eq(chatSessions.userId, userId)))
+      .limit(1);
 
-    if (error || !chatSession) {
+    if (!chatSession) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
+
+    const messages = await db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.sessionId, id))
+      .orderBy(asc(chatMessages.createdAt));
+
+    const sessionWithMessages = { ...chatSession, messages };
 
     const searchParams = req.nextUrl.searchParams;
     const format = searchParams.get('format') || 'markdown';
@@ -42,16 +51,16 @@ export async function GET(
 
     switch (format) {
       case 'jira':
-        content = generateJiraMarkdown(chatSession);
-        filename = `${chatSession.title.replace(/\s+/g, '-')}-jira.txt`;
+        content = generateJiraMarkdown(sessionWithMessages);
+        filename = `${sessionWithMessages.title.replace(/\s+/g, '-')}-jira.txt`;
         break;
       case 'trello':
-        content = generateTrelloMarkdown(chatSession);
-        filename = `${chatSession.title.replace(/\s+/g, '-')}-trello.md`;
+        content = generateTrelloMarkdown(sessionWithMessages);
+        filename = `${sessionWithMessages.title.replace(/\s+/g, '-')}-trello.md`;
         break;
       default:
         content = await generateMarkdownFromSession(id);
-        filename = `${chatSession.title.replace(/\s+/g, '-')}.md`;
+        filename = `${sessionWithMessages.title.replace(/\s+/g, '-')}.md`;
     }
 
     return new NextResponse(content, {

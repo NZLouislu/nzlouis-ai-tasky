@@ -132,7 +132,7 @@ function ErrorFallback({
           </div>
           <CardTitle className="text-xl">Something went wrong</CardTitle>
           <p className="text-gray-600">
-            We encountered an unexpected error. Don't worry, your data is safe.
+            We encountered an unexpected error. Don&apos;t worry, your data is safe.
           </p>
         </CardHeader>
 

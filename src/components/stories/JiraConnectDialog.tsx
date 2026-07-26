@@ -159,7 +159,7 @@ export default function JiraConnectDialog({
             <ol className="text-xs text-blue-700 space-y-1 list-decimal list-inside">
               <li>Go to Atlassian Account Settings</li>
               <li>Click on Security → API tokens</li>
-              <li>Click "Create API token"</li>
+              <li>Click &quot;Create API token&quot;</li>
               <li>Give it a name and copy the token</li>
               <li>Paste it here</li>
             </ol>

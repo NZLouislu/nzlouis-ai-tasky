@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { db } from '@/lib/db/connection';
+import { chatSessions, chatMessages } from '@/lib/db/schema/tasky';
+import { eq, and, asc } from 'drizzle-orm';
 import { getUserIdFromRequest } from '@/lib/admin-auth';
 
 // GET /api/chat-sessions/[id] - Get session with messages
@@ -17,18 +19,23 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: chatSession, error } = await taskyDb
-      .from('chat_sessions')
-      .select('*, messages:chat_messages(*)')
-      .eq('id', id)
-      .eq('user_id', userId)
-      .single();
+    const [chatSession] = await db
+      .select()
+      .from(chatSessions)
+      .where(and(eq(chatSessions.id, id), eq(chatSessions.userId, userId)))
+      .limit(1);
 
-    if (error || !chatSession) {
+    if (!chatSession) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ session: chatSession });
+    const messages = await db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.sessionId, id))
+      .orderBy(asc(chatMessages.createdAt));
+
+    return NextResponse.json({ session: { ...chatSession, messages } });
   } catch (error) {
     console.error('Get session error:', error);
     return NextResponse.json(
@@ -55,17 +62,16 @@ export async function PATCH(
     const body = await req.json();
     const { title } = body;
 
-    const { data, error } = await taskyDb
-      .from('chat_sessions')
-      .update({
+    const [updatedSession] = await db
+      .update(chatSessions)
+      .set({
         title,
-        updated_at: new Date().toISOString(),
+        updatedAt: new Date(),
       })
-      .eq('id', id)
-      .eq('user_id', userId)
-      .select();
+      .where(and(eq(chatSessions.id, id), eq(chatSessions.userId, userId)))
+      .returning();
 
-    if (error || !data || data.length === 0) {
+    if (!updatedSession) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
 
@@ -93,14 +99,12 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data, error } = await taskyDb
-      .from('chat_sessions')
-      .delete()
-      .eq('id', id)
-      .eq('user_id', userId)
-      .select();
+    const [deletedSession] = await db
+      .delete(chatSessions)
+      .where(and(eq(chatSessions.id, id), eq(chatSessions.userId, userId)))
+      .returning();
 
-    if (error || !data || data.length === 0) {
+    if (!deletedSession) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
 

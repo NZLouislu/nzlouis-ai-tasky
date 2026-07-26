@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { blogDb } from "@/lib/supabase/blog-client";
+import { db } from "@/lib/db/connection";
+import { comments } from "@/lib/db/schema/blog";
+import { eq, desc } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   try {
-    if (!blogDb) {
-      return NextResponse.json(
-        { error: "Database not configured" },
-        { status: 503 }
-      );
-    }
-
     const { searchParams } = new URL(request.url);
     const postId = searchParams.get("postId");
 
@@ -20,13 +15,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { data, error } = await blogDb
-      .from("comments")
-      .select("*")
-      .eq("post_id", postId)
-      .order("created_at", { ascending: false });
-
-    if (error) throw error;
+    const data = await db
+      .select()
+      .from(comments)
+      .where(eq(comments.postId, postId))
+      .orderBy(desc(comments.createdAt));
 
     return NextResponse.json(data);
   } catch (error) {
@@ -40,13 +33,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    if (!blogDb) {
-      return NextResponse.json(
-        { error: "Database not configured" },
-        { status: 503 }
-      );
-    }
-
     const body = await request.json();
     const { post_id, name, email, comment, is_anonymous } = body;
 
@@ -57,29 +43,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data, error } = await blogDb
-      .from("comments")
-      .insert({
-        post_id,
+    const [data] = await db
+      .insert(comments)
+      .values({
+        postId: post_id,
         name,
         email,
         comment,
-        is_anonymous: is_anonymous || false,
+        isAnonymous: is_anonymous || false,
       })
-      .select();
+      .returning();
 
-    if (error) throw error;
-
-    // Check if any rows were inserted
-    if (!data || data.length === 0) {
+    if (!data) {
       return NextResponse.json(
         { error: "Failed to create comment" },
         { status: 500 }
       );
     }
 
-    // Return the first (and should be only) created comment
-    const createdComment = data[0];
+    const createdComment = data;
 
     return NextResponse.json(createdComment);
   } catch (error) {

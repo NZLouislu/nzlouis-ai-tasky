@@ -113,7 +113,7 @@ async function callLLM(
           const jsonStr = line.substring(2);
           const text = JSON.parse(jsonStr);
           fullResponse += text;
-        } catch (error) {
+        } catch {
           // Silently skip parsing errors
         }
       }
@@ -193,7 +193,7 @@ function parseJSON(response: string): any | null {
     // First try parsing as is (after basic cleanup)
     try {
       return JSON.parse(jsonStr);
-    } catch (e) {
+    } catch {
       // If that fails, try the robust repair for unescaped newlines
       console.log('⚠️ Standard JSON parse failed, attempting repair for unescaped newlines...');
       const repairedStr = repairJsonString(jsonStr);
@@ -217,7 +217,7 @@ async function processSmartInstruction(params: {
   userId?: string;
   modelId?: string;
 }): Promise<string> {
-  const { instruction, chatHistory, currentContent, currentTitle, userId, modelId } = params;
+  const { instruction, chatHistory, currentTitle, userId, modelId } = params;
   
   // Detect if user is referring to previous suggestions
   const referencePatterns = [
@@ -558,7 +558,7 @@ ${lengthGuideline}
 }
 
 // Generate detailed Chinese content based on topic
-function generateDetailedChineseContent(topic: string): string {
+function _generateDetailedChineseContent(topic: string): string {
   const topicLower = topic.toLowerCase();
   
   // Topic-specific detailed content
@@ -603,7 +603,7 @@ ${topic}是一个值得深入探讨的重要主题。在当今快速发展的时
 }
 
 // Generate detailed English content based on topic
-function generateDetailedEnglishContent(topic: string): string {
+function _generateDetailedEnglishContent(topic: string): string {
   const topicLower = topic.toLowerCase();
   
   if (topicLower.includes('universe') || topicLower.includes('big bang') || topicLower.includes('cosmos')) {

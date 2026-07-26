@@ -1,5 +1,7 @@
-import { taskyDb } from '../supabase/tasky-db-client';
+import { db } from '@/lib/db/connection';
+import { userAISettings } from '@/lib/db/schema/tasky';
 import { AIProvider } from './providers';
+import { eq } from 'drizzle-orm';
 
 export interface UserAISettings {
   defaultProvider: AIProvider;
@@ -10,13 +12,13 @@ export interface UserAISettings {
 }
 
 export async function getUserAISettings(userId: string): Promise<UserAISettings> {
-  const { data: settings, error } = await taskyDb
-    .from('user_ai_settings')
-    .select('*')
-    .eq('user_id', userId)
-    .single();
+  const [settings] = await db
+    .select()
+    .from(userAISettings)
+    .where(eq(userAISettings.userId, userId))
+    .limit(1);
 
-  if (error || !settings) {
+  if (!settings) {
     console.warn(`⚠️ No AI settings found for user ${userId}, using defaults`);
     return {
       defaultProvider: 'google',
@@ -28,11 +30,11 @@ export async function getUserAISettings(userId: string): Promise<UserAISettings>
   }
 
   return {
-    defaultProvider: settings.default_provider as AIProvider,
-    defaultModel: settings.default_model,
-    temperature: settings.temperature,
-    maxTokens: settings.max_tokens === 1024 ? 4096 : settings.max_tokens,
-    systemPrompt: settings.system_prompt,
+    defaultProvider: settings.defaultProvider as AIProvider,
+    defaultModel: settings.defaultModel,
+    temperature: settings.temperature / 10,
+    maxTokens: settings.maxTokens === 1024 ? 4096 : settings.maxTokens,
+    systemPrompt: settings.systemPrompt,
   };
 }
 
@@ -40,64 +42,72 @@ export async function updateUserAISettings(
   userId: string,
   settings: Partial<UserAISettings>
 ): Promise<UserAISettings> {
-  const { data: updated, error } = await taskyDb
-    .from('user_ai_settings')
-    .upsert({
-      user_id: userId,
-      default_provider: settings.defaultProvider || 'google',
-      default_model: settings.defaultModel || 'gemini-3-flash-preview',
-      temperature: settings.temperature ?? 0.8,
-      max_tokens: settings.maxTokens ?? 4096,
-      system_prompt: settings.systemPrompt || 'You are a helpful AI assistant with vision capabilities. You can see and analyze images provided by users. When comparing items or presenting structured data, please use Markdown tables for better readability.',
+  const [updated] = await db
+    .insert(userAISettings)
+    .values({
+      userId,
+      defaultProvider: settings.defaultProvider || 'google',
+      defaultModel: settings.defaultModel || 'gemini-3-flash-preview',
+      temperature: settings.temperature !== undefined ? Math.round(settings.temperature * 10) : 8,
+      maxTokens: settings.maxTokens ?? 4096,
+      systemPrompt: settings.systemPrompt || 'You are a helpful AI assistant with vision capabilities. You can see and analyze images provided by users. When comparing items or presenting structured data, please use Markdown tables for better readability.',
     })
-    .select()
-    .single();
+    .onConflictDoUpdate({
+      target: userAISettings.userId,
+      set: {
+        defaultProvider: settings.defaultProvider || 'google',
+        defaultModel: settings.defaultModel || 'gemini-3-flash-preview',
+        temperature: settings.temperature !== undefined ? Math.round(settings.temperature * 10) : 8,
+        maxTokens: settings.maxTokens ?? 4096,
+        systemPrompt: settings.systemPrompt || 'You are a helpful AI assistant with vision capabilities. You can see and analyze images provided by users. When comparing items or presenting structured data, please use Markdown tables for better readability.',
+      },
+    })
+    .returning();
 
-  if (error || !updated) {
+  if (!updated) {
     throw new Error('Failed to update AI settings');
   }
 
   return {
-    defaultProvider: updated.default_provider as AIProvider,
-    defaultModel: updated.default_model,
-    temperature: updated.temperature,
-    maxTokens: updated.max_tokens,
-    systemPrompt: updated.system_prompt,
+    defaultProvider: updated.defaultProvider as AIProvider,
+    defaultModel: updated.defaultModel,
+    temperature: updated.temperature / 10,
+    maxTokens: updated.maxTokens,
+    systemPrompt: updated.systemPrompt,
   };
 }
 
 export async function ensureUserAISettings(userId: string): Promise<UserAISettings> {
-  const { data: existing, error: fetchError } = await taskyDb
-    .from('user_ai_settings')
-    .select('*')
-    .eq('user_id', userId)
-    .single();
+  const [existing] = await db
+    .select()
+    .from(userAISettings)
+    .where(eq(userAISettings.userId, userId))
+    .limit(1);
 
-  if (existing && !fetchError) {
+  if (existing) {
     return {
-      defaultProvider: existing.default_provider as AIProvider,
-      defaultModel: existing.default_model,
-      temperature: existing.temperature,
-      maxTokens: existing.max_tokens,
-      systemPrompt: existing.system_prompt,
+      defaultProvider: existing.defaultProvider as AIProvider,
+      defaultModel: existing.defaultModel,
+      temperature: existing.temperature / 10,
+      maxTokens: existing.maxTokens,
+      systemPrompt: existing.systemPrompt,
     };
   }
 
-  const { data: created, error: createError } = await taskyDb
-    .from('user_ai_settings')
-    .insert({
-      user_id: userId,
-      default_provider: 'google',
-      default_model: 'gemini-3-flash-preview',
-      temperature: 0.8,
-      max_tokens: 4096,
-      system_prompt: 'You are a helpful AI assistant with vision capabilities. You can see and analyze images provided by users. When comparing items or presenting structured data, please use Markdown tables for better readability.',
+  const [created] = await db
+    .insert(userAISettings)
+    .values({
+      userId,
+      defaultProvider: 'google',
+      defaultModel: 'gemini-3-flash-preview',
+      temperature: 8,
+      maxTokens: 4096,
+      systemPrompt: 'You are a helpful AI assistant with vision capabilities. You can see and analyze images provided by users. When comparing items or presenting structured data, please use Markdown tables for better readability.',
     })
-    .select()
-    .single();
+    .returning();
 
-  if (createError || !created) {
-    console.error('Failed to create AI settings for user:', userId, createError);
+  if (!created) {
+    console.error('Failed to create AI settings for user:', userId);
     return {
       defaultProvider: 'google',
       defaultModel: 'gemini-3-flash-preview',
@@ -108,10 +118,10 @@ export async function ensureUserAISettings(userId: string): Promise<UserAISettin
   }
 
   return {
-    defaultProvider: created.default_provider as AIProvider,
-    defaultModel: created.default_model,
-    temperature: created.temperature,
-    maxTokens: created.max_tokens,
-    systemPrompt: created.system_prompt,
+    defaultProvider: created.defaultProvider as AIProvider,
+    defaultModel: created.defaultModel,
+    temperature: created.temperature / 10,
+    maxTokens: created.maxTokens,
+    systemPrompt: created.systemPrompt,
   };
 }

@@ -13,7 +13,7 @@ export interface QualityScore {
 }
 
 export class QualityAnalyzer {
-  analyze(blocks: PartialBlock[], title: string): QualityScore {
+  analyze(blocks: PartialBlock[], _title: string): QualityScore {
     const structureScore = this.analyzeStructure(blocks);
     const contentScore = this.analyzeContent(blocks);
     const readabilityScore = this.analyzeReadability(blocks);

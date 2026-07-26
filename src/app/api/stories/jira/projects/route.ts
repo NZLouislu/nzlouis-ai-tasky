@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { db } from '@/lib/db/connection';
+import { userPlatformConfigs, storiesProjects, storiesDocuments } from '@/lib/db/schema/stories';
+import { eq, and } from 'drizzle-orm';
 import { decrypt } from '@/lib/encryption';
 import { getUserIdFromRequest } from '@/lib/admin-auth';
 
@@ -16,21 +18,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get user's Jira configuration
-    const { data: configs, error: configError } = await taskyDb
-      .from('user_platform_configs')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('platform', 'jira')
-      .eq('is_active', true);
-
-    if (configError) {
-      console.error('Database error:', configError);
-      return NextResponse.json(
-        { error: 'Failed to fetch Jira configurations' },
-        { status: 500 }
+    const configs = await db
+      .select()
+      .from(userPlatformConfigs)
+      .where(
+        and(
+          eq(userPlatformConfigs.userId, userId),
+          eq(userPlatformConfigs.platform, 'jira'),
+          eq(userPlatformConfigs.isActive, true),
+        )
       );
-    }
 
     if (!configs || configs.length === 0) {
       return NextResponse.json(
@@ -39,12 +36,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const config = configs[0]; // Use the first active configuration
+    const config = configs[0];
 
-    // Decrypt API Token
     let jiraApiToken: string;
     try {
-      jiraApiToken = decrypt(config.jira_api_token_encrypted);
+      jiraApiToken = decrypt(config.jiraApiTokenEncrypted!);
     } catch (error) {
       console.error('Failed to decrypt Jira API token:', error);
       return NextResponse.json(
@@ -53,11 +49,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get Jira projects list
     try {
-      const projectsResponse = await fetch(`${config.jira_url}/rest/api/3/project`, {
+      const projectsResponse = await fetch(`${config.jiraUrl}/rest/api/3/project`, {
         headers: {
-          'Authorization': `Basic ${Buffer.from(`${config.jira_email}:${jiraApiToken}`).toString('base64')}`,
+          'Authorization': `Basic ${Buffer.from(`${config.jiraEmail}:${jiraApiToken}`).toString('base64')}`,
           'Accept': 'application/json',
         },
       });
@@ -71,7 +66,6 @@ export async function GET(request: NextRequest) {
 
       const projects = await projectsResponse.json();
 
-      // Filter and format project data
       const formattedProjects = projects.map((project: any) => ({
         id: project.id,
         key: project.key,
@@ -86,8 +80,8 @@ export async function GET(request: NextRequest) {
         success: true,
         projects: formattedProjects,
         totalCount: formattedProjects.length,
-        jiraUrl: config.jira_url,
-        configName: config.config_name,
+        jiraUrl: config.jiraUrl,
+        configName: config.configName,
       });
 
     } catch (error) {
@@ -129,15 +123,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get user's Jira configuration
-    const { data: configs, error: configError } = await taskyDb
-      .from('user_platform_configs')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('platform', 'jira')
-      .eq('is_active', true);
+    const configs = await db
+      .select()
+      .from(userPlatformConfigs)
+      .where(
+        and(
+          eq(userPlatformConfigs.userId, userId),
+          eq(userPlatformConfigs.platform, 'jira'),
+          eq(userPlatformConfigs.isActive, true),
+        )
+      );
 
-    if (configError || !configs || configs.length === 0) {
+    if (!configs || configs.length === 0) {
       return NextResponse.json(
         { error: 'No active Jira configuration found' },
         { status: 404 }
@@ -146,45 +143,34 @@ export async function POST(request: NextRequest) {
 
     const config = configs[0];
 
-    // Create Stories project record
-    const { data: project, error: projectError } = await taskyDb
-      .from('stories_projects')
-      .insert({
-        user_id: userId,
+    const [project] = await db
+      .insert(storiesProjects)
+      .values({
+        userId,
         platform: 'jira',
-        platform_project_id: projectKey,
-        project_name: projectName,
-        google_account_email: session?.user?.email || '',
-        connection_status: 'connected',
-        platform_credentials: {
-          jira_url: config.jira_url,
-          jira_email: config.jira_email,
+        platformProjectId: projectKey,
+        projectName,
+        googleAccountEmail: session?.user?.email || '',
+        connectionStatus: 'connected',
+        platformCredentials: {
+          jira_url: config.jiraUrl,
+          jira_email: config.jiraEmail,
           project_key: projectKey,
         },
-        project_metadata: {
-          config_name: config.config_name,
+        projectMetadata: {
+          config_name: config.configName,
           created_from: 'api',
         },
       })
-      .select('*')
-      .single();
+      .returning();
 
-    if (projectError) {
-      console.error('Database error:', projectError);
-      return NextResponse.json(
-        { error: 'Failed to create project record' },
-        { status: 500 }
-      );
-    }
-
-    // Create default Report document
     const reportFileName = `${projectName.replace(/\s+/g, '-')}-Report.md`;
-    const { data: reportDoc, error: reportError } = await taskyDb
-      .from('stories_documents')
-      .insert({
-        project_id: project.id,
-        document_type: 'report',
-        file_name: reportFileName,
+    const [reportDoc] = await db
+      .insert(storiesDocuments)
+      .values({
+        projectId: project.id,
+        documentType: 'report',
+        fileName: reportFileName,
         title: `${projectName} Report`,
         content: [
           {
@@ -213,21 +199,15 @@ This is the project report for ${projectName}.
           project_key: projectKey,
         },
       })
-      .select('*')
-      .single();
+      .returning();
 
-    if (reportError) {
-      console.error('Failed to create report document:', reportError);
-    }
-
-    // Create default Stories document
     const storiesFileName = `${projectName.replace(/\s+/g, '-')}-Jira-Stories.md`;
-    const { data: storiesDoc, error: storiesError } = await taskyDb
-      .from('stories_documents')
-      .insert({
-        project_id: project.id,
-        document_type: 'stories',
-        file_name: storiesFileName,
+    await db
+      .insert(storiesDocuments)
+      .values({
+        projectId: project.id,
+        documentType: 'stories',
+        fileName: storiesFileName,
         title: `${projectName} Stories`,
         content: [
           {
@@ -245,12 +225,7 @@ This is the project report for ${projectName}.
           project_key: projectKey,
         },
       })
-      .select('*')
-      .single();
-
-    if (storiesError) {
-      console.error('Failed to create stories document:', storiesError);
-    }
+      .returning();
 
     return NextResponse.json({
       success: true,
@@ -260,10 +235,10 @@ This is the project report for ${projectName}.
         projectKey,
         projectName,
         platform: 'jira',
-        createdAt: project.created_at,
+        createdAt: project.createdAt,
         reportDocument: reportDoc ? {
           id: reportDoc.id,
-          fileName: reportDoc.file_name,
+          fileName: reportDoc.fileName,
           title: reportDoc.title,
         } : null,
       }

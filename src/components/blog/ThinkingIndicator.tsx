@@ -14,7 +14,7 @@ interface ThinkingIndicatorProps {
   progress?: number;
 }
 
-export function ThinkingIndicator({ planning, currentStage = 'planning', progress = 0 }: ThinkingIndicatorProps) {
+export function ThinkingIndicator({ planning, currentStage = 'planning' }: ThinkingIndicatorProps) {
   const stages = [
     { id: 'perception', label: 'Understanding', icon: '🧠' },
     { id: 'planning', label: 'Planning', icon: '📋' },

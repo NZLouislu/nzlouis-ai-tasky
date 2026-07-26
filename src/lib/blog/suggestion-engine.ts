@@ -99,7 +99,7 @@ export class SuggestionEngine {
     });
 
     const repetitive = Array.from(wordCount.entries())
-      .filter(([word, count]) => count > 5)
+      .filter(([, count]) => count > 5)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3);
 

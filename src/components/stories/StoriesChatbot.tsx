@@ -178,7 +178,7 @@ export default function StoriesChatbot({
             {messages.length === 0 && (
               <div className="text-center text-gray-500 text-sm">
                 <p className="mb-3">
-                  Hi! I'm here to help you with your {documentType === 'report' ? 'project report' : 'user stories'}.
+                  Hi! I&apos;m here to help you with your {documentType === 'report' ? 'project report' : 'user stories'}.
                 </p>
                 
                 {/* Quick Action Buttons */}

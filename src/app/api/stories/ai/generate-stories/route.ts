@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { db } from '@/lib/db/connection';
+import { storiesProjects, storiesDocuments } from '@/lib/db/schema/stories';
+import { eq, and } from 'drizzle-orm';
 import { generateText } from 'ai';
-import { generateDocument } from '@/lib/stories/document-generator';
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,44 +29,40 @@ export async function POST(request: NextRequest) {
     let reportContent = '';
     let projectData = null;
 
-    // Get report content if reportDocumentId provided
     if (reportDocumentId) {
-      const { data: reportDoc, error: reportError } = await taskyDb
-        .from('stories_documents')
-        .select(`
-          *,
-          stories_projects!inner(
-            id,
-            project_name,
-            platform,
-            user_id
+      const [row] = await db
+        .select()
+        .from(storiesDocuments)
+        .innerJoin(storiesProjects, eq(storiesDocuments.projectId, storiesProjects.id))
+        .where(
+          and(
+            eq(storiesDocuments.id, reportDocumentId),
+            eq(storiesProjects.userId, session.user.id),
+            eq(storiesDocuments.documentType, 'report'),
           )
-        `)
-        .eq('id', reportDocumentId)
-        .eq('stories_projects.user_id', session.user.id)
-        .eq('document_type', 'report')
-        .single();
+        );
 
-      if (reportError || !reportDoc) {
+      if (!row) {
         return NextResponse.json(
           { error: 'Report document not found or access denied' },
           { status: 404 }
         );
       }
 
-      // Convert BlockNote content to text
-      reportContent = extractTextFromBlockNote(reportDoc.content);
-      projectData = reportDoc.stories_projects;
+      reportContent = extractTextFromBlockNote(row.stories_documents.content as any[]);
+      projectData = row.stories_projects;
     } else if (projectId) {
-      // Get project data
-      const { data: project, error: projectError } = await taskyDb
-        .from('stories_projects')
-        .select('*')
-        .eq('id', projectId)
-        .eq('user_id', session.user.id)
-        .single();
+      const [project] = await db
+        .select()
+        .from(storiesProjects)
+        .where(
+          and(
+            eq(storiesProjects.id, projectId),
+            eq(storiesProjects.userId, session.user.id),
+          )
+        );
 
-      if (projectError || !project) {
+      if (!project) {
         return NextResponse.json(
           { error: 'Project not found or access denied' },
           { status: 404 }
@@ -73,10 +70,9 @@ export async function POST(request: NextRequest) {
       }
 
       projectData = project;
-      reportContent = `Project: ${project.project_name}\nPlatform: ${project.platform}`;
+      reportContent = `Project: ${project.projectName}\nPlatform: ${project.platform}`;
     }
 
-    // Create platform-specific prompt
     const platformTemplates = {
       jira: {
         storyFormat: `- Story: STORY-XXX Story Title
@@ -125,7 +121,7 @@ ${template.storyFormat}
 ${template.instructions}
 
 Project Platform: ${platform.toUpperCase()}
-Project Name: ${projectData?.project_name || 'Unknown Project'}`;
+Project Name: ${projectData?.projectName || 'Unknown Project'}`;
 
     const userPrompt = `Based on the following project report, please generate comprehensive user stories:
 
@@ -149,39 +145,27 @@ Please generate 5-10 user stories that cover the main features and requirements 
         temperature: settings.temperature || 0.7,
       });
 
-      // Create stories document
-      const storiesFileName = `${projectData?.project_name?.replace(/\s+/g, '-') || 'Project'}-${platform.charAt(0).toUpperCase() + platform.slice(1)}-Stories.md`;
+      const storiesFileName = `${projectData?.projectName?.replace(/\s+/g, '-') || 'Project'}-${platform.charAt(0).toUpperCase() + platform.slice(1)}-Stories.md`;
       
-      // Convert generated text to BlockNote format
       const blockNoteContent = parseMarkdownToBlockNote(text);
 
-      // Save stories document to database
-      const { data: storiesDoc, error: saveError } = await taskyDb
-        .from('stories_documents')
-        .insert({
-          project_id: projectData?.id || projectId,
-          document_type: 'stories',
-          file_name: storiesFileName,
-          title: `${projectData?.project_name || 'Project'} ${platform.charAt(0).toUpperCase() + platform.slice(1)} Stories`,
+      const [storiesDoc] = await db
+        .insert(storiesDocuments)
+        .values({
+          projectId: projectData?.id || projectId,
+          documentType: 'stories',
+          fileName: storiesFileName,
+          title: `${projectData?.projectName || 'Project'} ${platform.charAt(0).toUpperCase() + platform.slice(1)} Stories`,
           content: blockNoteContent,
           metadata: {
             generated_from: 'ai',
             source_report_id: reportDocumentId,
             platform,
-            generated_at: new Date().toISOString(),
+            generated_at: new Date(),
             ai_model: 'gemini-3-flash-preview',
           },
         })
-        .select('*')
-        .single();
-
-      if (saveError) {
-        console.error('Failed to save stories document:', saveError);
-        return NextResponse.json(
-          { error: 'Failed to save generated stories' },
-          { status: 500 }
-        );
-      }
+        .returning();
 
       return NextResponse.json({
         success: true,
@@ -208,7 +192,6 @@ Please generate 5-10 user stories that cover the main features and requirements 
   }
 }
 
-// Helper function to extract text from BlockNote content
 function extractTextFromBlockNote(content: any[]): string {
   if (!Array.isArray(content)) return '';
   
@@ -220,7 +203,6 @@ function extractTextFromBlockNote(content: any[]): string {
   }).join('\n');
 }
 
-// Helper function to convert markdown to BlockNote format
 function parseMarkdownToBlockNote(markdown: string): any[] {
   const lines = markdown.split('\n');
   const blocks: any[] = [];
@@ -236,7 +218,6 @@ function parseMarkdownToBlockNote(markdown: string): any[] {
       continue;
     }
     
-    // Headers
     if (line.startsWith('# ')) {
       blocks.push({
         type: 'heading',
@@ -256,21 +237,18 @@ function parseMarkdownToBlockNote(markdown: string): any[] {
         content: [{ type: 'text', text: line.substring(4) }]
       });
     }
-    // Bullet points
     else if (line.startsWith('- ') || line.startsWith('* ')) {
       blocks.push({
         type: 'bulletListItem',
         content: [{ type: 'text', text: line.substring(2) }]
       });
     }
-    // Numbered lists
     else if (/^\d+\.\s/.test(line)) {
       blocks.push({
         type: 'numberedListItem',
         content: [{ type: 'text', text: line.replace(/^\d+\.\s/, '') }]
       });
     }
-    // Regular paragraphs
     else {
       blocks.push({
         type: 'paragraph',

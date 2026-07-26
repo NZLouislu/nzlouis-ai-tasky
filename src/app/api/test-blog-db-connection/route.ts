@@ -1,27 +1,13 @@
 import { NextResponse } from "next/server";
-import { blogDb } from "@/lib/supabase/blog-client";
+import { db } from '@/lib/db/connection';
+import { featureToggles } from '@/lib/db/schema/blog';
 
 export async function GET() {
   try {
-    if (!blogDb) {
-      return NextResponse.json(
-        { error: "Blog database client is not initialized" },
-        { status: 500 }
-      );
-    }
-
-    // Test database connection
-    const { data, error } = await blogDb
-      .from("feature_toggles")
-      .select("*")
+    const data = await db
+      .select()
+      .from(featureToggles)
       .limit(1);
-
-    if (error) {
-      return NextResponse.json(
-        { error: "Database connection failed", details: error.message },
-        { status: 500 }
-      );
-    }
 
     return NextResponse.json({
       success: true,

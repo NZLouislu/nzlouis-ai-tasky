@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { getUserIdFromRequest } from '@/lib/admin-auth';
-import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { db } from '@/lib/db/connection';
+import { userAPIKeys } from '@/lib/db/schema/tasky';
+import { eq } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
   try {
@@ -12,15 +14,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: keys, error } = await taskyDb
-      .from('user_api_keys')
-      .select('provider, created_at, updated_at')
-      .eq('user_id', userId);
-
-    if (error) {
-      console.error('Error fetching API keys:', error);
-      return NextResponse.json({ error: 'Failed to fetch API keys' }, { status: 500 });
-    }
+    const keys = await db
+      .select({
+        provider: userAPIKeys.provider,
+        createdAt: userAPIKeys.createdAt,
+        updatedAt: userAPIKeys.updatedAt,
+      })
+      .from(userAPIKeys)
+      .where(eq(userAPIKeys.userId, userId));
 
     return NextResponse.json({ 
       userId,

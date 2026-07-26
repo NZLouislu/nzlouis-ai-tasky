@@ -1,5 +1,8 @@
 import { PartialBlock } from '@blocknote/core';
-import { supabase } from '@/lib/supabase/supabase-client';
+import { db } from '@/lib/db/connection';
+import { articleVersions } from '@/lib/db/schema/tasky';
+import { blogPosts } from '@/lib/db/schema/tasky';
+import { eq, desc, inArray } from 'drizzle-orm';
 
 export interface ArticleVersion {
   id: string;
@@ -22,32 +25,26 @@ export class VersionControl {
     trigger: 'ai' | 'auto' | 'manual',
     description?: string
   ): Promise<ArticleVersion | null> {
-    if (!supabase) {
-      console.error('Supabase client not initialized');
-      return null;
-    }
-
     try {
-      const { data, error } = await supabase
-        .from('article_versions')
-        .insert({
-          post_id: postId,
+      const [data] = await db
+        .insert(articleVersions)
+        .values({
+          postId: postId,
           content,
           metadata: { trigger, description },
-          created_by: userId,
+          createdBy: userId,
         })
-        .select()
-        .single();
+        .returning();
 
-      if (error) throw error;
+      if (!data) return null;
 
       return {
         id: data.id,
-        postId: data.post_id,
-        content: data.content,
-        metadata: data.metadata,
-        createdAt: data.created_at,
-        createdBy: data.created_by,
+        postId: data.postId,
+        content: data.content as PartialBlock[],
+        metadata: data.metadata as { trigger: 'ai' | 'auto' | 'manual'; description?: string; title?: string },
+        createdAt: data.createdAt ? data.createdAt.toISOString() : new Date().toISOString(),
+        createdBy: data.createdBy || '',
       };
     } catch (error) {
       console.error('Failed to save version:', error);
@@ -56,28 +53,21 @@ export class VersionControl {
   }
 
   async getVersionHistory(postId: string, limit = 50): Promise<ArticleVersion[]> {
-    if (!supabase) {
-      console.error('Supabase client not initialized');
-      return [];
-    }
-
     try {
-      const { data, error } = await supabase
-        .from('article_versions')
-        .select('*')
-        .eq('post_id', postId)
-        .order('created_at', { ascending: false })
+      const data = await db
+        .select()
+        .from(articleVersions)
+        .where(eq(articleVersions.postId, postId))
+        .orderBy(desc(articleVersions.createdAt))
         .limit(limit);
 
-      if (error) throw error;
-
-      return (data || []).map((v: any) => ({
+      return (data || []).map((v) => ({
         id: v.id,
-        postId: v.post_id,
-        content: v.content,
-        metadata: v.metadata,
-        createdAt: v.created_at,
-        createdBy: v.created_by,
+        postId: v.postId,
+        content: v.content as PartialBlock[],
+        metadata: v.metadata as { trigger: 'ai' | 'auto' | 'manual'; description?: string; title?: string },
+        createdAt: v.createdAt ? v.createdAt.toISOString() : '',
+        createdBy: v.createdBy || '',
       }));
     } catch (error) {
       console.error('Failed to get version history:', error);
@@ -86,27 +76,22 @@ export class VersionControl {
   }
 
   async getVersion(versionId: string): Promise<ArticleVersion | null> {
-    if (!supabase) {
-      console.error('Supabase client not initialized');
-      return null;
-    }
-
     try {
-      const { data, error } = await supabase
-        .from('article_versions')
-        .select('*')
-        .eq('id', versionId)
-        .single();
+      const [data] = await db
+        .select()
+        .from(articleVersions)
+        .where(eq(articleVersions.id, versionId))
+        .limit(1);
 
-      if (error) throw error;
+      if (!data) return null;
 
       return {
         id: data.id,
-        postId: data.post_id,
-        content: data.content,
-        metadata: data.metadata,
-        createdAt: data.created_at,
-        createdBy: data.created_by,
+        postId: data.postId,
+        content: data.content as PartialBlock[],
+        metadata: data.metadata as { trigger: 'ai' | 'auto' | 'manual'; description?: string; title?: string },
+        createdAt: data.createdAt ? data.createdAt.toISOString() : '',
+        createdBy: data.createdBy || '',
       };
     } catch (error) {
       console.error('Failed to get version:', error);
@@ -115,21 +100,14 @@ export class VersionControl {
   }
 
   async rollbackToVersion(versionId: string): Promise<boolean> {
-    if (!supabase) {
-      console.error('Supabase client not initialized');
-      return false;
-    }
-
     try {
       const version = await this.getVersion(versionId);
       if (!version) return false;
 
-      const { error } = await supabase
-        .from('blog_posts')
-        .update({ content: version.content })
-        .eq('id', version.postId);
-
-      if (error) throw error;
+      await db
+        .update(blogPosts)
+        .set({ content: version.content })
+        .where(eq(blogPosts.id, version.postId));
 
       return true;
     } catch (error) {
@@ -139,24 +117,16 @@ export class VersionControl {
   }
 
   async deleteOldVersions(postId: string, keepLast = 50): Promise<number> {
-    if (!supabase) {
-      console.error('Supabase client not initialized');
-      return 0;
-    }
-
     try {
       const versions = await this.getVersionHistory(postId, 1000);
-      
+
       if (versions.length <= keepLast) return 0;
 
       const toDelete = versions.slice(keepLast).map((v) => v.id);
 
-      const { error } = await supabase
-        .from('article_versions')
-        .delete()
-        .in('id', toDelete);
-
-      if (error) throw error;
+      await db
+        .delete(articleVersions)
+        .where(inArray(articleVersions.id, toDelete));
 
       return toDelete.length;
     } catch (error) {

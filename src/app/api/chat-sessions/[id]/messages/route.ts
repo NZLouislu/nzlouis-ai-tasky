@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { db } from '@/lib/db/connection';
+import { chatSessions, chatMessages } from '@/lib/db/schema/tasky';
+import { eq, and } from 'drizzle-orm';
 import { getUserIdFromRequest } from '@/lib/admin-auth';
 
 // POST /api/chat-sessions/[id]/messages - Save messages
@@ -18,14 +20,13 @@ export async function POST(
     }
 
     // Verify session belongs to user
-    const { data: chatSession, error: sessionError } = await taskyDb
-      .from('chat_sessions')
-      .select('id')
-      .eq('id', id)
-      .eq('user_id', userId)
-      .single();
+    const [chatSession] = await db
+      .select({ id: chatSessions.id })
+      .from(chatSessions)
+      .where(and(eq(chatSessions.id, id), eq(chatSessions.userId, userId)))
+      .limit(1);
 
-    if (sessionError || !chatSession) {
+    if (!chatSession) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 });
     }
 
@@ -38,32 +39,29 @@ export async function POST(
 
     // Save messages
     interface MessageInput {
-      role: string;
+      role: 'user' | 'assistant' | 'system';
       content: string;
       imageUrl?: string;
     }
     
-    const { data: savedMessages, error: messagesError } = await taskyDb
-      .from('chat_messages')
-      .insert(
+    const savedMessages = await db
+      .insert(chatMessages)
+      .values(
         (messages as MessageInput[]).map((msg) => ({
           id: crypto.randomUUID(),
-          session_id: id,
+          sessionId: id,
           role: msg.role,
           content: msg.content,
-          image_url: msg.imageUrl || null,
-          created_at: new Date().toISOString(),
+          imageUrl: msg.imageUrl || null,
         }))
       )
-      .select();
-
-    if (messagesError) throw messagesError;
+      .returning();
 
     // Update session timestamp
-    await taskyDb
-      .from('chat_sessions')
-      .update({ updated_at: new Date().toISOString() })
-      .eq('id', id);
+    await db
+      .update(chatSessions)
+      .set({ updatedAt: new Date() })
+      .where(eq(chatSessions.id, id));
 
     return NextResponse.json({ 
       success: true,

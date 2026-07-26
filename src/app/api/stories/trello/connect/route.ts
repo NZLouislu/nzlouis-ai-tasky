@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { db } from '@/lib/db/connection';
+import { userPlatformConfigs, storiesPlatformConnections } from '@/lib/db/schema/stories';
+import { eq, and } from 'drizzle-orm';
 import { encrypt } from '@/lib/encryption';
 
 interface TrelloConnectionRequest {
@@ -53,43 +55,51 @@ export async function POST(request: NextRequest) {
 
       const boards = await testResponse.json();
       
-      const { data, error } = await taskyDb
-        .from('user_platform_configs')
-        .upsert({
-          user_id: session.user.id,
+      const [result] = await db
+        .insert(userPlatformConfigs)
+        .values({
+          userId: session.user.id,
           platform: 'trello',
-          trello_key_encrypted: encryptedKey,
-          trello_token_encrypted: encryptedToken,
-          trello_board_id: trelloBoardId || null,
-          config_name: configName,
-          is_active: true,
-          updated_at: new Date().toISOString(),
-        }, {
-          onConflict: 'user_id,platform,config_name'
+          trelloKeyEncrypted: encryptedKey,
+          trelloTokenEncrypted: encryptedToken,
+          trelloBoardId: trelloBoardId || null,
+          configName,
+          isActive: true,
+          updatedAt: new Date(),
         })
-        .select('id, created_at, updated_at');
+        .onConflictDoUpdate({
+          target: [userPlatformConfigs.userId, userPlatformConfigs.platform, userPlatformConfigs.configName],
+          set: {
+            trelloKeyEncrypted: encryptedKey,
+            trelloTokenEncrypted: encryptedToken,
+            trelloBoardId: trelloBoardId || null,
+            isActive: true,
+            updatedAt: new Date(),
+          },
+        })
+        .returning({ id: userPlatformConfigs.id, createdAt: userPlatformConfigs.createdAt, updatedAt: userPlatformConfigs.updatedAt });
 
-      if (error) {
-        console.error('Database error:', error);
-        return NextResponse.json(
-          { error: 'Failed to save Trello configuration' },
-          { status: 500 }
-        );
-      }
-
-      await taskyDb
-        .from('stories_platform_connections')
-        .upsert({
-          user_id: session.user.id,
+      await db
+        .insert(storiesPlatformConnections)
+        .values({
+          userId: session.user.id,
           platform: 'trello',
-          google_account_email: session.user.email || '',
-          platform_user_id: session.user.id,
-          platform_username: session.user.name || session.user.email || '',
-          connection_status: 'connected',
-          last_verified_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }, {
-          onConflict: 'user_id,platform,google_account_email'
+          googleAccountEmail: session.user.email || '',
+          platformUserId: session.user.id,
+          platformUsername: session.user.name || session.user.email || '',
+          connectionStatus: 'connected',
+          lastVerifiedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: [storiesPlatformConnections.userId, storiesPlatformConnections.platform, storiesPlatformConnections.googleAccountEmail],
+          set: {
+            platformUserId: session.user.id,
+            platformUsername: session.user.name || session.user.email || '',
+            connectionStatus: 'connected',
+            lastVerifiedAt: new Date(),
+            updatedAt: new Date(),
+          },
         });
 
       return NextResponse.json({
@@ -97,12 +107,12 @@ export async function POST(request: NextRequest) {
         message: 'Trello connection established successfully',
         boards: boards,
         config: {
-          id: data?.[0]?.id,
+          id: result?.id,
           platform: 'trello',
           trelloBoardId,
           configName,
-          createdAt: data?.[0]?.created_at,
-          updatedAt: data?.[0]?.updated_at,
+          createdAt: result?.createdAt,
+          updatedAt: result?.updatedAt,
         }
       });
 
@@ -123,7 +133,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const session = await auth();
     
@@ -134,21 +144,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get user's Trello configuration
-    const { data, error } = await taskyDb
-      .from('user_platform_configs_safe')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .eq('platform', 'trello')
-      .eq('is_active', true);
-
-    if (error) {
-      console.error('Database error:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch Trello configurations' },
-        { status: 500 }
+    const data = await db
+      .select({
+        id: userPlatformConfigs.id,
+        userId: userPlatformConfigs.userId,
+        platform: userPlatformConfigs.platform,
+        trelloBoardId: userPlatformConfigs.trelloBoardId,
+        isActive: userPlatformConfigs.isActive,
+        configName: userPlatformConfigs.configName,
+        createdAt: userPlatformConfigs.createdAt,
+        updatedAt: userPlatformConfigs.updatedAt,
+      })
+      .from(userPlatformConfigs)
+      .where(
+        and(
+          eq(userPlatformConfigs.userId, session.user.id),
+          eq(userPlatformConfigs.platform, 'trello'),
+          eq(userPlatformConfigs.isActive, true),
+        )
       );
-    }
 
     return NextResponse.json({
       success: true,
@@ -178,31 +192,28 @@ export async function DELETE(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const configName = searchParams.get('configName') || 'Default';
 
-    // Delete configuration
-    const { error } = await taskyDb
-      .from('user_platform_configs')
-      .delete()
-      .eq('user_id', session.user.id)
-      .eq('platform', 'trello')
-      .eq('config_name', configName);
-
-    if (error) {
-      console.error('Database error:', error);
-      return NextResponse.json(
-        { error: 'Failed to delete Trello configuration' },
-        { status: 500 }
+    await db
+      .delete(userPlatformConfigs)
+      .where(
+        and(
+          eq(userPlatformConfigs.userId, session.user.id),
+          eq(userPlatformConfigs.platform, 'trello'),
+          eq(userPlatformConfigs.configName, configName),
+        )
       );
-    }
 
-    // 更新平台连接状态
-    await taskyDb
-      .from('stories_platform_connections')
-      .update({
-        connection_status: 'disconnected',
-        updated_at: new Date().toISOString(),
+    await db
+      .update(storiesPlatformConnections)
+      .set({
+        connectionStatus: 'disconnected',
+        updatedAt: new Date(),
       })
-      .eq('user_id', session.user.id)
-      .eq('platform', 'trello');
+      .where(
+        and(
+          eq(storiesPlatformConnections.userId, session.user.id),
+          eq(storiesPlatformConnections.platform, 'trello'),
+        )
+      );
 
     return NextResponse.json({
       success: true,

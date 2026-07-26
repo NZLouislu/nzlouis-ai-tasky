@@ -24,7 +24,7 @@ export default function TavilyKeyWarning({ provider, onDismiss }: TavilyKeyWarni
           <p className={`text-sm ${isGoogle ? 'text-blue-800' : 'text-amber-800'} mb-2`}>
             {isGoogle ? (
               <>
-                Web search is enabled using Google's built-in Search Grounding. For enhanced search capabilities with other AI models, consider configuring a Tavily API key in Settings.
+                Web search is enabled using Google&apos;s built-in Search Grounding. For enhanced search capabilities with other AI models, consider configuring a Tavily API key in Settings.
               </>
             ) : (
               <>

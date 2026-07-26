@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { supabaseAdmin } from '@/lib/supabase/supabase-admin';
+import { db } from '@/lib/db/connection';
+import { blogPosts } from '@/lib/db/schema/tasky';
+import { eq } from 'drizzle-orm';
 
-// Clean up and recreate test data
 export async function POST() {
   try {
     const session = await auth();
@@ -13,34 +14,14 @@ export async function POST() {
       );
     }
 
-    if (!supabaseAdmin) {
-      return NextResponse.json(
-        { error: 'Supabase admin client not configured' },
-        { status: 500 }
-      );
-    }
-
-    // 1. Delete all user posts
     console.log('Deleting all posts for user:', session.user.id);
-    const { error: deleteError } = await supabaseAdmin
-      .from('blog_posts')
-      .delete()
-      .eq('user_id', session.user.id);
+    await db.delete(blogPosts).where(eq(blogPosts.userId, session.user.id));
 
-    if (deleteError) {
-      console.error('Error deleting posts:', deleteError);
-      return NextResponse.json(
-        { error: deleteError.message },
-        { status: 500 }
-      );
-    }
-
-    // 2. Create new test data
-    const now = new Date().toISOString();
+    const now = new Date();
     const testPosts = [
       {
         id: crypto.randomUUID(),
-        user_id: session.user.id,
+        userId: session.user.id,
         title: 'Getting Started',
         content: [
           {
@@ -72,14 +53,14 @@ export async function POST() {
         icon: '🚀',
         cover: { type: 'color', value: 'bg-blue-500' },
         published: false,
-        parent_id: null,
+        parentId: null,
         position: null,
-        created_at: now,
-        updated_at: now,
+        createdAt: now,
+        updatedAt: now,
       },
       {
         id: crypto.randomUUID(),
-        user_id: session.user.id,
+        userId: session.user.id,
         title: 'My Second Post',
         content: [
           {
@@ -101,14 +82,14 @@ export async function POST() {
         icon: '📝',
         cover: null,
         published: false,
-        parent_id: null,
+        parentId: null,
         position: null,
-        created_at: now,
-        updated_at: now,
+        createdAt: now,
+        updatedAt: now,
       },
       {
         id: crypto.randomUUID(),
-        user_id: session.user.id,
+        userId: session.user.id,
         title: 'Ideas and Notes',
         content: [
           {
@@ -137,26 +118,14 @@ export async function POST() {
         icon: '💡',
         cover: { type: 'color', value: 'bg-yellow-500' },
         published: false,
-        parent_id: null,
+        parentId: null,
         position: null,
-        created_at: now,
-        updated_at: now,
+        createdAt: now,
+        updatedAt: now,
       },
     ];
 
-    const { data, error: insertError } = await supabaseAdmin
-      .from('blog_posts')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .insert(testPosts as any)
-      .select();
-
-    if (insertError) {
-      console.error('Error creating test posts:', insertError);
-      return NextResponse.json(
-        { error: insertError.message },
-        { status: 500 }
-      );
-    }
+    const data = await db.insert(blogPosts).values(testPosts).returning();
 
     return NextResponse.json({
       success: true,

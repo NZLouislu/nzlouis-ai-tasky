@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { db } from '@/lib/db/connection';
+import { chatSessions, chatMessages } from '@/lib/db/schema/tasky';
+import { eq, desc, inArray, count } from 'drizzle-orm';
 import { getUserIdFromRequest } from '@/lib/admin-auth';
 
 // GET /api/chat-sessions - Get all sessions for user
@@ -13,15 +15,33 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: sessions, error } = await taskyDb
-      .from('chat_sessions')
-      .select('*, messages:chat_messages(count)')
-      .eq('user_id', userId)
-      .order('updated_at', { ascending: false });
+    const sessionsList = await db
+      .select()
+      .from(chatSessions)
+      .where(eq(chatSessions.userId, userId))
+      .orderBy(desc(chatSessions.updatedAt));
 
-    if (error) throw error;
+    let counts: Array<{ sessionId: string; count: number }> = [];
+    if (sessionsList.length > 0) {
+      const countResults = await db
+        .select({
+          sessionId: chatMessages.sessionId,
+          count: count(),
+        })
+        .from(chatMessages)
+        .where(inArray(chatMessages.sessionId, sessionsList.map(s => s.id)))
+        .groupBy(chatMessages.sessionId);
+      counts = countResults.map(r => ({ sessionId: r.sessionId, count: Number(r.count) }));
+    }
 
-    return NextResponse.json({ sessions: sessions || [] });
+    const countMap = new Map(counts.map(c => [c.sessionId, c.count]));
+
+    const sessions = sessionsList.map(session => ({
+      ...session,
+      messages: [{ count: countMap.get(session.id) ?? 0 }],
+    }));
+
+    return NextResponse.json({ sessions });
   } catch (error) {
     console.error('Get sessions error:', error);
     return NextResponse.json(
@@ -44,21 +64,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { title, provider, model } = body;
 
-    const { data: chatSession, error } = await taskyDb
-      .from('chat_sessions')
-      .insert({
+    const [chatSession] = await db
+      .insert(chatSessions)
+      .values({
         id: crypto.randomUUID(),
-        user_id: userId,
+        userId,
         title: title || 'New Chat',
         provider: provider || 'google',
         model: model || 'gemini-2.5-flash',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       })
-      .select()
-      .single();
-
-    if (error) throw error;
+      .returning();
 
     return NextResponse.json({ session: chatSession });
   } catch (error) {

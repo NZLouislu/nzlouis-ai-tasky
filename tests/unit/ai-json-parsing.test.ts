@@ -88,7 +88,7 @@ class JSONExtractor {
    * Parse JSON from LLM response
    */
   parseResponse(response: string): any {
-    let cleanedResponse = response
+    const cleanedResponse = response
       .replace(/```json\s*/g, '')
       .replace(/```\s*/g, '')
       .trim();
@@ -108,7 +108,7 @@ class JSONExtractor {
 
     try {
       return JSON.parse(jsonStr);
-    } catch (e) {
+    } catch {
       const repairedStr = this.repairJsonString(jsonStr);
       return JSON.parse(repairedStr);
     }

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { db } from '@/lib/db/connection';
+import { storiesProjects, storiesDocuments } from '@/lib/db/schema/stories';
+import { eq, and, desc } from 'drizzle-orm';
 import { generateDocument } from '@/lib/stories/document-generator';
 import { getUserIdFromRequest } from '@/lib/admin-auth';
 
@@ -20,36 +22,21 @@ export async function GET(request: NextRequest) {
     const projectId = searchParams.get('projectId');
     const documentType = searchParams.get('type') as 'report' | 'stories' | null;
 
-    let query = taskyDb
-      .from('stories_documents')
-      .select(`
-        *,
-        stories_projects!inner(
-          id,
-          project_name,
-          platform,
-          user_id
-        )
-      `)
-      .eq('stories_projects.user_id', userId);
+    const conditions = [eq(storiesProjects.userId, userId)];
+    if (projectId) conditions.push(eq(storiesDocuments.projectId, projectId));
+    if (documentType) conditions.push(eq(storiesDocuments.documentType, documentType));
 
-    if (projectId) {
-      query = query.eq('project_id', projectId);
-    }
+    const rows = await db
+      .select()
+      .from(storiesDocuments)
+      .innerJoin(storiesProjects, eq(storiesDocuments.projectId, storiesProjects.id))
+      .where(and(...conditions))
+      .orderBy(desc(storiesDocuments.updatedAt));
 
-    if (documentType) {
-      query = query.eq('document_type', documentType);
-    }
-
-    const { data: documents, error } = await query.order('updated_at', { ascending: false });
-
-    if (error) {
-      console.error('Database error:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch documents' },
-        { status: 500 }
-      );
-    }
+    const documents = rows.map(row => ({
+      ...row.stories_documents,
+      stories_projects: row.stories_projects,
+    }));
 
     return NextResponse.json({
       success: true,
@@ -88,26 +75,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: project, error: projectError } = await taskyDb
-      .from('stories_projects')
-      .select('*')
-      .eq('id', projectId)
-      .eq('user_id', userId)
-      .single();
+    const [project] = await db
+      .select()
+      .from(storiesProjects)
+      .where(
+        and(
+          eq(storiesProjects.id, projectId),
+          eq(storiesProjects.userId, userId),
+        )
+      );
 
-    if (projectError || !project) {
+    if (!project) {
       return NextResponse.json(
         { error: 'Project not found or access denied' },
         { status: 404 }
       );
     }
 
-    const { data: existingDoc } = await taskyDb
-      .from('stories_documents')
-      .select('*')
-      .eq('project_id', projectId)
-      .eq('document_type', documentType)
-      .single();
+    const [existingDoc] = await db
+      .select()
+      .from(storiesDocuments)
+      .where(
+        and(
+          eq(storiesDocuments.projectId, projectId),
+          eq(storiesDocuments.documentType, documentType),
+        )
+      );
 
     if (existingDoc) {
       return NextResponse.json({
@@ -123,8 +116,8 @@ export async function POST(request: NextRequest) {
     
     if (!documentContent) {
       const generatedDoc = generateDocument({
-        projectName: project.project_name,
-        projectKey: project.platform_credentials?.project_key || project.platform_credentials?.board_id,
+        projectName: project.projectName,
+        projectKey: (project.platformCredentials as any)?.project_key || (project.platformCredentials as any)?.board_id,
         platform: project.platform as 'jira' | 'trello',
         documentType: documentType as 'report' | 'stories',
       });
@@ -133,31 +126,22 @@ export async function POST(request: NextRequest) {
       documentFileName = documentFileName || generatedDoc.fileName;
     }
 
-    const { data: document, error: docError } = await taskyDb
-      .from('stories_documents')
-      .insert({
-        project_id: projectId,
-        document_type: documentType,
-        file_name: documentFileName || `${project.project_name}-${documentType}.md`,
+    const [document] = await db
+      .insert(storiesDocuments)
+      .values({
+        projectId,
+        documentType,
+        fileName: documentFileName || `${project.projectName}-${documentType}.md`,
         title,
         content: documentContent || [],
         metadata: {
           ...metadata,
           created_from: 'api',
-          project_name: project.project_name,
+          project_name: project.projectName,
           platform: project.platform,
         },
       })
-      .select('*')
-      .single();
-
-    if (docError) {
-      console.error('Database error:', docError);
-      return NextResponse.json(
-        { error: 'Failed to create document' },
-        { status: 500 }
-      );
-    }
+      .returning();
 
     return NextResponse.json({
       success: true,

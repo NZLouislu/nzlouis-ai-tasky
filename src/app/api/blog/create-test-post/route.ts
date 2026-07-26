@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { supabaseAdmin } from '@/lib/supabase/supabase-admin';
+import { db } from '@/lib/db/connection';
+import { blogPosts } from '@/lib/db/schema/tasky';
+
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify user login
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -16,7 +17,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { user_id, title } = body;
 
-    // Verify user_id matches
     if (user_id !== session.user.id) {
       return NextResponse.json(
         { error: 'User ID mismatch' },
@@ -24,21 +24,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!supabaseAdmin) {
-      return NextResponse.json(
-        { error: 'Supabase admin client not configured' },
-        { status: 500 }
-      );
-    }
-
-    // Generate UUID and timestamp
     const postId = crypto.randomUUID();
-    const now = new Date().toISOString();
+    const now = new Date();
 
-    // Use admin client to create post (bypass RLS)
     const insertData = {
       id: postId,
-      user_id,
+      userId: user_id,
       title,
       content: [
         {
@@ -53,28 +44,15 @@ export async function POST(request: NextRequest) {
         },
       ],
       published: false,
-      parent_id: null,
+      parentId: null,
       position: null,
       icon: '📝',
       cover: null,
-      created_at: now,
-      updated_at: now,
+      createdAt: now,
+      updatedAt: now,
     };
 
-    const { data, error } = await supabaseAdmin
-      .from('blog_posts')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .insert(insertData as any)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error creating test post:', error);
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      );
-    }
+    const [data] = await db.insert(blogPosts).values(insertData).returning();
 
     return NextResponse.json({
       success: true,

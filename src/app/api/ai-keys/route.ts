@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth-config";
-import { taskyDb } from "@/lib/supabase/tasky-db-client";
+import { db } from "@/lib/db/connection";
+import { userAPIKeys } from "@/lib/db/schema/tasky";
 import { encryptAPIKey } from "@/lib/encryption";
 import { getUserIdFromRequest } from "@/lib/admin-auth";
+import { eq, and } from 'drizzle-orm';
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -32,23 +34,23 @@ export async function POST(req: NextRequest) {
 
     const { encrypted, iv, authTag } = encryptAPIKey(apiKey);
 
-    const { error } = await taskyDb
-      .from('user_api_keys')
-      .upsert({
-        id: crypto.randomUUID(),
-        user_id: userId,
+    await db
+      .insert(userAPIKeys)
+      .values({
+        userId,
         provider,
-        key_encrypted: encrypted,
+        keyEncrypted: encrypted,
         iv,
-        auth_tag: authTag,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'user_id,provider',
-        ignoreDuplicates: false,
+        authTag,
+      })
+      .onConflictDoUpdate({
+        target: [userAPIKeys.userId, userAPIKeys.provider],
+        set: {
+          keyEncrypted: encrypted,
+          iv,
+          authTag,
+        },
       });
-
-    if (error) throw error;
 
     return NextResponse.json({ 
       success: true,
@@ -72,12 +74,10 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const { data: keys, error } = await taskyDb
-      .from('user_api_keys')
-      .select('id, provider, created_at, updated_at')
-      .eq('user_id', userId);
-
-    if (error) throw error;
+    const keys = await db
+      .select({ id: userAPIKeys.id, provider: userAPIKeys.provider, created_at: userAPIKeys.createdAt, updated_at: userAPIKeys.updatedAt })
+      .from(userAPIKeys)
+      .where(eq(userAPIKeys.userId, userId));
 
     console.log('[API /ai-keys GET] User ID:', userId);
     console.log('[API /ai-keys GET] Keys from DB:', keys);
@@ -111,13 +111,9 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const { error } = await taskyDb
-      .from('user_api_keys')
-      .delete()
-      .eq('user_id', userId)
-      .eq('provider', provider);
-
-    if (error) throw error;
+    await db
+      .delete(userAPIKeys)
+      .where(and(eq(userAPIKeys.userId, userId), eq(userAPIKeys.provider, provider)));
 
     return NextResponse.json({ 
       success: true,

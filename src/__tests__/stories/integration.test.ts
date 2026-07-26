@@ -10,8 +10,7 @@ import {
 } from '@/lib/stories/sync/jira-sync';
 import { 
   parseStoriesForTrello,
-  createTrelloCard,
-  syncStoriesToTrello 
+  createTrelloCard
 } from '@/lib/stories/sync/trello-sync';
 import { 
   markdownToADF,
@@ -19,13 +18,9 @@ import {
   ADFDocument
 } from '@/lib/stories/converters/markdown-to-adf';
 import { 
-  markdownToTrello,
   parseStoryToTrelloCard 
 } from '@/lib/stories/converters/markdown-to-trello';
 import { 
-  mockProject,
-  mockDocument,
-  mockApiResponses,
   mockFetch,
   testSetup,
   generators

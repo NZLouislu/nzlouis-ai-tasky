@@ -43,7 +43,7 @@ export const storiesSyncHistory = pgTable('stories_sync_history', {
   documentId: uuid('document_id').notNull().references(() => storiesDocuments.id, { onDelete: 'cascade' }),
   syncDirection: text('sync_direction', { enum: ['to_platform', 'from_platform'] }).notNull(),
   platform: text('platform', { enum: ['jira', 'trello'] }).notNull(),
-  syncStatus: text('sync_status', { enum: ['success', 'partial', 'failed'] }).notNull(),
+  syncStatus: text('sync_status', { enum: ['in_progress', 'success', 'partial', 'failed'] }).notNull(),
   itemsSynced: integer('items_synced').default(0),
   itemsFailed: integer('items_failed').default(0),
   syncDetails: jsonb('sync_details'),

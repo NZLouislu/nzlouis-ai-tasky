@@ -1,28 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseService } from "@/lib/supabase/supabase-client";
+import { db } from "@/lib/db/connection";
+import { taskColumns } from "@/lib/db/schema/tasky";
+import { eq } from "drizzle-orm";
 
-// Get a specific task column
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ columnId: string }> }
 ) {
   try {
-    if (!supabaseService) {
-      return NextResponse.json(
-        { error: "Database not configured" },
-        { status: 503 }
-      );
-    }
-
     const { columnId } = await params;
 
-    const { data, error } = await supabaseService
-      .from("task_columns")
-      .select("*")
-      .eq("id", columnId)
-      .single();
+    const [data] = await db.select()
+      .from(taskColumns)
+      .where(eq(taskColumns.id, columnId));
 
-    if (error) throw error;
+    if (!data) {
+      return NextResponse.json({ error: "Column not found" }, { status: 404 });
+    }
 
     return NextResponse.json(data);
   } catch (error) {
@@ -31,33 +25,21 @@ export async function GET(
   }
 }
 
-// Update a task column
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ columnId: string }> }
 ) {
   try {
-    if (!supabaseService) {
-      return NextResponse.json(
-        { error: "Database not configured" },
-        { status: 503 }
-      );
-    }
-
     const { columnId } = await params;
     const body = await request.json();
 
-    const { data, error } = await supabaseService
-      .from("task_columns")
-      .update({
+    const [data] = await db.update(taskColumns)
+      .set({
         name: body.name,
         position: body.position,
       })
-      .eq("id", columnId)
-      .select()
-      .single();
-
-    if (error) throw error;
+      .where(eq(taskColumns.id, columnId))
+      .returning();
 
     return NextResponse.json(data);
   } catch (error) {
@@ -69,27 +51,15 @@ export async function PUT(
   }
 }
 
-// Delete a task column
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ columnId: string }> }
 ) {
   try {
-    if (!supabaseService) {
-      return NextResponse.json(
-        { error: "Database not configured" },
-        { status: 503 }
-      );
-    }
-
     const { columnId } = await params;
 
-    const { error } = await supabaseService
-      .from("task_columns")
-      .delete()
-      .eq("id", columnId);
-
-    if (error) throw error;
+    await db.delete(taskColumns)
+      .where(eq(taskColumns.id, columnId));
 
     return NextResponse.json({ success: true });
   } catch (error) {

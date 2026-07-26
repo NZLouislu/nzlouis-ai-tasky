@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase/supabase-client';
+import { db } from '@/lib/db/connection';
+import { blogChatMessages } from '@/lib/db/schema/blog';
+import { eq, desc, inArray } from 'drizzle-orm';
 
-/**
- * Cleanup old chat messages to prevent database bloat
- * This endpoint should be called periodically (e.g., via cron job)
- */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -17,58 +15,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabaseClient = supabase;
-
-    if (!supabaseClient) {
-      return NextResponse.json(
-        { error: 'Supabase client not initialized' },
-        { status: 500 }
-      );
-    }
-
     console.log(`🧹 Cleaning up old messages for post: ${postId}, keeping latest ${keepCount}`);
 
-    // Get all messages for this post, ordered by timestamp DESC
-    const { data: allMessages, error: fetchError } = await supabaseClient
-      .from('blog_chat_messages')
-      .select('id, timestamp')
-      .eq('post_id', postId)
-      .order('timestamp', { ascending: false });
-
-    if (fetchError) {
-      console.error('Error fetching messages for cleanup:', fetchError);
-      return NextResponse.json(
-        { error: 'Failed to fetch messages' },
-        { status: 500 }
-      );
-    }
+    const allMessages = await db
+      .select({ id: blogChatMessages.id, timestamp: blogChatMessages.timestamp })
+      .from(blogChatMessages)
+      .where(eq(blogChatMessages.postId, postId))
+      .orderBy(desc(blogChatMessages.timestamp));
 
     if (!allMessages || allMessages.length <= keepCount) {
       console.log(`✅ No cleanup needed. Current count: ${allMessages?.length || 0}`);
-      return NextResponse.json({ 
+      return NextResponse.json({
         cleaned: 0,
         remaining: allMessages?.length || 0,
         message: 'No cleanup needed'
       });
     }
 
-    // Get IDs of messages to delete (all except the latest keepCount)
     const messagesToDelete = allMessages.slice(keepCount).map(m => m.id);
 
     console.log(`🗑️  Deleting ${messagesToDelete.length} old messages`);
 
-    const { error: deleteError } = await supabaseClient
-      .from('blog_chat_messages')
-      .delete()
-      .in('id', messagesToDelete);
-
-    if (deleteError) {
-      console.error('Error deleting old messages:', deleteError);
-      return NextResponse.json(
-        { error: 'Failed to delete old messages' },
-        { status: 500 }
-      );
-    }
+    await db
+      .delete(blogChatMessages)
+      .where(inArray(blogChatMessages.id, messagesToDelete));
 
     console.log(`✅ Cleaned up ${messagesToDelete.length} messages, kept ${keepCount}`);
 

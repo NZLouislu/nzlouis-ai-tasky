@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { db } from '@/lib/db/connection';
+import { userPlatformConfigs, storiesPlatformConnections, storiesProjects } from '@/lib/db/schema/stories';
+import { eq, and } from 'drizzle-orm';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,41 +18,41 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { configName = 'Default' } = body;
 
-    // 删除用户的Jira配置
-    const { error: configError } = await taskyDb
-      .from('user_platform_configs')
-      .delete()
-      .eq('user_id', session.user.id)
-      .eq('platform', 'jira')
-      .eq('config_name', configName);
-
-    if (configError) {
-      console.error('Database error:', configError);
-      return NextResponse.json(
-        { error: 'Failed to delete Jira configuration' },
-        { status: 500 }
+    await db
+      .delete(userPlatformConfigs)
+      .where(
+        and(
+          eq(userPlatformConfigs.userId, session.user.id),
+          eq(userPlatformConfigs.platform, 'jira'),
+          eq(userPlatformConfigs.configName, configName),
+        )
       );
-    }
 
-    // 更新平台连接状态为断开
-    await taskyDb
-      .from('stories_platform_connections')
-      .update({
-        connection_status: 'disconnected',
-        updated_at: new Date().toISOString(),
+    await db
+      .update(storiesPlatformConnections)
+      .set({
+        connectionStatus: 'disconnected',
+        updatedAt: new Date(),
       })
-      .eq('user_id', session.user.id)
-      .eq('platform', 'jira');
+      .where(
+        and(
+          eq(storiesPlatformConnections.userId, session.user.id),
+          eq(storiesPlatformConnections.platform, 'jira'),
+        )
+      );
 
-    // 更新所有相关项目的连接状态
-    await taskyDb
-      .from('stories_projects')
-      .update({
-        connection_status: 'disconnected',
-        updated_at: new Date().toISOString(),
+    await db
+      .update(storiesProjects)
+      .set({
+        connectionStatus: 'disconnected',
+        updatedAt: new Date(),
       })
-      .eq('user_id', session.user.id)
-      .eq('platform', 'jira');
+      .where(
+        and(
+          eq(storiesProjects.userId, session.user.id),
+          eq(storiesProjects.platform, 'jira'),
+        )
+      );
 
     return NextResponse.json({
       success: true,
@@ -66,7 +68,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const session = await auth();
     
@@ -77,21 +79,27 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 检查Jira连接状态
-    const { data: configs, error } = await taskyDb
-      .from('user_platform_configs_safe')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .eq('platform', 'jira')
-      .eq('is_active', true);
-
-    if (error) {
-      console.error('Database error:', error);
-      return NextResponse.json(
-        { error: 'Failed to check Jira connection status' },
-        { status: 500 }
+    const configs = await db
+      .select({
+        id: userPlatformConfigs.id,
+        userId: userPlatformConfigs.userId,
+        platform: userPlatformConfigs.platform,
+        jiraUrl: userPlatformConfigs.jiraUrl,
+        jiraEmail: userPlatformConfigs.jiraEmail,
+        jiraProjectKey: userPlatformConfigs.jiraProjectKey,
+        isActive: userPlatformConfigs.isActive,
+        configName: userPlatformConfigs.configName,
+        createdAt: userPlatformConfigs.createdAt,
+        updatedAt: userPlatformConfigs.updatedAt,
+      })
+      .from(userPlatformConfigs)
+      .where(
+        and(
+          eq(userPlatformConfigs.userId, session.user.id),
+          eq(userPlatformConfigs.platform, 'jira'),
+          eq(userPlatformConfigs.isActive, true),
+        )
       );
-    }
 
     const isConnected = configs && configs.length > 0;
 

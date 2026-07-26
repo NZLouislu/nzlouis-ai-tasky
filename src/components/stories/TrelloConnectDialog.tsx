@@ -141,11 +141,11 @@ export default function TrelloConnectDialog({
             </h3>
             <ol className="text-xs text-blue-700 space-y-1 list-decimal list-inside">
               <li>Go to Trello Power-Ups Admin page</li>
-              <li>Click "New" to create a new Power-Up (or use existing)</li>
+              <li>Click &quot;New&quot; to create a new Power-Up (or use existing)</li>
               <li>Copy your API Key</li>
-              <li>Click "Token" link to generate a token</li>
+              <li>Click &quot;Token&quot; link to generate a token</li>
               <li>Authorize and copy the token</li>
-              <li>After connecting, you'll be able to select a board</li>
+              <li>After connecting, you&apos;ll be able to select a board</li>
             </ol>
           </div>
         </div>

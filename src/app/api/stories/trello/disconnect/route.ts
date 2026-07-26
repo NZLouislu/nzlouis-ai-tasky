@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { db } from '@/lib/db/connection';
+import { userPlatformConfigs, storiesPlatformConnections, storiesProjects } from '@/lib/db/schema/stories';
+import { eq, and } from 'drizzle-orm';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,41 +18,41 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { configName = 'Default' } = body;
 
-    // Delete user's Trello configuration
-    const { error: configError } = await taskyDb
-      .from('user_platform_configs')
-      .delete()
-      .eq('user_id', session.user.id)
-      .eq('platform', 'trello')
-      .eq('config_name', configName);
-
-    if (configError) {
-      console.error('Database error:', configError);
-      return NextResponse.json(
-        { error: 'Failed to delete Trello configuration' },
-        { status: 500 }
+    await db
+      .delete(userPlatformConfigs)
+      .where(
+        and(
+          eq(userPlatformConfigs.userId, session.user.id),
+          eq(userPlatformConfigs.platform, 'trello'),
+          eq(userPlatformConfigs.configName, configName),
+        )
       );
-    }
 
-    // Update platform connection status to disconnected
-    await taskyDb
-      .from('stories_platform_connections')
-      .update({
-        connection_status: 'disconnected',
-        updated_at: new Date().toISOString(),
+    await db
+      .update(storiesPlatformConnections)
+      .set({
+        connectionStatus: 'disconnected',
+        updatedAt: new Date(),
       })
-      .eq('user_id', session.user.id)
-      .eq('platform', 'trello');
+      .where(
+        and(
+          eq(storiesPlatformConnections.userId, session.user.id),
+          eq(storiesPlatformConnections.platform, 'trello'),
+        )
+      );
 
-    // Update all related projects connection status
-    await taskyDb
-      .from('stories_projects')
-      .update({
-        connection_status: 'disconnected',
-        updated_at: new Date().toISOString(),
+    await db
+      .update(storiesProjects)
+      .set({
+        connectionStatus: 'disconnected',
+        updatedAt: new Date(),
       })
-      .eq('user_id', session.user.id)
-      .eq('platform', 'trello');
+      .where(
+        and(
+          eq(storiesProjects.userId, session.user.id),
+          eq(storiesProjects.platform, 'trello'),
+        )
+      );
 
     return NextResponse.json({
       success: true,
@@ -66,7 +68,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const session = await auth();
     
@@ -77,21 +79,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Check Trello connection status
-    const { data: configs, error } = await taskyDb
-      .from('user_platform_configs_safe')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .eq('platform', 'trello')
-      .eq('is_active', true);
-
-    if (error) {
-      console.error('Database error:', error);
-      return NextResponse.json(
-        { error: 'Failed to check Trello connection status' },
-        { status: 500 }
+    const configs = await db
+      .select({
+        id: userPlatformConfigs.id,
+        userId: userPlatformConfigs.userId,
+        platform: userPlatformConfigs.platform,
+        trelloBoardId: userPlatformConfigs.trelloBoardId,
+        isActive: userPlatformConfigs.isActive,
+        configName: userPlatformConfigs.configName,
+        createdAt: userPlatformConfigs.createdAt,
+        updatedAt: userPlatformConfigs.updatedAt,
+      })
+      .from(userPlatformConfigs)
+      .where(
+        and(
+          eq(userPlatformConfigs.userId, session.user.id),
+          eq(userPlatformConfigs.platform, 'trello'),
+          eq(userPlatformConfigs.isActive, true),
+        )
       );
-    }
 
     const isConnected = configs && configs.length > 0;
 

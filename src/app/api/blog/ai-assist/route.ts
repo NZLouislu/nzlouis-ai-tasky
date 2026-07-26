@@ -3,29 +3,39 @@ import { getUserIdFromRequest } from '@/lib/admin-auth';
 import { AgentOrchestrator } from '@/lib/blog/agent-orchestrator';
 import { AgentRequest } from '@/lib/blog/agentic-types';
 import { getUserAISettings } from '@/lib/ai/settings';
-import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { db } from '@/lib/db/connection';
+import { userAPIKeys } from '@/lib/db/schema/tasky';
 import { decryptAPIKey } from '@/lib/encryption';
+import { eq, and } from 'drizzle-orm';
 
 import { auth } from '@/lib/auth-config';
 
 async function getUserTavilyKey(userId: string): Promise<string | null> {
   try {
-    const { data: apiKeyRecord, error } = await taskyDb
-      .from('user_api_keys')
-      .select('key_encrypted, iv, auth_tag')
-      .eq('user_id', userId)
-      .eq('provider', 'tavily')
-      .single();
+    const [apiKeyRecord] = await db
+      .select({
+        keyEncrypted: userAPIKeys.keyEncrypted,
+        iv: userAPIKeys.iv,
+        authTag: userAPIKeys.authTag,
+      })
+      .from(userAPIKeys)
+      .where(
+        and(
+          eq(userAPIKeys.userId, userId),
+          eq(userAPIKeys.provider, 'tavily')
+        )
+      )
+      .limit(1);
 
-    if (error || !apiKeyRecord) {
+    if (!apiKeyRecord) {
       console.log(`[getUserTavilyKey] No Tavily API key found for user ${userId}`);
       return null;
     }
 
     const decrypted = decryptAPIKey(
-      apiKeyRecord.key_encrypted,
+      apiKeyRecord.keyEncrypted,
       apiKeyRecord.iv,
-      apiKeyRecord.auth_tag
+      apiKeyRecord.authTag
     );
 
     return decrypted;
@@ -37,22 +47,30 @@ async function getUserTavilyKey(userId: string): Promise<string | null> {
 
 async function getUserAPIKey(userId: string, provider: string): Promise<string | null> {
   try {
-    const { data: apiKeyRecord, error } = await taskyDb
-      .from('user_api_keys')
-      .select('key_encrypted, iv, auth_tag')
-      .eq('user_id', userId)
-      .eq('provider', provider)
-      .single();
+    const [apiKeyRecord] = await db
+      .select({
+        keyEncrypted: userAPIKeys.keyEncrypted,
+        iv: userAPIKeys.iv,
+        authTag: userAPIKeys.authTag,
+      })
+      .from(userAPIKeys)
+      .where(
+        and(
+          eq(userAPIKeys.userId, userId),
+          eq(userAPIKeys.provider, provider)
+        )
+      )
+      .limit(1);
 
-    if (error || !apiKeyRecord) {
+    if (!apiKeyRecord) {
       console.log(`[getUserAPIKey] No API key found for user ${userId}, provider ${provider}`);
       return null;
     }
 
     const decrypted = decryptAPIKey(
-      apiKeyRecord.key_encrypted,
+      apiKeyRecord.keyEncrypted,
       apiKeyRecord.iv,
-      apiKeyRecord.auth_tag
+      apiKeyRecord.authTag
     );
 
     return decrypted;
@@ -71,7 +89,7 @@ async function callLLM(
 ): Promise<string> {
   const settings = await getUserAISettings(userId);
   const provider = overrideProvider || settings.defaultProvider;
-  let modelId = overrideModel || settings.defaultModel;
+  const modelId = overrideModel || settings.defaultModel;
 
   const apiKey = await getUserAPIKey(userId, provider);
   if (!apiKey) {
@@ -97,7 +115,7 @@ async function callLLM(
 
     let model: any;
     const sdkKey = apiKey || undefined;
-    
+
     if (!sdkKey) {
       throw new Error(`API key is missing for provider ${provider}. Please configure your API key in Settings.`);
     }
@@ -147,7 +165,7 @@ async function callLLM(
 
   try {
     const response = await performAttempt(modelId, settings.temperature);
-    
+
     if (!response) {
       throw new Error(`Null response from ${provider}/${modelId}. The API call succeeded but returned no data.`);
     }
@@ -161,15 +179,14 @@ async function callLLM(
         hasText: !!response.text,
         textLength: response.text?.length || 0
       };
-      
+
       console.error(`❌ [Empty Response Debug]:`, debugInfo);
-      
-      // Special handling for OpenRouter free models
+
       if (provider === 'openrouter' && modelId.includes(':free')) {
-        const isUsageInvalid = !response.usage || 
-          isNaN(response.usage.totalTokens as number) || 
+        const isUsageInvalid = !response.usage ||
+          isNaN(response.usage.totalTokens as number) ||
           response.usage.totalTokens === null;
-        
+
         if (isUsageInvalid) {
           throw new Error(`OpenRouter 免费模型 [${modelId}] 当前不可用。
 
@@ -189,7 +206,7 @@ async function callLLM(
 - 建议: 立即切换模型`);
         }
       }
-      
+
       throw new Error(`模型 [${modelId}] 返回了空内容。
 调试信息:
 - 提供商: ${provider}
@@ -208,7 +225,7 @@ async function callLLM(
       stack: error.stack?.split('\n').slice(0, 3),
       cause: error.cause
     });
-    
+
     let friendlyError = error.message;
     if (provider === 'google' && (modelId.includes('gemini-3') || modelId.includes('gemini-1.5') || modelId.includes('gemini-2'))) {
       if (error.message.includes('404') || error.message.includes('not found') || error.message.includes('NOT_FOUND')) {
@@ -228,7 +245,7 @@ async function callLLM(
 获取地址: https://makersuite.google.com/app/apikey`;
       }
     }
-    
+
     throw new Error(friendlyError);
   }
 }
@@ -238,7 +255,7 @@ export async function POST(request: NextRequest) {
     const session = await auth();
 
     const userId = getUserIdFromRequest(session?.user?.id, request);
-    
+
     if (!userId) {
       console.error('❌ Authentication failed: No user ID found');
       return NextResponse.json(
@@ -267,19 +284,19 @@ export async function POST(request: NextRequest) {
     }
 
     const settings = await getUserAISettings(userId);
-    
+
     const targetProvider = provider || settings.defaultProvider;
-    
+
     console.log(`⚙️ [AI Settings] Processing request for user ${userId.substring(0, 8)}...`);
     console.log(`   - Target Provider: ${targetProvider} ${provider ? '(User Override)' : '(Default)'}`);
     console.log(`   - Target Model: ${model || settings.defaultModel} ${model ? '(User Override)' : '(Default)'}`);
     console.log(`   - Search Enabled: ${search_enabled !== undefined ? search_enabled : 'Auto (Default)'}`);
-    
+
     const apiKey = await getUserAPIKey(userId, targetProvider);
-    
+
     if (!apiKey) {
       return NextResponse.json(
-        { 
+        {
           error: 'API key not configured',
           message: `Please configure your ${targetProvider.toUpperCase()} API key in Settings to use the AI Blog Assistant.`,
           requiresSetup: true,
@@ -289,7 +306,7 @@ export async function POST(request: NextRequest) {
     }
 
     const tavilyKey = await getUserTavilyKey(userId);
-    
+
     const agentRequest: AgentRequest = {
       message,
       conversation_id,
@@ -300,7 +317,7 @@ export async function POST(request: NextRequest) {
     };
 
     const orchestrator = new AgentOrchestrator();
-    
+
     const llmCaller = (systemPrompt: string, userPrompt: string) =>
       callLLM(systemPrompt, userPrompt, userId, provider, model);
 
@@ -329,7 +346,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(response);
   } catch (error) {
     console.error('AI Assist API error:', error);
-    
+
     if (error instanceof Error && error.message.includes('API key')) {
       return NextResponse.json(
         {
@@ -340,7 +357,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    
+
     return NextResponse.json(
       {
         error: 'Internal server error',

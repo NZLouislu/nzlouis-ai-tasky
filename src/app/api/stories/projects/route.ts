@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { db } from '@/lib/db/connection';
+import { storiesProjects, storiesDocuments } from '@/lib/db/schema/stories';
+import { eq, desc } from 'drizzle-orm';
 import { getUserIdFromRequest } from '@/lib/admin-auth';
 
 export async function GET(request: NextRequest) {
@@ -15,22 +17,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { data: projects, error } = await taskyDb
-      .from('stories_projects')
-      .select(`
-        *,
-        stories_documents(*)
-      `)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+    const rows = await db
+      .select()
+      .from(storiesProjects)
+      .leftJoin(storiesDocuments, eq(storiesDocuments.projectId, storiesProjects.id))
+      .where(eq(storiesProjects.userId, userId))
+      .orderBy(desc(storiesProjects.createdAt));
 
-    if (error) {
-      console.error('Database error:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch projects' },
-        { status: 500 }
-      );
+    const projectMap = new Map<string, any>();
+    for (const row of rows) {
+      const project = row.stories_projects;
+      const doc = row.stories_documents;
+      if (!projectMap.has(project.id)) {
+        projectMap.set(project.id, { ...project, stories_documents: [] });
+      }
+      if (doc) {
+        projectMap.get(project.id).stories_documents.push(doc);
+      }
     }
+    const projects = Array.from(projectMap.values());
 
     return NextResponse.json({
       success: true,

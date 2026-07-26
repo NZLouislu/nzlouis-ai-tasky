@@ -1,14 +1,7 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.TASKY_SUPABASE_SERVICE_ROLE_KEY!;
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-  },
-});
+import { listObjectsWithPrefix, deleteObjectFromR2 } from '@/lib/storage/r2-storage';
+import { db } from '@/lib/db/connection';
+import { storageFiles, blogPosts, chatSessions } from '@/lib/db/schema/tasky';
+import { eq, and, inArray } from 'drizzle-orm';
 
 export interface CleanupResult {
   orphanedFiles: number;
@@ -19,65 +12,63 @@ export interface CleanupResult {
 }
 
 export async function findOrphanedFiles(userId: string): Promise<string[]> {
-  const { data: files } = await supabase
-    .from('storage_files')
-    .select('file_path, entity_type, entity_id')
-    .eq('user_id', userId);
-
+  const files = await db.select().from(storageFiles).where(eq(storageFiles.userId, userId));
+  
   if (!files) return [];
-
+  
   const orphaned: string[] = [];
-
+  
   for (const file of files) {
     let exists = false;
-
-    if (file.entity_type === 'blog_post' || file.entity_type === 'blog_cover') {
-      const { data } = await supabase
-        .from('blog_posts')
-        .select('id')
-        .eq('id', file.entity_id)
-        .single();
-      exists = !!data;
-    } else if (file.entity_type === 'chat_message') {
-      const { data } = await supabase
-        .from('chat_sessions')
-        .select('id')
-        .eq('id', file.entity_id)
-        .single();
-      exists = !!data;
+    
+    if (file.entityType === 'blog_post' || file.entityType === 'blog_cover') {
+      const [blogPost] = await db
+        .select()
+        .from(blogPosts)
+        .where(eq(blogPosts.id, file.entityId));
+      exists = !!blogPost;
+    } else if (file.entityType === 'chat_message') {
+      const [chatSession] = await db
+        .select()
+        .from(chatSessions)
+        .where(eq(chatSessions.id, file.entityId));
+      exists = !!chatSession;
     }
-
+    
     if (!exists) {
-      orphaned.push(file.file_path);
+      orphaned.push(file.filePath);
     }
   }
-
+  
   return orphaned;
 }
 
 export async function findOrphanedRecords(userId: string): Promise<string[]> {
-  const { data: records } = await supabase
-    .from('storage_files')
-    .select('id, file_path, bucket_name')
-    .eq('user_id', userId);
-
+  const records = await db.select().from(storageFiles).where(eq(storageFiles.userId, userId));
+  
   if (!records) return [];
-
+  
   const orphaned: string[] = [];
-
-  for (const record of records) {
-    const { data } = await supabase.storage
-      .from(record.bucket_name)
-      .list(record.file_path.split('/').slice(0, -1).join('/'));
-
-    const fileName = record.file_path.split('/').pop();
-    const exists = data?.some(f => f.name === fileName);
-
-    if (!exists) {
-      orphaned.push(record.id);
+  
+  for (const file of records) {
+    const dirPath = file.filePath.substring(0, file.filePath.lastIndexOf('/'));
+    const fileName = file.filePath.substring(file.filePath.lastIndexOf('/') + 1);
+    
+    try {
+      const objects = await listObjectsWithPrefix(`${dirPath}/`);
+      const exists = objects.some(obj => 
+        obj.substring(obj.lastIndexOf('/') + 1) === fileName
+      );
+      
+      if (!exists) {
+        orphaned.push(file.id);
+      }
+    } catch (error) {
+      // If we can't list objects, assume it exists to avoid false positives
+      console.warn(`Could not list objects in ${dirPath}:`, error);
     }
   }
-
+  
   return orphaned;
 }
 
@@ -92,108 +83,105 @@ export async function cleanupOrphanedFiles(
     deletedRecords: 0,
     errors: [],
   };
-
+  
   try {
     const orphanedFiles = await findOrphanedFiles(userId);
     result.orphanedFiles = orphanedFiles.length;
-
+    
     if (!dryRun && orphanedFiles.length > 0) {
       for (const filePath of orphanedFiles) {
         try {
-          const { error } = await supabase.storage
-            .from('NZLouis Tasky')
-            .remove([filePath]);
-
-          if (error) {
-            result.errors.push(`Failed to delete ${filePath}: ${error.message}`);
-          } else {
-            result.deletedFiles++;
-          }
-
-          await supabase
-            .from('storage_files')
-            .delete()
-            .eq('file_path', filePath)
-            .eq('user_id', userId);
+          await deleteObjectFromR2(filePath);
+          result.deletedFiles++;
         } catch (error) {
-          result.errors.push(
-            `Error processing ${filePath}: ${error instanceof Error ? error.message : 'Unknown error'}`
+          result.errors.push(`Failed to delete ${filePath}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+      
+      // Delete corresponding database records
+      for (const filePath of orphanedFiles) {
+        try {
+          await db.delete(storageFiles).where(
+            and(
+              eq(storageFiles.filePath, filePath),
+              eq(storageFiles.userId, userId)
+            )
           );
+          result.deletedRecords++;
+        } catch (error) {
+          result.errors.push(`Error deleting DB record for ${filePath}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
     }
-
+    
     const orphanedRecords = await findOrphanedRecords(userId);
     result.orphanedRecords = orphanedRecords.length;
-
+    
     if (!dryRun && orphanedRecords.length > 0) {
-      const { error } = await supabase
-        .from('storage_files')
-        .delete()
-        .in('id', orphanedRecords)
-        .eq('user_id', userId);
-
-      if (error) {
-        result.errors.push(`Failed to delete records: ${error.message}`);
-      } else {
+      try {
+        await db.delete(storageFiles).where(
+          and(
+            inArray(storageFiles.id, orphanedRecords),
+            eq(storageFiles.userId, userId)
+          )
+        );
         result.deletedRecords = orphanedRecords.length;
+      } catch (error) {
+        result.errors.push(`Failed to delete records: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }
   } catch (error) {
-    result.errors.push(
-      `Cleanup failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-    );
+    result.errors.push(`Cleanup failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
-
+  
   return result;
 }
 
-export async function deletePostWithImages(
-  postId: string,
+export async function deleteFile(
+  filePath: string,
   userId: string
 ): Promise<void> {
-  const { data: files } = await supabase
-    .from('storage_files')
-    .select('file_path')
-    .eq('entity_type', 'blog_post')
-    .eq('entity_id', postId)
-    .eq('user_id', userId);
-
-  if (files && files.length > 0) {
-    const filePaths = files.map(f => f.file_path);
-    await supabase.storage.from('NZLouis Tasky').remove(filePaths);
-  }
-
-  await supabase
-    .from('storage_files')
-    .delete()
-    .eq('entity_type', 'blog_post')
-    .eq('entity_id', postId);
-
-  await supabase.from('blog_posts').delete().eq('id', postId);
+  // Delete from R2 storage
+  await deleteObjectFromR2(filePath);
+  
+  // Delete from database
+  await db.delete(storageFiles).where(
+    and(
+      eq(storageFiles.filePath, filePath),
+      eq(storageFiles.userId, userId)
+    )
+  );
 }
 
-export async function deleteSessionWithImages(
-  sessionId: string,
+export async function deleteEntityFiles(
+  entityType: string,
+  entityId: string,
   userId: string
 ): Promise<void> {
-  const { data: files } = await supabase
-    .from('storage_files')
-    .select('file_path')
-    .eq('entity_type', 'chat_message')
-    .eq('entity_id', sessionId)
-    .eq('user_id', userId);
-
-  if (files && files.length > 0) {
-    const filePaths = files.map(f => f.file_path);
-    await supabase.storage.from('NZLouis Tasky').remove(filePaths);
+  // Get all files for this entity
+  const files = await db.select().from(storageFiles).where(
+    and(
+      eq(storageFiles.entityType, entityType),
+      eq(storageFiles.entityId, entityId),
+      eq(storageFiles.userId, userId)
+    )
+  );
+  
+  // Delete from R2 storage
+  for (const file of files) {
+    try {
+      await deleteObjectFromR2(file.filePath);
+    } catch (error) {
+      console.error(`Failed to delete file ${file.filePath}:`, error);
+    }
   }
-
-  await supabase
-    .from('storage_files')
-    .delete()
-    .eq('entity_type', 'chat_message')
-    .eq('entity_id', sessionId);
-
-  await supabase.from('chat_sessions').delete().eq('id', sessionId);
+  
+  // Delete database records
+  await db.delete(storageFiles).where(
+    and(
+      eq(storageFiles.entityType, entityType),
+      eq(storageFiles.entityId, entityId),
+      eq(storageFiles.userId, userId)
+    )
+  );
 }

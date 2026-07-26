@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { supabase } from '@/lib/supabase/supabase-client';
+import { db } from '@/lib/db/connection';
+import { blogPosts } from '@/lib/db/schema/tasky';
+import { eq, and } from 'drizzle-orm';
 import { PartialBlock } from '@blocknote/core';
 
 interface Modification {
@@ -76,21 +78,18 @@ export async function POST(req: NextRequest) {
 
     const { postId, modifications } = await req.json();
 
-    if (!supabase) {
-      return NextResponse.json(
-        { error: 'Database not available' },
-        { status: 503 }
-      );
-    }
+    const [post] = await db
+      .select()
+      .from(blogPosts)
+      .where(
+        and(
+          eq(blogPosts.id, postId),
+          eq(blogPosts.userId, session.user.id)
+        )
+      )
+      .limit(1);
 
-    const { data: post, error: fetchError } = await supabase
-      .from('blog_posts')
-      .select('*')
-      .eq('id', postId)
-      .eq('user_id', session.user.id)
-      .single();
-
-    if (fetchError || !post) {
+    if (!post) {
       return NextResponse.json({ error: 'Post not found' }, { status: 404 });
     }
 
@@ -122,18 +121,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const { data: updated, error: updateError } = await supabase
-      .from('blog_posts')
-      .update({
+    const [updated] = await db
+      .update(blogPosts)
+      .set({
         title: updatedTitle,
         content: updatedContent,
-        updated_at: new Date().toISOString(),
+        updatedAt: new Date(),
       })
-      .eq('id', postId)
-      .select()
-      .single();
-
-    if (updateError) throw updateError;
+      .where(eq(blogPosts.id, postId))
+      .returning();
 
     return NextResponse.json({ post: updated });
   } catch (error) {

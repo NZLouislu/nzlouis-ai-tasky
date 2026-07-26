@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth-config";
-import { taskyDb } from "@/lib/supabase/tasky-db-client";
+import { db } from "@/lib/db/connection";
+import { userAPIKeys, modelTestResults } from "@/lib/db/schema/tasky";
 import { getUserIdFromRequest } from "@/lib/admin-auth";
+import { eq } from 'drizzle-orm';
 
 const MODEL_CONFIGS = {
     google: [
@@ -49,22 +51,21 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        const { data: keys, error } = await taskyDb
-            .from('user_api_keys')
-            .select('provider')
-            .eq('user_id', userId);
-
-        if (error) throw error;
+        const keys = await db
+            .select({ provider: userAPIKeys.provider })
+            .from(userAPIKeys)
+            .where(eq(userAPIKeys.userId, userId));
 
         const configuredProviders = keys?.map(k => k.provider) || [];
 
-        const { data: testResults, error: testError } = await taskyDb
-            .from('model_test_results')
-            .select('model_id, success, tested_at')
-            .eq('user_id', userId);
-
-        if (testError) {
-            console.warn('Failed to fetch test results:', testError);
+        let testResults: { model_id: string; success: boolean; tested_at: Date }[] = [];
+        try {
+            testResults = await db
+                .select({ model_id: modelTestResults.modelId, success: modelTestResults.success, tested_at: modelTestResults.testedAt })
+                .from(modelTestResults)
+                .where(eq(modelTestResults.userId, userId));
+        } catch (dbError) {
+            console.warn('Failed to fetch test results:', dbError);
         }
 
         const testResultsMap = new Map();

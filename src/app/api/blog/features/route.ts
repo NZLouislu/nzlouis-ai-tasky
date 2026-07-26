@@ -1,58 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
-import { blogDb } from "@/lib/supabase/blog-client";
+import { db } from "@/lib/db/connection";
+import { featureToggles } from "@/lib/db/schema/blog";
+import { eq } from "drizzle-orm";
 
 export async function GET() {
   try {
-    // Check if blogDb is available
-    if (!blogDb) {
-      return NextResponse.json(
-        { error: "Blog database not configured" },
-        { status: 503 }
-      );
-    }
+    const [data] = await db
+      .select({
+        totalViews: featureToggles.totalViews,
+        totalLikes: featureToggles.totalLikes,
+        totalComments: featureToggles.totalComments,
+        aiSummaries: featureToggles.aiSummaries,
+        aiQuestions: featureToggles.aiQuestions,
+      })
+      .from(featureToggles)
+      .limit(1);
 
-    const { data, error } = await blogDb
-      .from("feature_toggles")
-      .select(
-        "total_views, total_likes, total_comments, ai_summaries, ai_questions"
-      )
-      .limit(1)
-      .single();
+    if (!data) {
+      const [allData] = await db
+        .select()
+        .from(featureToggles)
+        .limit(1);
 
-    if (error) {
-      if (error.code === "PGRST116") {
-        const { data: allData, error: fetchError } = await blogDb
-          .from("feature_toggles")
-          .select("*")
-          .limit(1);
+      if (allData) {
+        return NextResponse.json(allData);
+      } else {
+        const defaultToggles = {
+          totalViews: true,
+          totalLikes: true,
+          totalComments: true,
+          aiSummaries: true,
+          aiQuestions: true,
+        };
 
-        if (fetchError) throw fetchError;
+        const [insertedData] = await db
+          .insert(featureToggles)
+          .values(defaultToggles)
+          .returning();
 
-        if (allData && allData.length > 0) {
-          return NextResponse.json(allData[0]);
-        } else {
-          const defaultToggles = {
-            id: "default",
-            total_views: true,
-            total_likes: true,
-            total_comments: true,
-            ai_summaries: true,
-            ai_questions: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-
-          const { data: insertedData, error: insertError } = await blogDb
-            .from("feature_toggles")
-            .insert(defaultToggles)
-            .select()
-            .single();
-
-          if (insertError) throw insertError;
-          return NextResponse.json(insertedData);
-        }
+        return NextResponse.json(insertedData);
       }
-      throw error;
     }
 
     return NextResponse.json(data);
@@ -67,14 +54,6 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
-    // Verify blogDb availability
-    if (!blogDb) {
-      return NextResponse.json(
-        { error: "Blog database not configured" },
-        { status: 503 }
-      );
-    }
-
     const body = await request.json();
     const {
       total_views,
@@ -85,56 +64,47 @@ export async function PUT(request: NextRequest) {
     } = body;
 
     const updateData = {
-      total_views,
-      total_likes,
-      total_comments,
-      ai_summaries,
-      ai_questions,
-      updated_at: new Date().toISOString(),
+      totalViews: total_views,
+      totalLikes: total_likes,
+      totalComments: total_comments,
+      aiSummaries: ai_summaries,
+      aiQuestions: ai_questions,
+      updatedAt: new Date(),
     };
 
     let resultData;
 
-    // First, attempt to fetch the existing feature toggle
-    const { data: existingToggle, error: fetchError } = await blogDb
-      .from("feature_toggles")
-      .select("id")
-      .limit(1)
-      .single();
-
-    if (fetchError && fetchError.code !== "PGRST116") {
-      // PGRST116 indicates no rows found
-      throw fetchError;
-    }
+    const [existingToggle] = await db
+      .select({ id: featureToggles.id })
+      .from(featureToggles)
+      .limit(1);
 
     if (existingToggle) {
-      // If a toggle exists, update it using its actual UUID
-      const { data: updatedData, error: updateError } = await blogDb
-        .from("feature_toggles")
-        .update(updateData)
-        .eq("id", existingToggle.id)
-        .select(
-          "total_views, total_likes, total_comments, ai_summaries, ai_questions"
-        )
-        .single();
+      const [updatedData] = await db
+        .update(featureToggles)
+        .set(updateData)
+        .where(eq(featureToggles.id, existingToggle.id))
+        .returning({
+          totalViews: featureToggles.totalViews,
+          totalLikes: featureToggles.totalLikes,
+          totalComments: featureToggles.totalComments,
+          aiSummaries: featureToggles.aiSummaries,
+          aiQuestions: featureToggles.aiQuestions,
+        });
 
-      if (updateError) throw updateError;
       resultData = updatedData;
     } else {
-      // If no toggle exists, insert a new one
-      // The 'id' will be auto-generated by the database
-      const { data: insertedData, error: insertError } = await blogDb
-        .from("feature_toggles")
-        .insert({
-          ...updateData,
-          created_at: new Date().toISOString(),
-        })
-        .select(
-          "total_views, total_likes, total_comments, ai_summaries, ai_questions"
-        )
-        .single();
+      const [insertedData] = await db
+        .insert(featureToggles)
+        .values(updateData)
+        .returning({
+          totalViews: featureToggles.totalViews,
+          totalLikes: featureToggles.totalLikes,
+          totalComments: featureToggles.totalComments,
+          aiSummaries: featureToggles.aiSummaries,
+          aiQuestions: featureToggles.aiQuestions,
+        });
 
-      if (insertError) throw insertError;
       resultData = insertedData;
     }
 

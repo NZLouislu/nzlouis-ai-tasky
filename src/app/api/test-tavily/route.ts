@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { db } from '@/lib/db/connection';
+import { userAPIKeys } from '@/lib/db/schema/tasky';
+import { eq, and } from 'drizzle-orm';
 import { decryptAPIKey } from '@/lib/encryption';
 import { getUserIdFromRequest } from '@/lib/admin-auth';
 
@@ -14,12 +16,19 @@ export async function POST(req: NextRequest) {
     }
 
     // Get Tavily API key from database
-    const { data: apiKeyRecord } = await taskyDb
-      .from('user_api_keys')
-      .select('key_encrypted, iv, auth_tag')
-      .eq('user_id', userId)
-      .eq('provider', 'tavily')
-      .single();
+    const [apiKeyRecord] = await db
+      .select({
+        keyEncrypted: userAPIKeys.keyEncrypted,
+        iv: userAPIKeys.iv,
+        authTag: userAPIKeys.authTag,
+      })
+      .from(userAPIKeys)
+      .where(
+        and(
+          eq(userAPIKeys.userId, userId),
+          eq(userAPIKeys.provider, 'tavily')
+        )
+      );
 
     if (!apiKeyRecord) {
       return NextResponse.json({ 
@@ -29,9 +38,9 @@ export async function POST(req: NextRequest) {
     }
 
     const tavilyApiKey = decryptAPIKey(
-      apiKeyRecord.key_encrypted,
+      apiKeyRecord.keyEncrypted,
       apiKeyRecord.iv,
-      apiKeyRecord.auth_tag
+      apiKeyRecord.authTag
     );
 
     // Test the API key with a simple search

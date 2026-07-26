@@ -188,7 +188,7 @@ export function testRoundTripConversion(markdown: string): {
       converted: markdown, // Placeholder
       isEqual: true
     };
-  } catch (error) {
+  } catch {
     return {
       original: markdown,
       converted: '',

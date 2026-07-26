@@ -312,7 +312,7 @@ export async function performIncrementalSync(
     }
     
     // Update content with Jira changes
-    const updatedContent = updateStoriesWithJiraChanges(currentContent, updatedIssues);
+    updateStoriesWithJiraChanges(currentContent, updatedIssues);
     
     // Save updated content
     // This would need to be implemented with actual Supabase call

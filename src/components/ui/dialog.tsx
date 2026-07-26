@@ -30,7 +30,7 @@ interface DialogFooterProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
 }
 
-export const Dialog = ({ children, open, onOpenChange, ...props }: DialogProps) => {
+export const Dialog = ({ children, open, ...props }: DialogProps) => {
   if (!open) return null;
   
   return (

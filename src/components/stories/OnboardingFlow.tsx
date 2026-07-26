@@ -308,7 +308,7 @@ function WriteStoryStep({ onNext, onPrev, isFirst }: OnboardingStepProps) {
           <h4 className="font-medium text-green-900 mb-2">Story Structure</h4>
           <ul className="text-sm text-green-800 space-y-1">
             <li>• <strong>Story:</strong> Brief title describing the feature</li>
-            <li>• <strong>Description:</strong> Detailed user story in "As a... I want... so that..." format</li>
+            <li>• <strong>Description:</strong> Detailed user story in &quot;As a... I want... so that...&quot; format</li>
             <li>• <strong>Acceptance_Criteria:</strong> Checkboxes with specific requirements</li>
             <li>• <strong>Priority:</strong> High, Medium, or Low</li>
             <li>• <strong>Labels:</strong> Tags for categorization</li>
@@ -400,7 +400,7 @@ function SyncStoriesStep({ onNext, onPrev, isFirst }: OnboardingStepProps) {
       <div>
         <h3 className="text-lg font-semibold mb-2">Syncs (Optional)</h3>
         <p className="text-gray-600">
-          Once you've written stories and connected platforms, you can sync them with one click.
+          Once you&apos;ve written stories and connected platforms, you can sync them with one click.
         </p>
       </div>
 
@@ -457,9 +457,9 @@ function CompleteStep({ onComplete, onPrev, isFirst }: OnboardingStepProps) {
           <CheckCircle className="h-8 w-8 text-green-600" />
         </div>
         <div>
-          <h3 className="text-lg font-semibold">You're All Set!</h3>
+          <h3 className="text-lg font-semibold">You&apos;re All Set!</h3>
           <p className="text-gray-600">
-            You've completed the Stories onboarding. Start creating amazing user stories!
+            You&apos;ve completed the Stories onboarding. Start creating amazing user stories!
           </p>
         </div>
       </div>

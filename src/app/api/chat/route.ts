@@ -1,7 +1,9 @@
 import { auth } from '@/lib/auth-config';
 import { getUserAISettings } from '@/lib/ai/settings';
 import { AIProvider } from '@/lib/ai/providers';
-import { taskyDb } from '@/lib/supabase/tasky-db-client';
+import { db } from '@/lib/db/connection';
+import { userAPIKeys } from '@/lib/db/schema/tasky';
+import { eq, and } from 'drizzle-orm';
 import { NextRequest } from 'next/server';
 import { getUserIdFromRequest } from '@/lib/admin-auth';
 
@@ -133,14 +135,13 @@ async function getModelConfigFromId(userId: string | undefined, modelId: string)
   }
 
   if (userId) {
-    const { data } = await taskyDb
-      .from('user_api_keys')
-      .select('provider')
-      .eq('user_id', userId)
-      .eq('provider', provider)
-      .single();
+    const [apiKeyRecord] = await db
+      .select({ provider: userAPIKeys.provider })
+      .from(userAPIKeys)
+      .where(and(eq(userAPIKeys.userId, userId), eq(userAPIKeys.provider, provider)))
+      .limit(1);
 
-    if (!data) {
+    if (!apiKeyRecord) {
       throw new Error(`API key not configured for ${provider}`);
     }
   }
@@ -562,18 +563,21 @@ export async function POST(req: NextRequest) {
         if (userId) {
           const { decryptAPIKey } = await import('@/lib/encryption');
           
-          const { data: apiKeyRecord } = await taskyDb
-            .from('user_api_keys')
-            .select('key_encrypted, iv, auth_tag')
-            .eq('user_id', userId)
-            .eq('provider', 'google')
-            .single();
+          const [apiKeyRecord] = await db
+            .select({
+              keyEncrypted: userAPIKeys.keyEncrypted,
+              iv: userAPIKeys.iv,
+              authTag: userAPIKeys.authTag,
+            })
+            .from(userAPIKeys)
+            .where(and(eq(userAPIKeys.userId, userId), eq(userAPIKeys.provider, 'google')))
+            .limit(1);
 
           if (apiKeyRecord) {
             userApiKey = decryptAPIKey(
-              apiKeyRecord.key_encrypted,
+              apiKeyRecord.keyEncrypted,
               apiKeyRecord.iv,
-              apiKeyRecord.auth_tag
+              apiKeyRecord.authTag
             );
             console.log(`[Performance] User API key retrieved and decrypted in ${Date.now() - apiKeyStartTime}ms`);
           }

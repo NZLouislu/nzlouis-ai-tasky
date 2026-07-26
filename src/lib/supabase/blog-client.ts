@@ -1,19 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { getBlogSupabaseConfig } from "@/lib/environment";
 
-// Read Supabase config from environment variables
 const supabaseConfig = getBlogSupabaseConfig();
 
-// Create client only when environment variables are properly configured
 export const blogDb = (() => {
-  // Check if environment variables exist and are not empty
   if (!supabaseConfig.url || !supabaseConfig.serviceRoleKey) {
-    console.warn(
-      "Blog Supabase configuration missing. Blog features will be limited."
-    );
-    console.warn(
-      "Please set correct BLOG_SUPABASE_URL and BLOG_SUPABASE_SERVICE_ROLE_KEY in .env file"
-    );
     return null;
   }
 
@@ -21,32 +12,26 @@ export const blogDb = (() => {
     return createClient(supabaseConfig.url, supabaseConfig.serviceRoleKey, {
       auth: { persistSession: false },
     });
-  } catch (error) {
-    console.error("Failed to initialize Supabase client:", error);
+  } catch {
     return null;
   }
 })();
 
-// Add a function to test the connection
 export const testBlogDbConnection = async () => {
   if (!blogDb) {
-    console.error("Blog database client is not initialized");
     return false;
   }
 
   try {
-    const { data, error } = await blogDb
+    const { error } = await blogDb
       .from("feature_toggles")
       .select("*")
       .limit(1);
     if (error) {
-      console.error("Blog database connection test failed:", error);
       return false;
     }
-    console.log("Blog database connection test successful", data);
     return true;
-  } catch (error) {
-    console.error("Blog database connection test failed:", error);
+  } catch {
     return false;
   }
 };

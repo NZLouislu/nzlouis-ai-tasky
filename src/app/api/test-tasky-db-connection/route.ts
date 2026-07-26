@@ -1,27 +1,13 @@
 import { NextResponse } from "next/server";
-import { supabaseService } from "@/lib/supabase/supabase-client";
+import { db } from '@/lib/db/connection';
+import { blogPosts } from '@/lib/db/schema/tasky';
 
 export async function GET() {
   try {
-    if (!supabaseService) {
-      return NextResponse.json(
-        { error: "Tasky database client is not initialized" },
-        { status: 500 }
-      );
-    }
-
-    // Test database connection
-    const { data, error } = await supabaseService
-      .from("blog_posts")
-      .select("*")
+    const data = await db
+      .select()
+      .from(blogPosts)
       .limit(1);
-
-    if (error) {
-      return NextResponse.json(
-        { error: "Database connection failed", details: error.message },
-        { status: 500 }
-      );
-    }
 
     return NextResponse.json({
       success: true,
