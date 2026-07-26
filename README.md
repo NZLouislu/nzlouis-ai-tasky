@@ -127,10 +127,6 @@ npm run type-check      # Check TypeScript
 See `.env.example` for complete list. Key variables:
 
 ```env
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-TASKY_SUPABASE_SERVICE_ROLE_KEY=
 
 # AI
 GOOGLE_API_KEY=
